@@ -1,0 +1,3 @@
+time: 55.514
+total iter: 10
+frames: 5

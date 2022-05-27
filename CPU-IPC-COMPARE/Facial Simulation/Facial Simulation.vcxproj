@@ -1,0 +1,125 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Project DefaultTargets="Build" ToolsVersion="15.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <ItemGroup Label="ProjectConfigurations">
+    <ProjectConfiguration Include="Debug|x64">
+      <Configuration>Debug</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+    <ProjectConfiguration Include="Release|x64">
+      <Configuration>Release</Configuration>
+      <Platform>x64</Platform>
+    </ProjectConfiguration>
+  </ItemGroup>
+  <PropertyGroup Label="Globals">
+    <ProjectGuid>{F27C99DB-EF5B-435E-B3AF-67768F594F12}</ProjectGuid>
+    <RootNamespace>Facial_Simulation</RootNamespace>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v143</PlatformToolset>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
+    <ConfigurationType>Application</ConfigurationType>
+    <UseDebugLibraries>false</UseDebugLibraries>
+    <WholeProgramOptimization>true</WholeProgramOptimization>
+    <CharacterSet>MultiByte</CharacterSet>
+    <PlatformToolset>v142</PlatformToolset>
+  </PropertyGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.props" />
+  <ImportGroup Label="ExtensionSettings">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 11.4.props" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <ImportGroup Label="PropertySheets" Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <Import Project="$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props" Condition="exists('$(UserRootDir)\Microsoft.Cpp.$(Platform).user.props')" Label="LocalAppDataPlatform" />
+  </ImportGroup>
+  <PropertyGroup Label="UserMacros" />
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <LinkIncremental>true</LinkIncremental>
+    <IncludePath>$(SolutionDir)\Facial Simulation\GL_LIB\glew_64\include;$(SolutionDir)\Facial Simulation\GL_LIB\freeglut_64\include;$(SolutionDir)\Facial Simulation\TBB\include;$(SolutionDir)\Facial Simulation\Include;$(SolutionDir)\Facial Simulation\SP\include\suitesparse;$(SolutionDir)\Facial Simulation\SP\include;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)\Facial Simulation\GL_LIB\glew_64\libs\debug;$(SolutionDir)\Facial Simulation\GL_LIB\freeglut_64\libs\debug;$(SolutionDir)\Facial Simulation\TBB;$(SolutionDir)\Facial Simulation\CCD\dubug;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <IncludePath>$(SolutionDir)\Facial Simulation\GL_LIB\glew_64\include;$(SolutionDir)\Facial Simulation\GL_LIB\freeglut_64\include;$(SolutionDir)\Facial Simulation\TBB\include;$(SolutionDir)\Facial Simulation\Include;$(SolutionDir)\Facial Simulation\GL_LIB\glm;$(SolutionDir)\Facial Simulation\SP\include;$(SolutionDir)\Facial Simulation\SP\include\suitesparse;$(IncludePath)</IncludePath>
+    <LibraryPath>$(SolutionDir)\Facial Simulation\GL_LIB\glew_64\libs\release;$(SolutionDir)\Facial Simulation\GL_LIB\freeglut_64\libs\release;$(SolutionDir)\Facial Simulation\TBB;$(SolutionDir)\Facial Simulation\CCD\release;$(SolutionDir)\Facial Simulation\SP\lib;$(SolutionDir)\Facial Simulation\blas;$(LibraryPath)</LibraryPath>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Disabled</Optimization>
+      <PreprocessorDefinitions>WIN32;WIN64;_DEBUG;_CONSOLE;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <AdditionalOptions>/bigobj %(AdditionalOptions)</AdditionalOptions>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <SubSystem>Console</SubSystem>
+      <AdditionalDependencies>cudart_static.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;collisiondetection.lib;freeglutd.lib;glew32d.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <CudaCompile>
+      <TargetMachinePlatform>64</TargetMachinePlatform>
+    </CudaCompile>
+  </ItemDefinitionGroup>
+  <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+    <ClCompile>
+      <WarningLevel>Level3</WarningLevel>
+      <Optimization>Full</Optimization>
+      <FunctionLevelLinking>true</FunctionLevelLinking>
+      <IntrinsicFunctions>true</IntrinsicFunctions>
+      <PreprocessorDefinitions>WIN32;WIN64;NDEBUG;_CONSOLE;USE_FRICTION;USE_SNK;USE_TBB;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+    </ClCompile>
+    <Link>
+      <GenerateDebugInformation>true</GenerateDebugInformation>
+      <EnableCOMDATFolding>true</EnableCOMDATFolding>
+      <OptimizeReferences>true</OptimizeReferences>
+      <SubSystem>Console</SubSystem>
+      <AdditionalDependencies>cudart_static.lib;kernel32.lib;user32.lib;gdi32.lib;winspool.lib;comdlg32.lib;advapi32.lib;shell32.lib;ole32.lib;oleaut32.lib;uuid.lib;odbc32.lib;odbccp32.lib;collisiondetection.lib;freeglut.lib;glew32.lib;libamd.lib;libbtf.lib;libcamd.lib;libccolamd.lib;libcolamd.lib;libcxsparse.lib;libklu.lib;libldl.lib;libspqr.lib;libumfpack.lib;metis.lib;suitesparseconfig.lib;libcholmod.lib;libblas.lib;liblapacke.lib;liblapack.lib;%(AdditionalDependencies)</AdditionalDependencies>
+    </Link>
+    <CudaCompile>
+      <TargetMachinePlatform>64</TargetMachinePlatform>
+    </CudaCompile>
+  </ItemDefinitionGroup>
+  <ItemGroup>
+    <ClCompile Include="ACCD.cpp" />
+    <ClCompile Include="collisionUtil.cpp" />
+    <ClCompile Include="fem3D.cpp" />
+    <ClCompile Include="FEMTimeIntegrator.cpp" />
+    <ClCompile Include="fem_math.cpp" />
+    <ClCompile Include="gl_main.cpp" />
+    <ClCompile Include="IPCdistanceFuncs.cpp" />
+    <ClCompile Include="IPCtimeStepFuncs.cpp" />
+    <ClCompile Include="IPC_FUNC.cpp" />
+    <ClCompile Include="mesh.cpp" />
+    <ClCompile Include="mIPC.cpp" />
+    <ClCompile Include="Simulator.cpp" />
+    <ClCompile Include="Solver.cpp" />
+    <ClCompile Include="SVD.cpp" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ACCD.h" />
+    <ClInclude Include="collisionUtil.h" />
+    <ClInclude Include="IPCdistanceFuncs.h" />
+    <ClInclude Include="Eigen_Data.h" />
+    <ClInclude Include="fem3D.h" />
+    <ClInclude Include="fem_math.h" />
+    <ClInclude Include="fem_parameters.h" />
+    <ClInclude Include="fem_timer.h" />
+    <ClInclude Include="IPCtimeStepFuns.h" />
+    <ClInclude Include="IPC_FUNC.h" />
+    <ClInclude Include="mesh.h" />
+    <ClInclude Include="mIPC.h" />
+    <ClInclude Include="setting.h" />
+    <ClInclude Include="Simulator.h" />
+    <ClInclude Include="Solver.h" />
+    <ClInclude Include="SVD.h" />
+  </ItemGroup>
+  <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <ImportGroup Label="ExtensionTargets">
+    <Import Project="$(VCTargetsPath)\BuildCustomizations\CUDA 11.4.targets" />
+  </ImportGroup>
+</Project>

@@ -2610,7 +2610,7 @@ void Evaluate_SelfEEConstraintVals(const mesh3D& mesh, Eigen::VectorXd& vals, co
     for (int i = 0;i < number;i++)
 #endif
     {
-        vals[i + offset] = SelfConstraintVal(mesh, mesh.Self_ActiveSet[i]);
+        vals[i + offset] = SelfConstraintVal(mesh, mesh.Self_EE_ActiveSet[i]);
     }
 #ifdef USE_TBB
     );

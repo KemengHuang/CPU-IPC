@@ -27,9 +27,6 @@
     <ClInclude Include="Simulator.h">
       <Filter>CPU-H</Filter>
     </ClInclude>
-    <ClInclude Include="setting.h">
-      <Filter>CPU-H</Filter>
-    </ClInclude>
     <ClInclude Include="fem3D.h">
       <Filter>CPU-H</Filter>
     </ClInclude>
@@ -54,7 +51,9 @@
     <ClInclude Include="Solver.h">
       <Filter>CPU-H</Filter>
     </ClInclude>
-    <ClInclude Include="ACCD.h" />
+    <ClInclude Include="ACCD.h">
+      <Filter>CPU-H</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="SVD.cpp">
@@ -96,6 +95,8 @@
     <ClCompile Include="Solver.cpp">
       <Filter>CPU-CPP</Filter>
     </ClCompile>
-    <ClCompile Include="ACCD.cpp" />
+    <ClCompile Include="ACCD.cpp">
+      <Filter>CPU-CPP</Filter>
+    </ClCompile>
   </ItemGroup>
 </Project>

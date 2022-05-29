@@ -1152,36 +1152,7 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa) {
     int iterCap = 10000, k = 0;
 
     vector<Vector3d> moveDir(mesh.vertexNum, Vector3d(0, 0, 0));
-    if (false)
-    {
-        double new_alpha = 1;
-        updateBoundaryMoveDir(mesh, moveDir, IPC_dt, new_alpha);
-
-        sh.build(mesh, moveDir, new_alpha, mesh.averageEdgeLenth);
-        Self_largestFeasibleStepSize_CCD(mesh, sh, moveDir, 0.8, new_alpha);
-        new_alpha *= 0.5;
-
-        //updateBoundary(TetMesh, alpha);
-        updateBoundaryMoveDir(mesh, moveDir, IPC_dt, new_alpha);
-        vector<Vector3d> resultV0 = mesh.vertexes;
-        stepForward(resultV0, moveDir, mesh, new_alpha, true);
-
-        bool rehash = true;
-
-
-        sh.build(mesh, mesh.averageEdgeLenth);
-        int numOfIntersect = 0;
-
-        while (isIntersected(gd, sh, mesh, mesh.vertexes)) {
-            new_alpha /= 2.0;
-            updateBoundaryMoveDir(mesh, moveDir, IPC_dt, new_alpha);
-            stepForward(resultV0, moveDir, mesh, new_alpha, true);
-            sh.build(mesh, mesh.averageEdgeLenth);
-        }
-        cout << "new_alpha:";
-        cout << new_alpha << endl;
-        buildCollisionSets(mesh, sh, gd, false);
-    }
+   
     double totalTimeStep = 0;
     for (; k < iterCap; ++k) {
 
@@ -1203,20 +1174,11 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa) {
 
         bool gradVanish = (distToOpt_PN < sqrt(1e-4 * mesh.bboxDiagSize2 * IPC_dt * IPC_dt));
         if (k && gradVanish && totalTimeStep > 1 - 1e-3) {
-            // subproblem converged
             break;
-            //return false;
         }
 
         calculateMovingDirection(mesh, BH, gradient, moveDir);
 
-        //std::cout << "moveDir:" << std::endl;
-        //for (int i = 0; i < 3; i++) {
-        //    for (auto dir: moveDir) {
-        //        std::cout << dir[i] << " ";
-        //    }
-        //    std::cout << std::endl;
-        //}
         timer1.set_end();
         timer2.set_start();
 
@@ -1243,8 +1205,6 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa) {
         }
         double alpha_CFL = std::sqrt(mesh.Hhat) / (pMag.maxCoeff() * 2.0);
         printf("alpha_CFL:  %f\n", alpha_CFL);
-        //alpha = min(alpha, alpha_CFL);
-
 
         double fullCCD_alpha = alpha;
         sh.build(mesh, moveDir, fullCCD_alpha, mesh.averageEdgeLenth);
@@ -1262,7 +1222,6 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa) {
         timer3.set_start();
 
         printf("alpha:  %f\n", alpha);
-        //}
 
         double alpha_feasible = alpha;
 
@@ -1271,7 +1230,7 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa) {
         timer4.set_start();
         postLineSearch(mesh, gd, alpha, Kappa);
         timer4.set_end();
-        //cudaDeviceSynchronize();
+
         float time0, time1, time2, time3, time4;
         time0 = timer0.get_millisecond();
         time1 = timer1.get_millisecond();
@@ -1282,7 +1241,6 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa) {
         if (k > 10 && isStop && totalTimeStep > 1 - 1e-3) {
             break;
         }
-
 
         printf("time0 = %f,  time1 = %f,  time2 = %f,  time3 = %f,  time4 = %f\n", time0, time1, time2, time3, time4);
     }
@@ -1319,7 +1277,34 @@ int IPC_Solver(model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
     }
     initKappa(mesh, gd, mesh.Kappa);
     
-    //double dTol = 1e-18 * mesh.bboxDiagSize2;
+
+
+    if (false)
+    {
+        vector<Vector3d> moveDir(mesh.vertexNum, Vector3d(0, 0, 0));
+        double new_alpha = 1;
+        updateBoundaryMoveDir(mesh, moveDir, IPC_dt, new_alpha);
+        sh.build(mesh, moveDir, new_alpha, mesh.averageEdgeLenth);
+        Self_largestFeasibleStepSize_CCD(mesh, sh, moveDir, 0.8, new_alpha);
+        new_alpha *= 0.5;
+        updateBoundaryMoveDir(mesh, moveDir, IPC_dt, new_alpha);
+        vector<Vector3d> resultV0 = mesh.vertexes;
+        stepForward(resultV0, moveDir, mesh, new_alpha, true);
+
+        sh.build(mesh, mesh.averageEdgeLenth);
+        int numOfIntersect = 0;
+
+        while (isIntersected(gd, sh, mesh, mesh.vertexes)) {
+            new_alpha /= 2.0;
+            updateBoundaryMoveDir(mesh, moveDir, IPC_dt, new_alpha);
+            stepForward(resultV0, moveDir, mesh, new_alpha, true);
+            sh.build(mesh, mesh.averageEdgeLenth);
+        }
+        cout << "new_alpha:";
+        cout << new_alpha << endl;
+        buildCollisionSets(mesh, sh, gd, false);
+    }
+
     int k = 0;
     while (true) {
         mesh.closeConstraintID.resize(0);
@@ -1329,12 +1314,10 @@ int IPC_Solver(model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
         k = solve_subIP(mesh, sh, gd, mesh.Kappa);
 
         VectorXd constraintVals;
-        int offset = 0;//constraintVals.size();
+        int offset = 0;
         Evaluate_GroundConstraintVals(gd, mesh, constraintVals, offset);
         offset = constraintVals.size();
         Evaluate_SelfPTConstraintVals(mesh, constraintVals, offset);
-        //offset = constraintVals.size();
-        //Evaluate_SelfEEConstraintVals(mesh, constraintVals, offset);
 
         if (constraintVals.size()) {
             double minm = constraintVals.minCoeff();

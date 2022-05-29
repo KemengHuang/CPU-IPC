@@ -113,7 +113,6 @@
     <ClInclude Include="IPC_FUNC.h" />
     <ClInclude Include="mesh.h" />
     <ClInclude Include="mIPC.h" />
-    <ClInclude Include="setting.h" />
     <ClInclude Include="Simulator.h" />
     <ClInclude Include="Solver.h" />
     <ClInclude Include="SVD.h" />

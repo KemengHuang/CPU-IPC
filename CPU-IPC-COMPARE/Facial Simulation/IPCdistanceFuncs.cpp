@@ -2678,14 +2678,15 @@ void compute_g_dpt_new(const mesh3D& mesh,
             Eigen::Vector3d pos2 = mesh.vertexes[MMCVIDI[2]] + normal * (d_hat_sqrt - dis);
             Eigen::Vector3d pos3 = mesh.vertexes[MMCVIDI[3]] + normal * (d_hat_sqrt - dis);
 
-            Eigen::Vector3d u0 = mesh.vertexes[MMCVIDI[1]] - mesh.vertexes[MMCVIDI[0]];
+            Eigen::Vector3d u0 = v0;
             Eigen::Vector3d u1 = pos2 - mesh.vertexes[MMCVIDI[0]];
             Eigen::Vector3d u2 = pos3 - mesh.vertexes[MMCVIDI[0]];
             Eigen::Matrix3d Dm;
             Dm.col(0) = u0;
             Dm.col(1) = u1;
             Dm.col(2) = u2;
-            Eigen::Matrix3d F = Ds * Dm.inverse();
+            auto DmInv = Dm.inverse();
+            Eigen::Matrix3d F = Ds * DmInv;
             double I5 = normal.transpose() * F.transpose() * F * normal;
             //                if (I5 > 1)continue;
             Eigen::Matrix<double, 9, 1> flatten_pk1;
@@ -2696,9 +2697,8 @@ void compute_g_dpt_new(const mesh3D& mesh,
             tmp.block<3, 1>(3, 0) = fnn.col(1);
             tmp.block<3, 1>(6, 0) = fnn.col(2);
             tmp *= 2;
-            flatten_pk1 = -coef * (d_hat * d_hat * (I5 - 1) * (I5 + 2 * I5 * log(I5) - 1)) / I5 *
-                tmp;
-            auto DmInv = Dm.inverse();
+            flatten_pk1 = -coef * (d_hat * d_hat * (I5 - 1) * (I5 + 2 * I5 * log(I5) - 1)) / I5 * tmp;
+            
             const double m = DmInv(0, 0);
             const double n = DmInv(0, 1);
             const double o = DmInv(0, 2);
@@ -2809,9 +2809,7 @@ void compute_g_dpt_new(const mesh3D& mesh,
                 Eigen::Matrix<double, 3, 1> tmp;
                 tmp.block<3, 1>(0, 0) = fnn.col(0);
                 tmp *= 2;
-                flatten_pk1 =
-                    1 * coef * -(d_hat * d_hat * (I5 - 1) * (I5 + 2 * I5 * log(I5) - 1)) / I5 *
-                    tmp;
+                flatten_pk1 = 1 * coef * -(d_hat * d_hat * (I5 - 1) * (I5 + 2 * I5 * log(I5) - 1)) / I5 * tmp;
 
                 Eigen::Matrix<double, 3, 6> PFPx;
                 PFPx.block<3, 3>(0, 0) = -Eigen::Matrix3d::Identity() * DmInv;
@@ -2885,7 +2883,7 @@ void compute_g_dpt_new(const mesh3D& mesh,
                 auto DmInv = Dm.inverse();
 
 
-                Eigen::Matrix<double, 3, 2> F = Ds * Dm.inverse();
+                Eigen::Matrix<double, 3, 2> F = Ds * DmInv;
                 double I5 = normal.transpose() * F.transpose() * F * normal;
                 Eigen::Matrix<double, 6, 1> flatten_pk1;
 
@@ -2894,9 +2892,7 @@ void compute_g_dpt_new(const mesh3D& mesh,
                 tmp.block<3, 1>(0, 0) = fnn.col(0);
                 tmp.block<3, 1>(3, 0) = fnn.col(1);
                 tmp *= 2;
-                flatten_pk1 =
-                    1 * coef * -(d_hat * d_hat * (I5 - 1) * (I5 + 2 * I5 * log(I5) - 1)) / I5 *
-                    tmp;
+                flatten_pk1 = 1 * coef * -(d_hat * d_hat * (I5 - 1) * (I5 + 2 * I5 * log(I5) - 1)) / I5 * tmp;
 
 
                 double s0 = DmInv.col(0).sum();
@@ -2986,7 +2982,8 @@ void compute_g_dpt_new(const mesh3D& mesh,
                 Dm.col(0) = u0;
                 Dm.col(1) = u1;
                 Dm.col(2) = u2;
-                Eigen::Matrix3d F = Ds * Dm.inverse();
+                auto DmInv = Dm.inverse();
+                Eigen::Matrix3d F = Ds * DmInv;
                 double I5 = normal.transpose() * F.transpose() * F * normal;
 
                 Eigen::Matrix<double, 9, 1> flatten_pk1;
@@ -2996,11 +2993,9 @@ void compute_g_dpt_new(const mesh3D& mesh,
                 tmp.block<3, 1>(3, 0) = fnn.col(1);
                 tmp.block<3, 1>(6, 0) = fnn.col(2);
                 tmp *= 2;
-                flatten_pk1 =
-                    1 * coef * -(d_hat * d_hat * (I5 - 1) * (I5 + 2 * I5 * log(I5) - 1)) / I5 *
-                    tmp;
+                flatten_pk1 = 1 * coef * -(d_hat * d_hat * (I5 - 1) * (I5 + 2 * I5 * log(I5) - 1)) / I5 * tmp;
 
-                auto DmInv = Dm.inverse();
+                
                 const double m = DmInv(0, 0);
                 const double n = DmInv(0, 1);
                 const double o = DmInv(0, 2);
@@ -3362,35 +3357,25 @@ void compute_H_dpt_new(const mesh3D& mesh,
             //bool is_flip = false;
             Eigen::Matrix<double, 9, 12> PDmPx;
             if (dis < 0) {
-                //is_flip = true;
                 normal = -normal;
                 dis = -dis;
             }
-            //if (dis > d_hat_sqrt)continue;
 
             Eigen::Vector3d pos2 = mesh.vertexes[MMCVIDI[2]] + normal * (d_hat_sqrt - dis);
             Eigen::Vector3d pos3 = mesh.vertexes[MMCVIDI[3]] + normal * (d_hat_sqrt - dis);
 
-            Eigen::Vector3d u0 = mesh.vertexes[MMCVIDI[1]] - mesh.vertexes[MMCVIDI[0]];
+            Eigen::Vector3d u0 = v0;
             Eigen::Vector3d u1 = pos2 - mesh.vertexes[MMCVIDI[0]];
             Eigen::Vector3d u2 = pos3 - mesh.vertexes[MMCVIDI[0]];
             Eigen::Matrix3d Dm;
             Dm.col(0) = u0;
             Dm.col(1) = u1;
             Dm.col(2) = u2;
-            Eigen::Matrix3d F = Ds * Dm.inverse();
+
+            auto DmInv = Dm.inverse();
+            Eigen::Matrix3d F = Ds * DmInv;
             double I5 = normal.transpose() * F.transpose() * F * normal;
 
-            //                if (I5 > 1)continue;
-            Eigen::Matrix<double, 9, 1> flatten_pk1;
-
-            auto fnn = F * normal * normal.transpose();
-            Eigen::Matrix<double, 9, 1> tmp;
-            tmp.block<3, 1>(0, 0) = fnn.col(0);
-            tmp.block<3, 1>(3, 0) = fnn.col(1);
-            tmp.block<3, 1>(6, 0) = fnn.col(2);
-            tmp *= 2;
-            auto DmInv = Dm.inverse();
             const double m = DmInv(0, 0);
             const double n = DmInv(0, 1);
             const double o = DmInv(0, 2);
@@ -3442,17 +3427,7 @@ void compute_H_dpt_new(const mesh3D& mesh,
             PFPx(8, 8) = r;
             PFPx(8, 11) = u;
 
-            Eigen::Matrix<double, 9, 9> kro;
-            Eigen::Matrix3d aat2 = 2 * normal * normal.transpose();
-            for (int i = 0; i < 3; i++) {
-                for (int j = 0; j < 3; j++) {
-                    kro.block<3, 3>(3 * i, 3 * j) = aat2(i, j) * Eigen::Matrix3d::Identity();
-                }
-            }
-            double lambda0 =
-                1 * coef *
-                (2 * d_hat * d_hat * (6 * I5 + 2 * I5 * log(I5) - 7 * I5 * I5 - 6 * I5 * I5 * log(I5) + 1)) /
-                I5;
+            double lambda0 = 1 * coef * (2 * d_hat * d_hat * (6 * I5 + 2 * I5 * log(I5) - 7 * I5 * I5 - 6 * I5 * I5 * log(I5) + 1)) / I5;
             Eigen::Matrix<double, 3, 3> Q0 = 1 / sqrt(I5) * F * normal * normal.transpose();
             Eigen::Matrix<double, 9, 1> q0;
             q0.block<3, 1>(0, 0) = Q0.col(0);
@@ -3464,8 +3439,6 @@ void compute_H_dpt_new(const mesh3D& mesh,
             BH.H12x12.push_back(hessian);
         }
         else {
-            // point-triangle and degenerate edge-edge
-            //assert(MMCVIDI[1] >= 0);
 
             int v0I = -MMCVIDI[0] - 1;
             if (MMCVIDI[2] < 0) {
@@ -3495,7 +3468,6 @@ void compute_H_dpt_new(const mesh3D& mesh,
                 }
 
                 double dis = v0.norm();
-                //if (dis > d_hat_sqrt)continue;
                 Eigen::Vector3d pos0 = mesh.vertexes[v0I] + (d_hat_sqrt - dis) * vec_normal;
 
                 auto rotate_uv0 = rotation * pos0;
@@ -3511,26 +3483,12 @@ void compute_H_dpt_new(const mesh3D& mesh,
                 Eigen::Matrix<double, 3, 1> F = Ds * DmInv;
 
                 double I5 = F.transpose() * F;
-                Eigen::Matrix<double, 3, 1> flatten_pk1;
-
-                auto fnn = F;
-                Eigen::Matrix<double, 3, 1> tmp;
-                tmp.block<3, 1>(0, 0) = fnn.col(0);
-                tmp *= 2;
-                flatten_pk1 =
-                    1 * coef * -(d_hat * d_hat * (I5 - 1) * (I5 + 2 * I5 * log(I5) - 1)) / I5 *
-                    tmp;
 
                 Eigen::Matrix<double, 3, 6> PFPx;
                 PFPx.block<3, 3>(0, 0) = -Eigen::Matrix3d::Identity() * DmInv;
                 PFPx.block<3, 3>(0, 3) = Eigen::Matrix3d::Identity() * DmInv;
 
-                auto gradient_vec = PFPx.transpose() * flatten_pk1;
-                Eigen::Matrix3d kro = 2 * Eigen::Matrix3d::Identity();
-                double lambda0 =
-                    1 * coef *
-                    (2 * d_hat * d_hat * (6 * I5 + 2 * I5 * log(I5) - 7 * I5 * I5 - 6 * I5 * I5 * log(I5) + 1)) /
-                    I5;
+                double lambda0 = 1 * coef * (2 * d_hat * d_hat * (6 * I5 + 2 * I5 * log(I5) - 7 * I5 * I5 - 6 * I5 * I5 * log(I5) + 1)) / I5;
                 Eigen::Matrix<double, 3, 1> Q0 = 1 / sqrt(I5) * F;
                 Eigen::Matrix<double, 3, 1> q0;
                 q0.block<3, 1>(0, 0) = Q0.col(0);
@@ -3575,10 +3533,8 @@ void compute_H_dpt_new(const mesh3D& mesh,
                 Eigen::Vector3d edge_normal = (mesh.vertexes[MMCVIDI[1]] - mesh.vertexes[MMCVIDI[2]]).cross(
                     triangle_normal).normalized();
                 double dis = (mesh.vertexes[v0I] - mesh.vertexes[MMCVIDI[1]]).dot(edge_normal);
-                //                dis = dis * dis;
-                //if (dis > d_hat_sqrt)continue;
-                Eigen::Vector3d pos0 = mesh.vertexes[v0I] + (d_hat_sqrt - dis) * edge_normal;
 
+                Eigen::Vector3d pos0 = mesh.vertexes[v0I] + (d_hat_sqrt - dis) * edge_normal;
 
                 auto rotate_uv0 = rotation * pos0;
                 auto rotate_uv1 = rotation * mesh.vertexes[MMCVIDI[1]];
@@ -3599,18 +3555,8 @@ void compute_H_dpt_new(const mesh3D& mesh,
                 auto DmInv = Dm.inverse();
 
 
-                Eigen::Matrix<double, 3, 2> F = Ds * Dm.inverse();
+                Eigen::Matrix<double, 3, 2> F = Ds * DmInv;
                 double I5 = normal.transpose() * F.transpose() * F * normal;
-                Eigen::Matrix<double, 6, 1> flatten_pk1;
-
-                auto fnn = F * normal * normal.transpose();
-                Eigen::Matrix<double, 6, 1> tmp;
-                tmp.block<3, 1>(0, 0) = fnn.col(0);
-                tmp.block<3, 1>(3, 0) = fnn.col(1);
-                tmp *= 2;
-                flatten_pk1 =
-                    1 * coef * -(d_hat * d_hat * (I5 - 1) * (I5 + 2 * I5 * log(I5) - 1)) / I5 *
-                    tmp;
 
 
                 double s0 = DmInv.col(0).sum();
@@ -3660,22 +3606,12 @@ void compute_H_dpt_new(const mesh3D& mesh,
                 PFPx(2, 8) = d1;
                 PFPx(5, 8) = d3;
 
-                Eigen::Matrix<double, 6, 6> kro;
-                Eigen::Matrix2d aat2 = 2 * normal * normal.transpose();
-                for (int i = 0; i < 2; i++) {
-                    for (int j = 0; j < 2; j++) {
-                        kro.block<3, 3>(3 * i, 3 * j) = aat2(i, j) * Eigen::Matrix3d::Identity();
-                    }
-                }
-                double lambda0 =
-                    1 * coef *
-                    (2 * d_hat * d_hat * (6 * I5 + 2 * I5 * log(I5) - 7 * I5 * I5 - 6 * I5 * I5 * log(I5) + 1)) /
-                    I5;
+                double lambda0 = coef * (2 * d_hat * d_hat * (6 * I5 + 2 * I5 * log(I5) - 7 * I5 * I5 - 6 * I5 * I5 * log(I5) + 1)) / I5;
                 Eigen::Matrix<double, 3, 2> Q0 = 1 / sqrt(I5) * F * normal * normal.transpose();
                 Eigen::Matrix<double, 6, 1> q0;
                 q0.block<3, 1>(0, 0) = Q0.col(0);
                 q0.block<3, 1>(3, 0) = Q0.col(1);
-                Eigen::Matrix<double, 6, 6> H = -MMCVIDI[3]*lambda0 * q0 * q0.transpose();
+                Eigen::Matrix<double, 6, 6> H = -MMCVIDI[3] * lambda0 * q0 * q0.transpose();
                 Eigen::Matrix<double, 9, 9> hessian = PFPx.transpose() * H * PFPx;
                 BH.D3Index.push_back(Vector3i(v0I, MMCVIDI[1], MMCVIDI[2]));
                 BH.H9x9.push_back(hessian);
@@ -3704,15 +3640,7 @@ void compute_H_dpt_new(const mesh3D& mesh,
                     dis = -dis;
                 }
 
-                Eigen::Vector3d v0p = mesh.vertexes[v0I] - mesh.vertexes[MMCVIDI[1]];
-                /*Eigen::Vector3d v0p_plane =
-                    mesh.vertexes[MMCVIDI[1]] + (v0p - (v0p.dot(normal) / normal.squaredNorm()) * normal);*/
-                //
-                //                dis = dis * dis;
-                //if (dis > d_hat_sqrt)continue;
                 Eigen::Vector3d pos0 = mesh.vertexes[v0I] + normal * (d_hat_sqrt - dis);
-                //Eigen::Vector3d pos1 = v0p_plane + normal * (d_hat_sqrt);
-
 
                 Eigen::Vector3d u0 = mesh.vertexes[MMCVIDI[1]] - pos0;
                 Eigen::Vector3d u1 = mesh.vertexes[MMCVIDI[2]] - pos0;
@@ -3721,20 +3649,11 @@ void compute_H_dpt_new(const mesh3D& mesh,
                 Dm.col(0) = u0;
                 Dm.col(1) = u1;
                 Dm.col(2) = u2;
-                Eigen::Matrix3d F = Ds * Dm.inverse();
-                double I5 = normal.transpose() * F.transpose() * F * normal;
-
-                Eigen::Matrix<double, 9, 1> flatten_pk1;
-
-                auto fnn = F * normal * normal.transpose();
-                Eigen::Matrix<double, 9, 1> tmp;
-                tmp.block<3, 1>(0, 0) = fnn.col(0);
-                tmp.block<3, 1>(3, 0) = fnn.col(1);
-                tmp.block<3, 1>(6, 0) = fnn.col(2);
-                tmp *= 2;
-
 
                 auto DmInv = Dm.inverse();
+                Eigen::Matrix3d F = Ds * DmInv;
+                double I5 = normal.transpose() * F.transpose() * F * normal;
+
                 const double m = DmInv(0, 0);
                 const double n = DmInv(0, 1);
                 const double o = DmInv(0, 2);
@@ -3786,12 +3705,7 @@ void compute_H_dpt_new(const mesh3D& mesh,
                 PFPx(8, 8) = r;
                 PFPx(8, 11) = u;
 
-
-
-                double lambda0 =
-                    1 * coef *
-                    (2 * d_hat * d_hat * (6 * I5 + 2 * I5 * log(I5) - 7 * I5 * I5 - 6 * I5 * I5 * log(I5) + 1)) /
-                    I5;
+                double lambda0 = coef * (2 * d_hat * d_hat * (6 * I5 + 2 * I5 * log(I5) - 7 * I5 * I5 - 6 * I5 * I5 * log(I5) + 1)) / I5;
                 Eigen::Matrix<double, 3, 3> Q0 = 1 / sqrt(I5) * F * normal * normal.transpose();
                 Eigen::Matrix<double, 9, 1> q0;
                 q0.block<3, 1>(0, 0) = Q0.col(0);
@@ -3801,9 +3715,6 @@ void compute_H_dpt_new(const mesh3D& mesh,
                 Eigen::Matrix<double, 12, 12> hessian = PFPx.transpose() * H * PFPx;
                 BH.D4Index.push_back(Vector4i(v0I, MMCVIDI[1], MMCVIDI[2], MMCVIDI[3]));
                 BH.H12x12.push_back(hessian);
-                //if (I5 < 0)exit(3);
-
-
             }
         }
     }

@@ -12,8 +12,8 @@ bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
     mesh3d.objMinConer = Vector3d(0, 0, 0);
 
 
-    mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/cube.msh", 0.5, Vector3d(0.25, 0.0, 0.25));
-    mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/cube.msh", 0.5, Vector3d(0.25, 0.6, 0.25));
+    //mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/cube.msh", 0.5, Vector3d(0.25, 0.0, 0.25));
+    //mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/cube.msh", 0.5, Vector3d(0.25, 0.6, 0.25));
     //mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/cube.msh", 0.5, Vector3d(0.25, 0.8, 0.25));
     //mesh3d.load_tetrahedraMesh("tetrahedraMesh/cube15.msh", 0.5, Vector3d(-0.25, -0.95, -0.25));
     //mesh3d.load_tetrahedraMesh("tetrahedraMesh/ipcmesh/sqballTet_.msh", 1, Vector3d(0, 0.75, 0));
@@ -53,7 +53,7 @@ bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
     //    mesh3d.load_tetrahedraMesh("tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0.6, -0.65, -0.4));
     //    mesh3d.load_tetrahedraMesh("tetrahedraMesh/bunny2.msh", 0.2, Vector3d(-0.6, -0.65, -0.4));
     //}
-    //mesh3d.load_tetrahedraMesh("tetrahedraMesh/twoBunny.msh", 2, Vector3d(-0, -0, -0));
+    mesh3d.load_tetrahedraMesh("tetrahedraMesh/twoBunny.msh", 2, Vector3d(-0, -0, -0));
     //mesh3d.load_tetrahedraMesh("tetrahedraMesh/bunny.msh", 0.5, Vector3d(-0, 0.4, -0));
     //mesh3d.load_tetrahedraMesh("tetrahedraMesh/bunny.msh", 0.5, Vector3d(-0, -0.4, -0));
     //{

@@ -885,7 +885,7 @@ bool lineSearch(mesh3D& mesh,
         }
 #endif
     }
-
+    c1m *= armijoParam;
     vector<Vector3d> resultV0 = mesh.vertexes;
 
     stepForward(resultV0, searchDir, mesh, stepSize);

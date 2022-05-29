@@ -3709,7 +3709,7 @@ void compute_H_dpt_new(const mesh3D& mesh,
                     mesh.vertexes[MMCVIDI[1]] + (v0p - (v0p.dot(normal) / normal.squaredNorm()) * normal);*/
                 //
                 //                dis = dis * dis;
-                if (dis > d_hat_sqrt)continue;
+                //if (dis > d_hat_sqrt)continue;
                 Eigen::Vector3d pos0 = mesh.vertexes[v0I] + normal * (d_hat_sqrt - dis);
                 //Eigen::Vector3d pos1 = v0p_plane + normal * (d_hat_sqrt);
 

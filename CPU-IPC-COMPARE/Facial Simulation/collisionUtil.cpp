@@ -198,12 +198,16 @@ void SpatialHash::build(const  mesh3D& mesh, const vector<Vector3d>& searchDir, 
 
     const vector<Vector3d>& V = use_V_prev ? mesh.V_prev : mesh.vertexes;
     vector<Vector3d> SVt(mesh.surfVerts.size());
-    std::unordered_map<int, int> vI2SVI;
-    for (int svI = 0; svI < mesh.surfVerts.size(); ++svI) {
-        int vI = mesh.surfVerts[svI];
-        SVt[svI] = V[vI] - curMaxStepSize * searchDir[vI];
-        vI2SVI[vI] = svI;
-    }
+    std::vector<int> vI2SVI(mesh.vertexNum);
+
+    tbb::parallel_for(0, (int)mesh.surfVerts.size(), 1, [&](int svI)
+        //for (int svI = 0; svI < mesh.surfVerts.size(); ++svI) 
+        {
+            int vI = mesh.surfVerts[svI];
+            SVt[svI] = V[vI] - curMaxStepSize * searchDir[vI];
+            vI2SVI[vI] = svI;
+        }
+    );
 
 
     leftBottomCorner = tbb::parallel_reduce(
@@ -213,6 +217,12 @@ void SpatialHash::build(const  mesh3D& mesh, const vector<Vector3d>& searchDir, 
                 sceneSize[0] = min(pos[0], sceneSize[0]);
                 sceneSize[1] = min(pos[1], sceneSize[1]);
                 sceneSize[2] = min(pos[2], sceneSize[2]);
+
+                pos = SVt[i];
+                sceneSize[0] = min(pos[0], sceneSize[0]);
+                sceneSize[1] = min(pos[1], sceneSize[1]);
+                sceneSize[2] = min(pos[2], sceneSize[2]);
+
             }
             return sceneSize;
         },
@@ -229,6 +239,11 @@ void SpatialHash::build(const  mesh3D& mesh, const vector<Vector3d>& searchDir, 
         tbb::blocked_range<int>(0, (int)mesh.surfVerts.size()), Vector3d(-DBL_MAX, -DBL_MAX, -DBL_MAX), [&](const tbb::blocked_range<int>& rg, Vector3d sceneSize) {
             for (int i = rg.begin(); i != rg.end(); i++) {
                 Vector3d pos = V[mesh.surfVerts[i]];
+                sceneSize[0] = max(pos[0], sceneSize[0]);
+                sceneSize[1] = max(pos[1], sceneSize[1]);
+                sceneSize[2] = max(pos[2], sceneSize[2]);
+
+                pos = SVt[i];
                 sceneSize[0] = max(pos[0], sceneSize[0]);
                 sceneSize[1] = max(pos[1], sceneSize[1]);
                 sceneSize[2] = max(pos[2], sceneSize[2]);

@@ -34,7 +34,7 @@ void buildConstraintStartIndsWithMM(const vector<int>& activeSet,
 void computeXTilta(mesh3D& mesh)
 {
     mesh.xTilta.resize(mesh.vertexes.size());
-    Vector3d gravityDtSq = Vector3d(0, -0, 0) * IPC_dt * IPC_dt;
+    Vector3d gravityDtSq = Vector3d(0, -9.8, 0) * IPC_dt * IPC_dt;
 #ifdef USE_TBB
         tbb::parallel_for(0, (int)mesh.vertexes.size(), 1, [&](int vI)
 #else
@@ -955,9 +955,9 @@ bool lineSearch(mesh3D& mesh,
     //msg << stepSize << "(armijo) ";
     printf("lineSearch step: %f\n", stepSize);
     lastEnergyVal = testingE;
-    if (stepSize >= 1.0 / (1 << (1 + numOfLineSearch)) && !numOfIntersect /*&& !numOfLineSearch*/ && abs(testingE - lastEnergyVal) / abs(lastEnergyVal - mesh.restSNKE) < 1e-8 / IPC_dt / (1 << (numOfLineSearch + 1))/* / vertexNum*/ /*&& (testingE > lastEnergyVal + c1m * alpha)*/) {
-        stopped = true;
-    }
+    //if (stepSize >= 1.0 / (1 << (1 + numOfLineSearch)) && !numOfIntersect /*&& !numOfLineSearch*/ && abs(testingE - lastEnergyVal) / abs(lastEnergyVal - mesh.restSNKE) < 1e-8 / IPC_dt / (1 << (numOfLineSearch + 1))/* / vertexNum*/ /*&& (testingE > lastEnergyVal + c1m * alpha)*/) {
+    //    stopped = true;
+    //}
     return stopped;
 }
 
@@ -1152,7 +1152,7 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa) {
     int iterCap = 10000, k = 0;
 
     vector<Vector3d> moveDir(mesh.vertexNum, Vector3d(0, 0, 0));
-    if (true)
+    if (false)
     {
         double new_alpha = 1;
         updateBoundaryMoveDir(mesh, moveDir, IPC_dt, new_alpha);

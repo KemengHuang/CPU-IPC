@@ -769,7 +769,13 @@ void display(void)
 
     }
     int k = simulator.simulateStick();
+    newtonIt.push_back(k);
 
+    ofstream outIte("newTonIter.txt");
+    for (auto value : newtonIt) {
+        outIte << value << endl;
+    }
+    outIte.close();
 }
 
 void initScene0() {

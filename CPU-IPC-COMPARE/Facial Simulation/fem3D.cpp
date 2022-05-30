@@ -7,7 +7,7 @@
 #include <tbb/parallel_reduce.h>
 #include <tbb/spin_mutex.h>
 #include<fstream>
-#include <igl/winding_number.h>
+//#include <igl/winding_number.h>
 #include "fem_parameters.h"
 #include "IPCdistanceFuncs.h"
 

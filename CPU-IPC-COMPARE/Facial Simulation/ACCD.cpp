@@ -154,9 +154,6 @@ double point_triangle_distance(const Vector3d& p, const Vector3d& t0, const Vect
 double edge_edge_distance(const Vector3d& ea0, const Vector3d& ea1, const Vector3d& eb0, const Vector3d& eb1)
 {
     auto b = (ea1 - ea0).cross(eb1 - eb0);
-    //if (b.squaredNorm() < 1e-10) {
-    //    b = (ea1 - ea0).cross(eb1 - ea0).cross(ea1 - ea0);
-    //}
     double aTb = (eb0 - ea0).dot(b);
     return aTb * aTb / b.squaredNorm();
 }

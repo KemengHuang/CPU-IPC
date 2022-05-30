@@ -7,10 +7,7 @@
 #include "Simulator.h"
 #include <tbb/parallel_for.h>
 #include <tbb/spin_mutex.h>
-#include "glm/glm.hpp"
-#include "glm/gtc/matrix_transform.hpp"
-#include "glm/gtc/type_ptr.hpp"
-//#include <unsupported/Eigen/SparseExtra>
+
 using namespace std;
 int step = 0;
 int surfNumId = 0;

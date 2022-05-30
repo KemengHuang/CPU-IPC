@@ -300,98 +300,86 @@ void SpatialHash::build(const  mesh3D& mesh, const vector<Vector3d>& searchDir, 
     // precompute svVAI
     std::vector<Eigen::Array<int, 1, 3>> svMinVAI(mesh.surfVerts.size());
     std::vector<Eigen::Array<int, 1, 3>> svMaxVAI(mesh.surfVerts.size());
-#ifdef USE_TBB
+
     tbb::parallel_for(0, (int)mesh.surfVerts.size(), 1, [&](int svI)
-#else
-    for (int svI = 0; svI < mesh.surfVerts.size(); ++svI)
-#endif
-    {
-        int vI = mesh.surfVerts[svI];
-        Eigen::Array<int, 1, 3> v0VAI, vtVAI;
-        locateVoxelAxisIndex(V[vI], v0VAI);
-        locateVoxelAxisIndex(SVt[svI], vtVAI);
-        svMinVAI[svI] = v0VAI.min(vtVAI);
-        svMaxVAI[svI] = v0VAI.max(vtVAI);
-    }
-#ifdef USE_TBB
+        {
+            int vI = mesh.surfVerts[svI];
+            Eigen::Array<int, 1, 3> v0VAI, vtVAI;
+            locateVoxelAxisIndex(V[vI], v0VAI);
+            locateVoxelAxisIndex(SVt[svI], vtVAI);
+            svMinVAI[svI] = v0VAI.min(vtVAI);
+            svMaxVAI[svI] = v0VAI.max(vtVAI);
+        }
+
     );
-#endif
 
     voxel.clear(); //TODO: parallel insert
     pointAndEdgeOccupancy.resize(0);
     pointAndEdgeOccupancy.resize(surfTriStartInd);
 
-#ifdef USE_TBB
+
     tbb::parallel_for(0, (int)mesh.surfVerts.size(), 1, [&](int svI)
-#else
-    for (int svI = 0; svI < mesh.surfVerts.size(); ++svI)
-#endif
-    {
-        const Eigen::Array<int, 1, 3>& mins = svMinVAI[svI];
-        const Eigen::Array<int, 1, 3>& maxs = svMaxVAI[svI];
-        pointAndEdgeOccupancy[svI].reserve((maxs - mins + 1).prod());
-        for (int iz = mins[2]; iz <= maxs[2]; ++iz) {
-            int zOffset = iz * voxelCount0x1;
-            for (int iy = mins[1]; iy <= maxs[1]; ++iy) {
-                int yzOffset = iy * voxelCount[0] + zOffset;
-                for (int ix = mins[0]; ix <= maxs[0]; ++ix) {
-                    pointAndEdgeOccupancy[svI].emplace_back(ix + yzOffset);
+
+        {
+            const Eigen::Array<int, 1, 3>& mins = svMinVAI[svI];
+            const Eigen::Array<int, 1, 3>& maxs = svMaxVAI[svI];
+            pointAndEdgeOccupancy[svI].reserve((maxs - mins + 1).prod());
+            for (int iz = mins[2]; iz <= maxs[2]; ++iz) {
+                int zOffset = iz * voxelCount0x1;
+                for (int iy = mins[1]; iy <= maxs[1]; ++iy) {
+                    int yzOffset = iy * voxelCount[0] + zOffset;
+                    for (int ix = mins[0]; ix <= maxs[0]; ++ix) {
+                        pointAndEdgeOccupancy[svI].emplace_back(ix + yzOffset);
+                    }
                 }
             }
         }
-    }
-#ifdef USE_TBB
-    );
-#endif
 
-#ifdef USE_TBB
+    );
+
+
+
     tbb::parallel_for(0, (int)mesh.surfEdges.size(), 1, [&](int seCount)
-#else
-    for (int seCount = 0; seCount < mesh.surfEdges.size(); ++seCount)
-#endif
-    {
-        int seIInd = seCount + surfEdgeStartInd;
-        const auto& seI = mesh.surfEdges[seCount];
 
-        Eigen::Array<int, 1, 3> mins = svMinVAI[vI2SVI[seI.first]].min(svMinVAI[vI2SVI[seI.second]]);
-        Eigen::Array<int, 1, 3> maxs = svMaxVAI[vI2SVI[seI.first]].max(svMaxVAI[vI2SVI[seI.second]]);
-        pointAndEdgeOccupancy[seIInd].reserve((maxs - mins + 1).prod());
-        for (int iz = mins[2]; iz <= maxs[2]; ++iz) {
-            int zOffset = iz * voxelCount0x1;
-            for (int iy = mins[1]; iy <= maxs[1]; ++iy) {
-                int yzOffset = iy * voxelCount[0] + zOffset;
-                for (int ix = mins[0]; ix <= maxs[0]; ++ix) {
-                    pointAndEdgeOccupancy[seIInd].emplace_back(ix + yzOffset);
+        {
+            int seIInd = seCount + surfEdgeStartInd;
+            const auto& seI = mesh.surfEdges[seCount];
+
+            Eigen::Array<int, 1, 3> mins = svMinVAI[vI2SVI[seI.first]].min(svMinVAI[vI2SVI[seI.second]]);
+            Eigen::Array<int, 1, 3> maxs = svMaxVAI[vI2SVI[seI.first]].max(svMaxVAI[vI2SVI[seI.second]]);
+            pointAndEdgeOccupancy[seIInd].reserve((maxs - mins + 1).prod());
+            for (int iz = mins[2]; iz <= maxs[2]; ++iz) {
+                int zOffset = iz * voxelCount0x1;
+                for (int iy = mins[1]; iy <= maxs[1]; ++iy) {
+                    int yzOffset = iy * voxelCount[0] + zOffset;
+                    for (int ix = mins[0]; ix <= maxs[0]; ++ix) {
+                        pointAndEdgeOccupancy[seIInd].emplace_back(ix + yzOffset);
+                    }
                 }
             }
         }
-    }
-#ifdef USE_TBB
+
     );
-#endif
 
     std::vector<std::vector<int>> voxelLoc_sf(mesh.surface.size());
-#ifdef USE_TBB
+
     tbb::parallel_for(0, (int)mesh.surface.size(), 1, [&](int sfI)
-#else
-    for (int sfI = 0; sfI < mesh.surface.size(); ++sfI)
-#endif
-    {
-        Eigen::Array<int, 1, 3> mins = svMinVAI[vI2SVI[mesh.surface[sfI][0]]].min(svMinVAI[vI2SVI[mesh.surface[sfI][1]]]).min(svMinVAI[vI2SVI[mesh.surface[sfI][2]]]);
-        Eigen::Array<int, 1, 3> maxs = svMaxVAI[vI2SVI[mesh.surface[sfI][0]]].max(svMaxVAI[vI2SVI[mesh.surface[sfI][1]]]).max(svMaxVAI[vI2SVI[mesh.surface[sfI][2]]]);
-        for (int iz = mins[2]; iz <= maxs[2]; ++iz) {
-            int zOffset = iz * voxelCount0x1;
-            for (int iy = mins[1]; iy <= maxs[1]; ++iy) {
-                int yzOffset = iy * voxelCount[0] + zOffset;
-                for (int ix = mins[0]; ix <= maxs[0]; ++ix) {
-                    voxelLoc_sf[sfI].emplace_back(ix + yzOffset);
+
+        {
+            Eigen::Array<int, 1, 3> mins = svMinVAI[vI2SVI[mesh.surface[sfI][0]]].min(svMinVAI[vI2SVI[mesh.surface[sfI][1]]]).min(svMinVAI[vI2SVI[mesh.surface[sfI][2]]]);
+            Eigen::Array<int, 1, 3> maxs = svMaxVAI[vI2SVI[mesh.surface[sfI][0]]].max(svMaxVAI[vI2SVI[mesh.surface[sfI][1]]]).max(svMaxVAI[vI2SVI[mesh.surface[sfI][2]]]);
+            for (int iz = mins[2]; iz <= maxs[2]; ++iz) {
+                int zOffset = iz * voxelCount0x1;
+                for (int iy = mins[1]; iy <= maxs[1]; ++iy) {
+                    int yzOffset = iy * voxelCount[0] + zOffset;
+                    for (int ix = mins[0]; ix <= maxs[0]; ++ix) {
+                        voxelLoc_sf[sfI].emplace_back(ix + yzOffset);
+                    }
                 }
             }
         }
-    }
-#ifdef USE_TBB
+
     );
-#endif
 
     for (int i = 0; i < pointAndEdgeOccupancy.size(); ++i) {
         for (const auto& voxelI : pointAndEdgeOccupancy[i]) {

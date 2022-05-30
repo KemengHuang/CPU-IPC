@@ -14,8 +14,8 @@ bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
     //mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/cube.msh", 0.5, Vector3d(0.25, 0.6, 0.25));
     //mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/cube.msh", 0.5, Vector3d(0.25, 0.8, 0.25));
     //mesh3d.load_tetrahedraMesh("tetrahedraMesh/cube15.msh", 0.5, Vector3d(-0.25, -0.95, -0.25));
-    mesh3d.load_tetrahedraMesh("tetrahedraMesh/ipcmesh/sqballTet_.msh", 1, Vector3d(0, 0.75, 0));
-    mesh3d.load_tetrahedraMesh("tetrahedraMesh/ipcmesh/sqballTet_.msh", 1, Vector3d(0, -0.3, 0));
+    //mesh3d.load_tetrahedraMesh("tetrahedraMesh/ipcmesh/sqballTet_.msh", 1, Vector3d(0, 0.75, 0));
+    //mesh3d.load_tetrahedraMesh("tetrahedraMesh/ipcmesh/sqballTet_.msh", 1, Vector3d(0, -0.3, 0));
     //mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/sqballTet_.msh", 1, Vector3d(0, -0.75, 0));
 
     //if(true)
@@ -51,7 +51,7 @@ bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
     //    mesh3d.load_tetrahedraMesh("tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0.6, -0.65, -0.4));
     //    mesh3d.load_tetrahedraMesh("tetrahedraMesh/bunny2.msh", 0.2, Vector3d(-0.6, -0.65, -0.4));
     //}
-    //mesh3d.load_tetrahedraMesh("tetrahedraMesh/twoBunny.msh", 2, Vector3d(-0, -0, -0));
+    mesh3d.load_tetrahedraMesh("tetrahedraMesh/twoBunny.msh", 2, Vector3d(-0, -0, -0));
     //mesh3d.load_tetrahedraMesh("tetrahedraMesh/bunny.msh", 0.5, Vector3d(-0, 0.4, -0));
     //mesh3d.load_tetrahedraMesh("tetrahedraMesh/bunny.msh", 0.5, Vector3d(-0, -0.4, -0));
     //{
@@ -95,7 +95,7 @@ bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
 
 
     mesh3d.bboxDiagSize2 = (mesh3d.maxConer - mesh3d.minConer).squaredNorm();
-    mesh3d.Hhat = /*1e-6*/22.5e-8 */* mesh3d.bboxDiagSize2;*/ (mesh3d.objMaxConer - mesh3d.objMinConer).squaredNorm();
+    mesh3d.Hhat = 1e-6/*22.5e-8*/ */* mesh3d.bboxDiagSize2;*/ (mesh3d.objMaxConer - mesh3d.objMinConer).squaredNorm();
     mesh3d.Kappa = 0;
     mesh3d.dTol = 1e-18 * mesh3d.bboxDiagSize2;
     tetrahedra_meshes.mesh3Ds.push_back(mesh3d);

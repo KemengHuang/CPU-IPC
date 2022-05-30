@@ -13,192 +13,177 @@ std::vector<Eigen::Triplet<double>> BHessian::toTriplets(const vector<int>& Btyp
         Triplet<double>(0, 0, 0));
     int offset = 0;
 
-#ifdef USE_TBB
     tbb::parallel_for(0, (int)D1Index.size(), 1, [&](int i)
-#else
-    for (int i = 0; i < D1Index.size(); i++)
-#endif
-    {
-        if (D1Index[i] >= 0) {
-            for (int j = 0; j < 3; j++) {
-                for (int k = 0; k < 3; k++) {
-                    if (Btype[D1Index[i]] == 0)
-                    coefficients[offset + i * 9 + j * 3 + k] = Triplet<double>(3 * D1Index[i] + j,
-                        3 * D1Index[i] + k,
-                        H3x3[i](j, k));
+        {
+            if (D1Index[i] >= 0) {
+                for (int j = 0; j < 3; j++) {
+                    for (int k = 0; k < 3; k++) {
+                        if (Btype[D1Index[i]] == 0)
+                            coefficients[offset + i * 9 + j * 3 + k] = Triplet<double>(3 * D1Index[i] + j,
+                                3 * D1Index[i] + k,
+                                H3x3[i](j, k));
+                    }
                 }
             }
         }
-    }
-#ifdef USE_TBB
     );
-#endif
+
     offset = D1Index.size() * 9;
 
-#ifdef USE_TBB
     tbb::parallel_for(0, (int)D2Index.size(), 1, [&](int i)
-#else
-    for (int i = 0; i < D2Index.size(); i++)
-#endif
-    {
-        for (int j = 0; j < 3; j++) {
-            for (int k = 0; k < 3; k++) {
-                if (Btype[D2Index[i][0]] == 0)
-                    coefficients[offset + i * 9 * 4 + j * 3 + k] = Triplet<double>(3 * D2Index[i][0] + j,
-                        3 * D2Index[i][0] + k,
-                        H6x6[i](j, k));
-                if (Btype[D2Index[i][0]] == 0 && Btype[D2Index[i][1]] == 0)
-                    coefficients[offset + i * 9 * 4 + 9 + j * 3 + k] = Triplet<double>(3 * D2Index[i][0] + j,
-                        3 * D2Index[i][1] + k,
-                        H6x6[i](j, k + 3));
-                if (Btype[D2Index[i][0]] == 0 && Btype[D2Index[i][1]] == 0)
-                    coefficients[offset + i * 9 * 4 + 18 + j * 3 + k] = Triplet<double>(3 * D2Index[i][1] + j,
-                        3 * D2Index[i][0] + k,
-                        H6x6[i](j + 3, k));
-                if (Btype[D2Index[i][1]] == 0)
-                    coefficients[offset + i * 9 * 4 + 27 + j * 3 + k] = Triplet<double>(3 * D2Index[i][1] + j,
-                        3 * D2Index[i][1] + k,
-                        H6x6[i](j + 3, k + 3));
+        {
+            for (int j = 0; j < 3; j++) {
+                for (int k = 0; k < 3; k++) {
+                    if (Btype[D2Index[i][0]] == 0)
+                        coefficients[offset + i * 9 * 4 + j * 3 + k] = Triplet<double>(3 * D2Index[i][0] + j,
+                            3 * D2Index[i][0] + k,
+                            H6x6[i](j, k));
+                    if (Btype[D2Index[i][0]] == 0 && Btype[D2Index[i][1]] == 0)
+                        coefficients[offset + i * 9 * 4 + 9 + j * 3 + k] = Triplet<double>(3 * D2Index[i][0] + j,
+                            3 * D2Index[i][1] + k,
+                            H6x6[i](j, k + 3));
+                    if (Btype[D2Index[i][0]] == 0 && Btype[D2Index[i][1]] == 0)
+                        coefficients[offset + i * 9 * 4 + 18 + j * 3 + k] = Triplet<double>(3 * D2Index[i][1] + j,
+                            3 * D2Index[i][0] + k,
+                            H6x6[i](j + 3, k));
+                    if (Btype[D2Index[i][1]] == 0)
+                        coefficients[offset + i * 9 * 4 + 27 + j * 3 + k] = Triplet<double>(3 * D2Index[i][1] + j,
+                            3 * D2Index[i][1] + k,
+                            H6x6[i](j + 3, k + 3));
+                }
             }
         }
-    }
-#ifdef USE_TBB
+
     );
-#endif
+
     offset += D2Index.size() * 36;
 
-#ifdef USE_TBB
-    tbb::parallel_for(0, (int)D3Index.size(), 1, [&](int i)
-#else
-    for (int i = 0; i < D3Index.size(); i++)
-#endif
-    {
-        //                              IglUtils::makePD(H9x9[i]);
-        //            std::cout << D3Index[i].transpose() << std::endl;
-        for (int j = 0; j < 3; j++) {
-            for (int k = 0; k < 3; k++) {
-                if (Btype[D3Index[i][0]] == 0)
-                    coefficients[offset + i * 9 * 9 + j * 3 + k] = Triplet<double>(3 * D3Index[i][0] + j,
-                        3 * D3Index[i][0] + k,
-                        H9x9[i](j, k));
-                if (Btype[D3Index[i][0]] == 0 && Btype[D3Index[i][1]] == 0)
-                    coefficients[offset + i * 9 * 9 + 9 + j * 3 + k] = Triplet<double>(3 * D3Index[i][0] + j,
-                        3 * D3Index[i][1] + k,
-                        H9x9[i](j, k + 3));
-                if (Btype[D3Index[i][0]] == 0 && Btype[D3Index[i][2]] == 0)
-                    coefficients[offset + i * 9 * 9 + 18 + j * 3 + k] = Triplet<double>(3 * D3Index[i][0] + j,
-                        3 * D3Index[i][2] + k,
-                        H9x9[i](j, k + 6));
-                if (Btype[D3Index[i][0]] == 0 && Btype[D3Index[i][1]] == 0)
-                    coefficients[offset + i * 9 * 9 + 27 + j * 3 + k] = Triplet<double>(3 * D3Index[i][1] + j,
-                        3 * D3Index[i][0] + k,
-                        H9x9[i](j + 3, k));
-                if (Btype[D3Index[i][1]] == 0)
-                    coefficients[offset + i * 9 * 9 + 36 + j * 3 + k] = Triplet<double>(3 * D3Index[i][1] + j,
-                        3 * D3Index[i][1] + k,
-                        H9x9[i](j + 3, k + 3));
 
-                if (Btype[D3Index[i][1]] == 0 && Btype[D3Index[i][2]] == 0)
-                    coefficients[offset + i * 9 * 9 + 45 + j * 3 + k] = Triplet<double>(3 * D3Index[i][1] + j,
-                        3 * D3Index[i][2] + k,
-                        H9x9[i](j + 3, k + 6));
-                if (Btype[D3Index[i][2]] == 0 && Btype[D3Index[i][0]] == 0)
-                    coefficients[offset + i * 9 * 9 + 54 + j * 3 + k] = Triplet<double>(3 * D3Index[i][2] + j,
-                        3 * D3Index[i][0] + k,
-                        H9x9[i](j + 6, k));
-                if (Btype[D3Index[i][2]] == 0 && Btype[D3Index[i][1]] == 0)
-                    coefficients[offset + i * 9 * 9 + 63 + j * 3 + k] = Triplet<double>(3 * D3Index[i][2] + j,
-                        3 * D3Index[i][1] + k,
-                        H9x9[i](j + 6, k + 3));
-                if (Btype[D3Index[i][2]] == 0)
-                    coefficients[offset + i * 9 * 9 + 72 + j * 3 + k] = Triplet<double>(3 * D3Index[i][2] + j,
-                        3 * D3Index[i][2] + k,
-                        H9x9[i](j + 6, k + 6));
-    }
-}
-                          }
-#ifdef USE_TBB
-    );
-#endif
-    offset += D3Index.size() * 81;
-#ifdef USE_TBB
-    tbb::parallel_for(0, (int)D4Index.size(), 1, [&](int i)
-#else
-    for (int i = 0; i < D4Index.size(); i++)
-#endif
-    {
-        for (int j = 0; j < 3; j++) {
-            for (int k = 0; k < 3; k++) {
-                if (Btype[D4Index[i][0]] == 0)
-                    coefficients[offset + i * 9 * 16 + j * 3 + k] = Triplet<double>(3 * D4Index[i][0] + j,
-                        3 * D4Index[i][0] + k,
-                        H12x12[i](j, k));
-                if (Btype[D4Index[i][0]] == 0 && Btype[D4Index[i][1]] == 0)
-                    coefficients[offset + i * 9 * 16 + 9 + j * 3 + k] = Triplet<double>(3 * D4Index[i][0] + j,
-                        3 * D4Index[i][1] + k,
-                        H12x12[i](j, k + 3));
-                if (Btype[D4Index[i][0]] == 0 && Btype[D4Index[i][2]] == 0)
-                    coefficients[offset + i * 9 * 16 + 18 + j * 3 + k] = Triplet<double>(3 * D4Index[i][0] + j,
-                        3 * D4Index[i][2] + k,
-                        H12x12[i](j, k + 6));
-                if (Btype[D4Index[i][0]] == 0 && Btype[D4Index[i][3]] == 0)
-                    coefficients[offset + i * 9 * 16 + 27 + j * 3 + k] = Triplet<double>(3 * D4Index[i][0] + j,
-                        3 * D4Index[i][3] + k,
-                        H12x12[i](j, k + 9));
-                if (Btype[D4Index[i][0]] == 0 && Btype[D4Index[i][1]] == 0)
-                    coefficients[offset + i * 9 * 16 + 36 + j * 3 + k] = Triplet<double>(3 * D4Index[i][1] + j,
-                        3 * D4Index[i][0] + k,
-                        H12x12[i](j + 3, k));
-                if (Btype[D4Index[i][1]] == 0)
-                    coefficients[offset + i * 9 * 16 + 45 + j * 3 + k] = Triplet<double>(3 * D4Index[i][1] + j,
-                        3 * D4Index[i][1] + k,
-                        H12x12[i](j + 3, k + 3));
-                if (Btype[D4Index[i][2]] == 0 && Btype[D4Index[i][1]] == 0)
-                    coefficients[offset + i * 9 * 16 + 54 + j * 3 + k] = Triplet<double>(3 * D4Index[i][1] + j,
-                        3 * D4Index[i][2] + k,
-                        H12x12[i](j + 3, k + 6));
-                if (Btype[D4Index[i][3]] == 0 && Btype[D4Index[i][1]] == 0)
-                    coefficients[offset + i * 9 * 16 + 63 + j * 3 + k] = Triplet<double>(3 * D4Index[i][1] + j,
-                        3 * D4Index[i][3] + k,
-                        H12x12[i](j + 3, k + 9));
-                if (Btype[D4Index[i][0]] == 0 && Btype[D4Index[i][2]] == 0)
-                    coefficients[offset + i * 9 * 16 + 72 + j * 3 + k] = Triplet<double>(3 * D4Index[i][2] + j,
-                        3 * D4Index[i][0] + k,
-                        H12x12[i](j + 6, k));
-                if (Btype[D4Index[i][2]] == 0 && Btype[D4Index[i][1]] == 0)
-                    coefficients[offset + i * 9 * 16 + 81 + j * 3 + k] = Triplet<double>(3 * D4Index[i][2] + j,
-                        3 * D4Index[i][1] + k,
-                        H12x12[i](j + 6, k + 3));
-                if (Btype[D4Index[i][2]] == 0)
-                    coefficients[offset + i * 9 * 16 + 90 + j * 3 + k] = Triplet<double>(3 * D4Index[i][2] + j,
-                        3 * D4Index[i][2] + k,
-                        H12x12[i](j + 6, k + 6));
-                if (Btype[D4Index[i][2]] == 0 && Btype[D4Index[i][3]] == 0)
-                    coefficients[offset + i * 9 * 16 + 99 + j * 3 + k] = Triplet<double>(3 * D4Index[i][2] + j,
-                        3 * D4Index[i][3] + k,
-                        H12x12[i](j + 6, k + 9));
-                if (Btype[D4Index[i][0]] == 0 && Btype[D4Index[i][3]] == 0)
-                    coefficients[offset + i * 9 * 16 + 108 + j * 3 + k] = Triplet<double>(3 * D4Index[i][3] + j,
-                        3 * D4Index[i][0] + k,
-                        H12x12[i](j + 9, k));
-                if (Btype[D4Index[i][1]] == 0 && Btype[D4Index[i][3]] == 0)
-                    coefficients[offset + i * 9 * 16 + 117 + j * 3 + k] = Triplet<double>(3 * D4Index[i][3] + j,
-                        3 * D4Index[i][1] + k,
-                        H12x12[i](j + 9, k + 3));
-                if (Btype[D4Index[i][2]] == 0 && Btype[D4Index[i][3]] == 0)
-                    coefficients[offset + i * 9 * 16 + 126 + j * 3 + k] = Triplet<double>(3 * D4Index[i][3] + j,
-                        3 * D4Index[i][2] + k,
-                        H12x12[i](j + 9, k + 6));
-                if (Btype[D4Index[i][3]] == 0)
-                    coefficients[offset + i * 9 * 16 + 135 + j * 3 + k] = Triplet<double>(3 * D4Index[i][3] + j,
-                        3 * D4Index[i][3] + k,
-                        H12x12[i](j + 9, k + 9));
+    tbb::parallel_for(0, (int)D3Index.size(), 1, [&](int i)
+
+        {
+            //                              IglUtils::makePD(H9x9[i]);
+            //            std::cout << D3Index[i].transpose() << std::endl;
+            for (int j = 0; j < 3; j++) {
+                for (int k = 0; k < 3; k++) {
+                    if (Btype[D3Index[i][0]] == 0)
+                        coefficients[offset + i * 9 * 9 + j * 3 + k] = Triplet<double>(3 * D3Index[i][0] + j,
+                            3 * D3Index[i][0] + k,
+                            H9x9[i](j, k));
+                    if (Btype[D3Index[i][0]] == 0 && Btype[D3Index[i][1]] == 0)
+                        coefficients[offset + i * 9 * 9 + 9 + j * 3 + k] = Triplet<double>(3 * D3Index[i][0] + j,
+                            3 * D3Index[i][1] + k,
+                            H9x9[i](j, k + 3));
+                    if (Btype[D3Index[i][0]] == 0 && Btype[D3Index[i][2]] == 0)
+                        coefficients[offset + i * 9 * 9 + 18 + j * 3 + k] = Triplet<double>(3 * D3Index[i][0] + j,
+                            3 * D3Index[i][2] + k,
+                            H9x9[i](j, k + 6));
+                    if (Btype[D3Index[i][0]] == 0 && Btype[D3Index[i][1]] == 0)
+                        coefficients[offset + i * 9 * 9 + 27 + j * 3 + k] = Triplet<double>(3 * D3Index[i][1] + j,
+                            3 * D3Index[i][0] + k,
+                            H9x9[i](j + 3, k));
+                    if (Btype[D3Index[i][1]] == 0)
+                        coefficients[offset + i * 9 * 9 + 36 + j * 3 + k] = Triplet<double>(3 * D3Index[i][1] + j,
+                            3 * D3Index[i][1] + k,
+                            H9x9[i](j + 3, k + 3));
+
+                    if (Btype[D3Index[i][1]] == 0 && Btype[D3Index[i][2]] == 0)
+                        coefficients[offset + i * 9 * 9 + 45 + j * 3 + k] = Triplet<double>(3 * D3Index[i][1] + j,
+                            3 * D3Index[i][2] + k,
+                            H9x9[i](j + 3, k + 6));
+                    if (Btype[D3Index[i][2]] == 0 && Btype[D3Index[i][0]] == 0)
+                        coefficients[offset + i * 9 * 9 + 54 + j * 3 + k] = Triplet<double>(3 * D3Index[i][2] + j,
+                            3 * D3Index[i][0] + k,
+                            H9x9[i](j + 6, k));
+                    if (Btype[D3Index[i][2]] == 0 && Btype[D3Index[i][1]] == 0)
+                        coefficients[offset + i * 9 * 9 + 63 + j * 3 + k] = Triplet<double>(3 * D3Index[i][2] + j,
+                            3 * D3Index[i][1] + k,
+                            H9x9[i](j + 6, k + 3));
+                    if (Btype[D3Index[i][2]] == 0)
+                        coefficients[offset + i * 9 * 9 + 72 + j * 3 + k] = Triplet<double>(3 * D3Index[i][2] + j,
+                            3 * D3Index[i][2] + k,
+                            H9x9[i](j + 6, k + 6));
+                }
             }
         }
-    }
-#ifdef USE_TBB
+
     );
-#endif
+
+    offset += D3Index.size() * 81;
+
+    tbb::parallel_for(0, (int)D4Index.size(), 1, [&](int i)
+        {
+            for (int j = 0; j < 3; j++) {
+                for (int k = 0; k < 3; k++) {
+                    if (Btype[D4Index[i][0]] == 0)
+                        coefficients[offset + i * 9 * 16 + j * 3 + k] = Triplet<double>(3 * D4Index[i][0] + j,
+                            3 * D4Index[i][0] + k,
+                            H12x12[i](j, k));
+                    if (Btype[D4Index[i][0]] == 0 && Btype[D4Index[i][1]] == 0)
+                        coefficients[offset + i * 9 * 16 + 9 + j * 3 + k] = Triplet<double>(3 * D4Index[i][0] + j,
+                            3 * D4Index[i][1] + k,
+                            H12x12[i](j, k + 3));
+                    if (Btype[D4Index[i][0]] == 0 && Btype[D4Index[i][2]] == 0)
+                        coefficients[offset + i * 9 * 16 + 18 + j * 3 + k] = Triplet<double>(3 * D4Index[i][0] + j,
+                            3 * D4Index[i][2] + k,
+                            H12x12[i](j, k + 6));
+                    if (Btype[D4Index[i][0]] == 0 && Btype[D4Index[i][3]] == 0)
+                        coefficients[offset + i * 9 * 16 + 27 + j * 3 + k] = Triplet<double>(3 * D4Index[i][0] + j,
+                            3 * D4Index[i][3] + k,
+                            H12x12[i](j, k + 9));
+                    if (Btype[D4Index[i][0]] == 0 && Btype[D4Index[i][1]] == 0)
+                        coefficients[offset + i * 9 * 16 + 36 + j * 3 + k] = Triplet<double>(3 * D4Index[i][1] + j,
+                            3 * D4Index[i][0] + k,
+                            H12x12[i](j + 3, k));
+                    if (Btype[D4Index[i][1]] == 0)
+                        coefficients[offset + i * 9 * 16 + 45 + j * 3 + k] = Triplet<double>(3 * D4Index[i][1] + j,
+                            3 * D4Index[i][1] + k,
+                            H12x12[i](j + 3, k + 3));
+                    if (Btype[D4Index[i][2]] == 0 && Btype[D4Index[i][1]] == 0)
+                        coefficients[offset + i * 9 * 16 + 54 + j * 3 + k] = Triplet<double>(3 * D4Index[i][1] + j,
+                            3 * D4Index[i][2] + k,
+                            H12x12[i](j + 3, k + 6));
+                    if (Btype[D4Index[i][3]] == 0 && Btype[D4Index[i][1]] == 0)
+                        coefficients[offset + i * 9 * 16 + 63 + j * 3 + k] = Triplet<double>(3 * D4Index[i][1] + j,
+                            3 * D4Index[i][3] + k,
+                            H12x12[i](j + 3, k + 9));
+                    if (Btype[D4Index[i][0]] == 0 && Btype[D4Index[i][2]] == 0)
+                        coefficients[offset + i * 9 * 16 + 72 + j * 3 + k] = Triplet<double>(3 * D4Index[i][2] + j,
+                            3 * D4Index[i][0] + k,
+                            H12x12[i](j + 6, k));
+                    if (Btype[D4Index[i][2]] == 0 && Btype[D4Index[i][1]] == 0)
+                        coefficients[offset + i * 9 * 16 + 81 + j * 3 + k] = Triplet<double>(3 * D4Index[i][2] + j,
+                            3 * D4Index[i][1] + k,
+                            H12x12[i](j + 6, k + 3));
+                    if (Btype[D4Index[i][2]] == 0)
+                        coefficients[offset + i * 9 * 16 + 90 + j * 3 + k] = Triplet<double>(3 * D4Index[i][2] + j,
+                            3 * D4Index[i][2] + k,
+                            H12x12[i](j + 6, k + 6));
+                    if (Btype[D4Index[i][2]] == 0 && Btype[D4Index[i][3]] == 0)
+                        coefficients[offset + i * 9 * 16 + 99 + j * 3 + k] = Triplet<double>(3 * D4Index[i][2] + j,
+                            3 * D4Index[i][3] + k,
+                            H12x12[i](j + 6, k + 9));
+                    if (Btype[D4Index[i][0]] == 0 && Btype[D4Index[i][3]] == 0)
+                        coefficients[offset + i * 9 * 16 + 108 + j * 3 + k] = Triplet<double>(3 * D4Index[i][3] + j,
+                            3 * D4Index[i][0] + k,
+                            H12x12[i](j + 9, k));
+                    if (Btype[D4Index[i][1]] == 0 && Btype[D4Index[i][3]] == 0)
+                        coefficients[offset + i * 9 * 16 + 117 + j * 3 + k] = Triplet<double>(3 * D4Index[i][3] + j,
+                            3 * D4Index[i][1] + k,
+                            H12x12[i](j + 9, k + 3));
+                    if (Btype[D4Index[i][2]] == 0 && Btype[D4Index[i][3]] == 0)
+                        coefficients[offset + i * 9 * 16 + 126 + j * 3 + k] = Triplet<double>(3 * D4Index[i][3] + j,
+                            3 * D4Index[i][2] + k,
+                            H12x12[i](j + 9, k + 6));
+                    if (Btype[D4Index[i][3]] == 0)
+                        coefficients[offset + i * 9 * 16 + 135 + j * 3 + k] = Triplet<double>(3 * D4Index[i][3] + j,
+                            3 * D4Index[i][3] + k,
+                            H12x12[i](j + 9, k + 9));
+                }
+            }
+        }
+
+    );
     return coefficients;
 }
 
@@ -2588,50 +2573,41 @@ double SelfConstraintVal(const mesh3D& mesh, const MMCVID& active) {
 void Evaluate_SelfPTConstraintVals(const mesh3D& mesh, Eigen::VectorXd& vals, const int& offset) {
     int number = mesh.Self_ActiveSet.size();
     vals.conservativeResize(number + offset);
-#ifdef USE_TBB
+
     tbb::parallel_for(0, number, 1, [&](int i)
-#else
-    for (int i = 0;i < number;i++)
-#endif
-    {
-        vals[i + offset] = SelfConstraintVal(mesh, mesh.Self_ActiveSet[i]);
-    }
-#ifdef USE_TBB
+        {
+            vals[i + offset] = SelfConstraintVal(mesh, mesh.Self_ActiveSet[i]);
+        }
+
     );
-#endif
 }
 
 void Evaluate_SelfEEConstraintVals(const mesh3D& mesh, Eigen::VectorXd& vals, const int& offset) {
     int number = mesh.Self_EE_ActiveSet.size();
     vals.conservativeResize(number + offset);
-#ifdef USE_TBB
+
     tbb::parallel_for(0, number, 1, [&](int i)
-#else
-    for (int i = 0;i < number;i++)
-#endif
-    {
-        vals[i + offset] = SelfConstraintVal(mesh, mesh.Self_EE_ActiveSet[i]);
-    }
-#ifdef USE_TBB
+
+        {
+            vals[i + offset] = SelfConstraintVal(mesh, mesh.Self_EE_ActiveSet[i]);
+        }
+
     );
-#endif
+
 }
 
 void Evaluate_GroundConstraintVals(const Ground& grd, const mesh3D& mesh, Eigen::VectorXd& vals, const int& offset) {
     int number = mesh.Environment_ActiveSet.size();
     vals.conservativeResize(number + offset);
 
-#ifdef USE_TBB
+
     tbb::parallel_for(0, number, 1, [&](int i)
-#else
-    for (int i = 0;i < number;i++)
-#endif
-    {
-        vals[i + offset] = grd.calculateGapFromObj(mesh, mesh.Environment_ActiveSet[i]);
-    }
-#ifdef USE_TBB
+
+        {
+            vals[i + offset] = grd.calculateGapFromObj(mesh, mesh.Environment_ActiveSet[i]);
+        }
+
     );
-#endif
 
 }
 
@@ -3181,160 +3157,6 @@ void compute_g_dee(const mesh3D& mesh,
     //printf("%d\n", 4);
 }
 
-
-//void compute_H_dpmt(const mesh3D& mesh,
-//    BHessian& BH,
-//    double dHat, double coef, bool projectDBC)
-//{
-//    //TODO: parallelize
-//
-//    std::vector<Eigen::Matrix<double, 12, 12>> IPHessian(mesh.Self_ActiveSet.size());
-//    std::vector<Eigen::Matrix<int, 4, 1>> rowIStart(mesh.Self_ActiveSet.size());
-//#ifdef USE_TBB
-//    tbb::parallel_for(0, (int)activeSet.size(), 1, [&](int cI)
-//#else
-//    for (int cI = 0; cI < mesh.Self_ActiveSet.size(); ++cI)
-//#endif
-//    {
-//        const auto& MMCVIDI = mesh.Self_ActiveSet[cI];
-//        if (MMCVIDI[0] >= 0) {
-//            // edge-edge
-//            double d;
-//            d_EE(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], d);
-//            Eigen::Matrix<double, 12, 1> g;
-//            g_EE(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], g);
-//            Eigen::Matrix<double, 12, 12> H;
-//            H_EE(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], H);
-//
-//            double g_b, H_b;
-//            compute_g_b(d, dHat, g_b);
-//            compute_H_b(d, dHat, H_b);
-//
-//            IPHessian[cI] = ((coef * H_b) * g) * g.transpose() + (coef * g_b) * H;
-//            IglUtils::makePD<double, 12>(IPHessian[cI]);
-//            Eigen::Matrix<double, 6, 6> HessianBlock;
-//            HessianBlock.template block<6, 6>(0, 0) = IPHessian[cI].template block<6, 6>(0, 0);
-//            BH.H6x6.push_back(HessianBlock);
-//            BH.D2Index.push_back(Vector2i(MMCVIDI[0], MMCVIDI[1]));
-//        }
-//        else {
-//            // point-triangle and degenerate edge-edge
-//            if (MMCVIDI[1] >= 0) {
-//                int v0I = -MMCVIDI[0] - 1;
-//                if (MMCVIDI[2] < 0) {
-//                    // PP
-//                    double d;
-//                    d_PP(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], d);
-//                    Eigen::Matrix<double, 6, 1> g;
-//                    g_PP(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], g);
-//                    Eigen::Matrix<double, 6, 6> H;
-//                    H_PP(H);
-//
-//                    double g_b, H_b;
-//                    compute_g_b(d, dHat, g_b);
-//                    compute_H_b(d, dHat, H_b);
-//
-//                    double coef_dup = coef * -MMCVIDI[3];
-//                    Eigen::Matrix<double, 6, 6> HessianBlock = ((coef_dup * H_b) * g) * g.transpose() + (coef_dup * g_b) * H;
-//                    IglUtils::makePD<double, 6>(HessianBlock);
-//                    BH.H3x3.push_back(HessianBlock);
-//                    //BH.DppIndex.push_back()
-//                    //IPHessian[cI].template block<3, 3>(0, 0) = HessianBlock.template block<3, 3>(0, 0);
-//                }
-//                else if (MMCVIDI[3] < 0) {
-//                    // PE
-//                    double d;
-//                    d_PE(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], d);
-//                    Eigen::Matrix<double, 9, 1> g;
-//                    g_PE(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], g);
-//                    Eigen::Matrix<double, 9, 9> H;
-//                    H_PE(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], H);
-//
-//                    double g_b, H_b;
-//                    compute_g_b(d, dHat, g_b);
-//                    compute_H_b(d, dHat, H_b);
-//
-//                    double coef_dup = coef * -MMCVIDI[3];
-//                    Eigen::Matrix<double, 9, 9> HessianBlock = ((coef_dup * H_b) * g) * g.transpose() + (coef_dup * g_b) * H;
-//                    IglUtils::makePD<double, 9>(HessianBlock);
-//                    Eigen::Matrix<double, 3, 3> HessianBlock3x3;
-//                    HessianBlock3x3.template block<3, 3>(0, 0) = HessianBlock.template block<3, 3>(0, 0);
-//                    BH.H3x3.push_back(HessianBlock3x3);
-//                }
-//                else {
-//                    // PT
-//                    double d;
-//                    d_PT(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], d);
-//                    Eigen::Matrix<double, 12, 1> g;
-//                    g_PT(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], g);
-//                    Eigen::Matrix<double, 12, 12> H;
-//                    H_PT(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], H);
-//
-//                    double g_b, H_b;
-//                    compute_g_b(d, dHat, g_b);
-//                    compute_H_b(d, dHat, H_b);
-//
-//                    IPHessian[cI] = ((coef * H_b) * g) * g.transpose() + (coef * g_b) * H;
-//                    IglUtils::makePD<double, 12>(IPHessian[cI]);
-//                    Eigen::Matrix<double, 3, 3> HessianBlock3x3;
-//                    HessianBlock3x3.template block<3, 3>(0, 0) = IPHessian[cI].template block<3, 3>(0, 0);
-//                    BH.H3x3.push_back(HessianBlock3x3);
-//                }
-//                BH.D1Index.push_back(v0I);
-//            }
-//            else {
-//                if (MMCVIDI[2] < 0) {
-//                    // triangle-point
-//                    double d;
-//                    d_PT(mesh.vertexes[MMCVIDI[3]], mesh.vertexes[-MMCVIDI[0] - 1], mesh.vertexes[-MMCVIDI[1] - 1], mesh.vertexes[-MMCVIDI[2] - 1], d);
-//                    Eigen::Matrix<double, 12, 1> g;
-//                    g_PT(mesh.vertexes[MMCVIDI[3]], mesh.vertexes[-MMCVIDI[0] - 1], mesh.vertexes[-MMCVIDI[1] - 1], mesh.vertexes[-MMCVIDI[2] - 1], g);
-//                    Eigen::Matrix<double, 12, 12> H;
-//                    H_PT(mesh.vertexes[MMCVIDI[3]], mesh.vertexes[-MMCVIDI[0] - 1], mesh.vertexes[-MMCVIDI[1] - 1], mesh.vertexes[-MMCVIDI[2] - 1], H);
-//
-//                    double g_b, H_b;
-//                    compute_g_b(d, dHat, g_b);
-//                    compute_H_b(d, dHat, H_b);
-//
-//                    IPHessian[cI] = ((coef * H_b) * g) * g.transpose() + (coef * g_b) * H;
-//                    IglUtils::makePD<double, 12>(IPHessian[cI]);
-//
-//                    Eigen::Matrix<double, 9, 9> HessianBlock9x9;
-//                    HessianBlock9x9.template block<9, 9>(0, 0) = IPHessian[cI].template block<9, 9>(3, 3);
-//                    BH.H9x9.push_back(HessianBlock9x9);
-//                    BH.D3Index.push_back(Vector3i(-MMCVIDI[0] - 1, -MMCVIDI[1] - 1, -MMCVIDI[2] - 1));
-//
-//                }
-//                else {
-//                    // edge-point
-//                    double d;
-//                    d_PE(mesh.vertexes[MMCVIDI[2]], mesh.vertexes[-MMCVIDI[0] - 1], mesh.vertexes[-MMCVIDI[1] - 1], d);
-//                    Eigen::Matrix<double, 9, 1> g;
-//                    g_PE(mesh.vertexes[MMCVIDI[2]], mesh.vertexes[-MMCVIDI[0] - 1], mesh.vertexes[-MMCVIDI[1] - 1], g);
-//                    Eigen::Matrix<double, 9, 9> H;
-//                    H_PE(mesh.vertexes[MMCVIDI[2]], mesh.vertexes[-MMCVIDI[0] - 1], mesh.vertexes[-MMCVIDI[1] - 1], H);
-//
-//                    double g_b, H_b;
-//                    compute_g_b(d, dHat, g_b);
-//                    compute_H_b(d, dHat, H_b);
-//
-//                    double coef_dup = coef * -MMCVIDI[3];
-//                    Eigen::Matrix<double, 9, 9> HessianBlock = ((coef_dup * H_b) * g) * g.transpose() + (coef_dup * g_b) * H;
-//                    IglUtils::makePD<double, 9>(HessianBlock);
-//                    //IPHessian[cI].template block<6, 6>(3, 3) = HessianBlock.template block<6, 6>(3, 3);
-//
-//                    Eigen::Matrix<double, 6, 6> HessianBlock6x6;
-//                    HessianBlock6x6.template block<6, 6>(0, 0) = HessianBlock.template block<6, 6>(3, 3);
-//                    BH.H6x6.push_back(HessianBlock6x6);
-//                    BH.D2Index.push_back(Vector2i(-MMCVIDI[0] - 1, -MMCVIDI[1] - 1));
-//                }
-//            }
-//        }
-//    }
-//#ifdef USE_TBB
-//    );
-//#endif
-//}
 void compute_H_dpt_new(const mesh3D& mesh,
     BHessian& BH,
     double dHat, double coef, double d_hat)
@@ -3724,109 +3546,19 @@ void compute_H_dpt(const mesh3D& mesh,
     double dHat, double coef)
 {
     //std::vector<Eigen::Matrix<int, 4, 1>> rowIStart(mesh.Self_ActiveSet.size());
-#ifdef USE_TBB
+
     tbb::spin_mutex countMutex12, countMutex9, countMutex6;//, countMutex3;
     tbb::parallel_for(0, (int)mesh.Self_ActiveSet.size(), 1, [&](int cI)
-#else
-    for (int cI = 0; cI < mesh.Self_ActiveSet.size(); ++cI)
-#endif
-    {
-        const auto& MMCVIDI = mesh.Self_ActiveSet[cI];
-        if (MMCVIDI[0] >= 0) {
-            // edge-edge
-            double d;
-            d_EE(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], d);
-            Eigen::Matrix<double, 12, 1> g;
-            g_EE(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], g);
-            Eigen::Matrix<double, 12, 12> H;
-            H_EE(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], H);
-
-            double g_b, H_b;
-            compute_g_b(d, dHat, g_b);
-            compute_H_b(d, dHat, H_b);
-            Eigen::Matrix<double, 12, 12> IPHessian;
-            IPHessian = ((coef * H_b) * g) * g.transpose() + (coef * g_b) * H;
-            IglUtils::makePD<double, 12>(IPHessian);
-
-#ifdef USE_TBB
-            countMutex12.lock();
-            BH.H12x12.push_back(IPHessian);
-            BH.D4Index.push_back(Vector4i(MMCVIDI[0], MMCVIDI[1], MMCVIDI[2], MMCVIDI[3]));
-            countMutex12.unlock();
-#else
-            BH.H12x12.push_back(IPHessian);
-            BH.D4Index.push_back(Vector4i(MMCVIDI[0], MMCVIDI[1], MMCVIDI[2], MMCVIDI[3]));
-#endif
-        }
-        else {
-            // point-triangle and degenerate edge-edge
-            //assert(MMCVIDI[1] >= 0);
-
-            int v0I = -MMCVIDI[0] - 1;
-            if (MMCVIDI[2] < 0) {
-                // PP
+        {
+            const auto& MMCVIDI = mesh.Self_ActiveSet[cI];
+            if (MMCVIDI[0] >= 0) {
+                // edge-edge
                 double d;
-                d_PP(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], d);
-                Eigen::Matrix<double, 6, 1> g;
-                g_PP(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], g);
-                Eigen::Matrix<double, 6, 6> H;
-                H_PP(H);
-
-                double g_b, H_b;
-                compute_g_b(d, dHat, g_b);
-                compute_H_b(d, dHat, H_b);
-
-                double coef_dup = coef * -MMCVIDI[3];
-                Eigen::Matrix<double, 6, 6> HessianBlock = ((coef_dup * H_b) * g) * g.transpose() + (coef_dup * g_b) * H;
-                IglUtils::makePD<double, 6>(HessianBlock);
-                //IPHessian[cI].template block<6, 6>(0, 0) = HessianBlock;
-#ifdef USE_TBB
-                countMutex6.lock();
-                BH.H6x6.push_back(HessianBlock);
-                BH.D2Index.push_back(Vector2i(v0I, MMCVIDI[1]));
-                countMutex6.unlock();
-#else
-                BH.H6x6.push_back(HessianBlock);
-                BH.D2Index.push_back(Vector2i(v0I, MMCVIDI[1]));
-#endif
-
-            }
-            else if (MMCVIDI[3] < 0) {
-                // PE
-                double d;
-                d_PE(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], d);
-                Eigen::Matrix<double, 9, 1> g;
-                g_PE(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], g);
-                Eigen::Matrix<double, 9, 9> H;
-                H_PE(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], H);
-
-                double g_b, H_b;
-                compute_g_b(d, dHat, g_b);
-                compute_H_b(d, dHat, H_b);
-
-                double coef_dup = coef * -MMCVIDI[3];
-                Eigen::Matrix<double, 9, 9> HessianBlock = ((coef_dup * H_b) * g) * g.transpose() + (coef_dup * g_b) * H;
-                IglUtils::makePD<double, 9>(HessianBlock);
-                //IPHessian[cI].block(0, 0, 9, 9) = HessianBlock;
-
-#ifdef USE_TBB
-                countMutex9.lock();
-                BH.H9x9.push_back(HessianBlock);
-                BH.D3Index.push_back(Vector3i(v0I, MMCVIDI[1], MMCVIDI[2]));
-                countMutex9.unlock();
-#else
-                BH.H9x9.push_back(HessianBlock);
-                BH.D3Index.push_back(Vector3i(v0I, MMCVIDI[1], MMCVIDI[2]));
-#endif
-            }
-            else {
-                // PT
-                double d;
-                d_PT(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], d);
+                d_EE(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], d);
                 Eigen::Matrix<double, 12, 1> g;
-                g_PT(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], g);
+                g_EE(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], g);
                 Eigen::Matrix<double, 12, 12> H;
-                H_PT(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], H);
+                H_EE(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], H);
 
                 double g_b, H_b;
                 compute_g_b(d, dHat, g_b);
@@ -3834,22 +3566,94 @@ void compute_H_dpt(const mesh3D& mesh,
                 Eigen::Matrix<double, 12, 12> IPHessian;
                 IPHessian = ((coef * H_b) * g) * g.transpose() + (coef * g_b) * H;
                 IglUtils::makePD<double, 12>(IPHessian);
-               
-#ifdef USE_TBB
+
+
                 countMutex12.lock();
                 BH.H12x12.push_back(IPHessian);
-                BH.D4Index.push_back(Vector4i(v0I, MMCVIDI[1], MMCVIDI[2], MMCVIDI[3]));
+                BH.D4Index.push_back(Vector4i(MMCVIDI[0], MMCVIDI[1], MMCVIDI[2], MMCVIDI[3]));
                 countMutex12.unlock();
-#else
-                BH.H12x12.push_back(IPHessian);
-                BH.D4Index.push_back(Vector4i(v0I, MMCVIDI[1], MMCVIDI[2], MMCVIDI[3]));
-#endif
+
+            }
+            else {
+                // point-triangle and degenerate edge-edge
+                //assert(MMCVIDI[1] >= 0);
+
+                int v0I = -MMCVIDI[0] - 1;
+                if (MMCVIDI[2] < 0) {
+                    // PP
+                    double d;
+                    d_PP(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], d);
+                    Eigen::Matrix<double, 6, 1> g;
+                    g_PP(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], g);
+                    Eigen::Matrix<double, 6, 6> H;
+                    H_PP(H);
+
+                    double g_b, H_b;
+                    compute_g_b(d, dHat, g_b);
+                    compute_H_b(d, dHat, H_b);
+
+                    double coef_dup = coef * -MMCVIDI[3];
+                    Eigen::Matrix<double, 6, 6> HessianBlock = ((coef_dup * H_b) * g) * g.transpose() + (coef_dup * g_b) * H;
+                    IglUtils::makePD<double, 6>(HessianBlock);
+                    //IPHessian[cI].template block<6, 6>(0, 0) = HessianBlock;
+
+                    countMutex6.lock();
+                    BH.H6x6.push_back(HessianBlock);
+                    BH.D2Index.push_back(Vector2i(v0I, MMCVIDI[1]));
+                    countMutex6.unlock();
+
+
+                }
+                else if (MMCVIDI[3] < 0) {
+                    // PE
+                    double d;
+                    d_PE(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], d);
+                    Eigen::Matrix<double, 9, 1> g;
+                    g_PE(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], g);
+                    Eigen::Matrix<double, 9, 9> H;
+                    H_PE(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], H);
+
+                    double g_b, H_b;
+                    compute_g_b(d, dHat, g_b);
+                    compute_H_b(d, dHat, H_b);
+
+                    double coef_dup = coef * -MMCVIDI[3];
+                    Eigen::Matrix<double, 9, 9> HessianBlock = ((coef_dup * H_b) * g) * g.transpose() + (coef_dup * g_b) * H;
+                    IglUtils::makePD<double, 9>(HessianBlock);
+                    //IPHessian[cI].block(0, 0, 9, 9) = HessianBlock;
+
+                    countMutex9.lock();
+                    BH.H9x9.push_back(HessianBlock);
+                    BH.D3Index.push_back(Vector3i(v0I, MMCVIDI[1], MMCVIDI[2]));
+                    countMutex9.unlock();
+
+                }
+                else {
+                    // PT
+                    double d;
+                    d_PT(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], d);
+                    Eigen::Matrix<double, 12, 1> g;
+                    g_PT(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], g);
+                    Eigen::Matrix<double, 12, 12> H;
+                    H_PT(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], H);
+
+                    double g_b, H_b;
+                    compute_g_b(d, dHat, g_b);
+                    compute_H_b(d, dHat, H_b);
+                    Eigen::Matrix<double, 12, 12> IPHessian;
+                    IPHessian = ((coef * H_b) * g) * g.transpose() + (coef * g_b) * H;
+                    IglUtils::makePD<double, 12>(IPHessian);
+
+
+                    countMutex12.lock();
+                    BH.H12x12.push_back(IPHessian);
+                    BH.D4Index.push_back(Vector4i(v0I, MMCVIDI[1], MMCVIDI[2], MMCVIDI[3]));
+                    countMutex12.unlock();
+
+                }
             }
         }
-    }
-#ifdef USE_TBB
-    );
-#endif
+        );
 }
 
 void compute_H_dee(const mesh3D& mesh,
@@ -3860,126 +3664,121 @@ void compute_H_dee(const mesh3D& mesh,
     vector<Matrix<double, 12, 12>> PEEHessian(mesh.Self_EE_ActiveSet.size());
     vector<Vector4i> tempD4(mesh.Self_EE_ActiveSet.size());
     std::vector<Eigen::Matrix<int, 4, 1>> rowIStart(mesh.Self_EE_ActiveSet.size());
-#ifdef USE_TBB
     tbb::parallel_for(0, (int)mesh.Self_EE_ActiveSet.size(), 1, [&](int cI)
-#else
-    for (int cI = 0; cI < mesh.Self_EE_ActiveSet.size(); ++cI)
-#endif
-    {
-        double b, g_b, H_b;
+        {
+            double b, g_b, H_b;
 
-        double eps_x, e;
-        Eigen::Matrix<double, 12, 1> e_g;
-        Eigen::Matrix<double, 12, 12> e_H;
+            double eps_x, e;
+            Eigen::Matrix<double, 12, 1> e_g;
+            Eigen::Matrix<double, 12, 12> e_H;
 
-        const MMCVID& MMCVIDI = mesh.Self_EE_ActiveSet[cI];
-        double d = SelfConstraintVal(mesh, MMCVIDI);
-        Eigen::Matrix<double, 12, 1> grad_d;
-        Eigen::Matrix<double, 12, 12> H_d;
+            const MMCVID& MMCVIDI = mesh.Self_EE_ActiveSet[cI];
+            double d = SelfConstraintVal(mesh, MMCVIDI);
+            Eigen::Matrix<double, 12, 1> grad_d;
+            Eigen::Matrix<double, 12, 12> H_d;
 
-        if (MMCVIDI[3] >= 0) {
-            // EE
-            compute_b(d, dHat, b);
-            compute_g_b(d, dHat, g_b);
-            compute_H_b(d, dHat, H_b);
+            if (MMCVIDI[3] >= 0) {
+                // EE
+                compute_b(d, dHat, b);
+                compute_g_b(d, dHat, g_b);
+                compute_H_b(d, dHat, H_b);
 
-            compute_eps_x(mesh, MMCVIDI[0], MMCVIDI[1], MMCVIDI[2], MMCVIDI[3], eps_x);
-            compute_e(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], eps_x, e);
-            compute_e_g(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], eps_x, e_g);
-            compute_e_H(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], eps_x, e_H);
+                compute_eps_x(mesh, MMCVIDI[0], MMCVIDI[1], MMCVIDI[2], MMCVIDI[3], eps_x);
+                compute_e(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], eps_x, e);
+                compute_e_g(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], eps_x, e_g);
+                compute_e_H(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], eps_x, e_H);
 
-            g_EE(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], grad_d);
-            H_EE(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], H_d);
-            tempD4[cI] = Vector4i(MMCVIDI[0], MMCVIDI[1], MMCVIDI[2], MMCVIDI[3]);
-        }
-        else {
-            // PP or PE
-            compute_b(d, dHat, b);
-            compute_g_b(d, dHat, g_b);
-            compute_H_b(d, dHat, H_b);
-
-            const std::pair<int, int>& eIeJ = mesh.Self_EEeIe_ActiveSet[cI];
-            const std::pair<int, int>& eI = mesh.surfEdges[eIeJ.first];
-            const std::pair<int, int>& eJ = mesh.surfEdges[eIeJ.second];
-            compute_eps_x(mesh, eI.first, eI.second, eJ.first, eJ.second, eps_x);
-            compute_e(mesh.vertexes[eI.first], mesh.vertexes[eI.second], mesh.vertexes[eJ.first], mesh.vertexes[eJ.second], eps_x, e);
-            compute_e_g(mesh.vertexes[eI.first], mesh.vertexes[eI.second], mesh.vertexes[eJ.first], mesh.vertexes[eJ.second], eps_x, e_g);
-            compute_e_H(mesh.vertexes[eI.first], mesh.vertexes[eI.second], mesh.vertexes[eJ.first], mesh.vertexes[eJ.second], eps_x, e_H);
-
-            tempD4[cI] = Vector4i(eI.first, eI.second, eJ.first, eJ.second);
-
-            int v0I = -MMCVIDI[0] - 1;
-            if (MMCVIDI[2] >= 0) {
-                // PE
-                Eigen::Matrix<double, 9, 1> grad_d_PE;
-                g_PE(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], grad_d_PE);
-                Eigen::Matrix<double, 9, 9> H_d_PE;
-                H_PE(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], H_d_PE);
-
-                // fill in
-                int ind[4] = { eI.first, eI.second, eJ.first, eJ.second };
-                int indMap[3];
-                for (int i = 0; i < 4; ++i) {
-                    if (v0I == ind[i]) {
-                        indMap[0] = i;
-                    }
-                    else if (MMCVIDI[1] == ind[i]) {
-                        indMap[1] = i;
-                    }
-                    else if (MMCVIDI[2] == ind[i]) {
-                        indMap[2] = i;
-                    }
-                }
-
-                grad_d.setZero();
-                H_d.setZero();
-                for (int i = 0; i < 3; ++i) {
-                    grad_d.template segment<3>(indMap[i] * 3) = grad_d_PE.template segment<3>(i * 3);
-                    for (int j = 0; j < 3; ++j) {
-                        H_d.template block<3, 3>(indMap[i] * 3, indMap[j] * 3) = H_d_PE.template block<3, 3>(i * 3, j * 3);
-                    }
-                }
+                g_EE(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], grad_d);
+                H_EE(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], H_d);
+                tempD4[cI] = Vector4i(MMCVIDI[0], MMCVIDI[1], MMCVIDI[2], MMCVIDI[3]);
             }
             else {
-                // PP
-                Eigen::Matrix<double, 6, 1> grad_d_PP;
-                g_PP(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], grad_d_PP);
-                Eigen::Matrix<double, 6, 6> H_d_PP;
-                H_PP(H_d_PP);
+                // PP or PE
+                compute_b(d, dHat, b);
+                compute_g_b(d, dHat, g_b);
+                compute_H_b(d, dHat, H_b);
 
-                int ind[4] = { eI.first, eI.second, eJ.first, eJ.second };
-                int indMap[2];
-                for (int i = 0; i < 4; ++i) {
-                    if (v0I == ind[i]) {
-                        indMap[0] = i;
+                const std::pair<int, int>& eIeJ = mesh.Self_EEeIe_ActiveSet[cI];
+                const std::pair<int, int>& eI = mesh.surfEdges[eIeJ.first];
+                const std::pair<int, int>& eJ = mesh.surfEdges[eIeJ.second];
+                compute_eps_x(mesh, eI.first, eI.second, eJ.first, eJ.second, eps_x);
+                compute_e(mesh.vertexes[eI.first], mesh.vertexes[eI.second], mesh.vertexes[eJ.first], mesh.vertexes[eJ.second], eps_x, e);
+                compute_e_g(mesh.vertexes[eI.first], mesh.vertexes[eI.second], mesh.vertexes[eJ.first], mesh.vertexes[eJ.second], eps_x, e_g);
+                compute_e_H(mesh.vertexes[eI.first], mesh.vertexes[eI.second], mesh.vertexes[eJ.first], mesh.vertexes[eJ.second], eps_x, e_H);
+
+                tempD4[cI] = Vector4i(eI.first, eI.second, eJ.first, eJ.second);
+
+                int v0I = -MMCVIDI[0] - 1;
+                if (MMCVIDI[2] >= 0) {
+                    // PE
+                    Eigen::Matrix<double, 9, 1> grad_d_PE;
+                    g_PE(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], grad_d_PE);
+                    Eigen::Matrix<double, 9, 9> H_d_PE;
+                    H_PE(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], H_d_PE);
+
+                    // fill in
+                    int ind[4] = { eI.first, eI.second, eJ.first, eJ.second };
+                    int indMap[3];
+                    for (int i = 0; i < 4; ++i) {
+                        if (v0I == ind[i]) {
+                            indMap[0] = i;
+                        }
+                        else if (MMCVIDI[1] == ind[i]) {
+                            indMap[1] = i;
+                        }
+                        else if (MMCVIDI[2] == ind[i]) {
+                            indMap[2] = i;
+                        }
                     }
-                    else if (MMCVIDI[1] == ind[i]) {
-                        indMap[1] = i;
+
+                    grad_d.setZero();
+                    H_d.setZero();
+                    for (int i = 0; i < 3; ++i) {
+                        grad_d.template segment<3>(indMap[i] * 3) = grad_d_PE.template segment<3>(i * 3);
+                        for (int j = 0; j < 3; ++j) {
+                            H_d.template block<3, 3>(indMap[i] * 3, indMap[j] * 3) = H_d_PE.template block<3, 3>(i * 3, j * 3);
+                        }
                     }
                 }
+                else {
+                    // PP
+                    Eigen::Matrix<double, 6, 1> grad_d_PP;
+                    g_PP(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], grad_d_PP);
+                    Eigen::Matrix<double, 6, 6> H_d_PP;
+                    H_PP(H_d_PP);
 
-                grad_d.setZero();
-                H_d.setZero();
-                for (int i = 0; i < 2; ++i) {
-                    grad_d.template segment<3>(indMap[i] * 3) = grad_d_PP.template segment<3>(i * 3);
-                    for (int j = 0; j < 2; ++j) {
-                        H_d.template block<3, 3>(indMap[i] * 3, indMap[j] * 3) = H_d_PP.template block<3, 3>(i * 3, j * 3);
+                    int ind[4] = { eI.first, eI.second, eJ.first, eJ.second };
+                    int indMap[2];
+                    for (int i = 0; i < 4; ++i) {
+                        if (v0I == ind[i]) {
+                            indMap[0] = i;
+                        }
+                        else if (MMCVIDI[1] == ind[i]) {
+                            indMap[1] = i;
+                        }
+                    }
+
+                    grad_d.setZero();
+                    H_d.setZero();
+                    for (int i = 0; i < 2; ++i) {
+                        grad_d.template segment<3>(indMap[i] * 3) = grad_d_PP.template segment<3>(i * 3);
+                        for (int j = 0; j < 2; ++j) {
+                            H_d.template block<3, 3>(indMap[i] * 3, indMap[j] * 3) = H_d_PP.template block<3, 3>(i * 3, j * 3);
+                        }
                     }
                 }
             }
+
+            Eigen::Matrix<double, 12, 12> kappa_gradb_gradeT;
+            kappa_gradb_gradeT = ((coef * g_b) * grad_d) * e_g.transpose();
+
+            PEEHessian[cI] = kappa_gradb_gradeT + kappa_gradb_gradeT.transpose() + (coef * b) * e_H + ((coef * e * H_b) * grad_d) * grad_d.transpose() + (coef * e * g_b) * H_d;
+            IglUtils::makePD<double, 12>(PEEHessian[cI]);
+
+            //BH.H12x12.push_back(PEEHessian[cI]);
         }
+        );
 
-        Eigen::Matrix<double, 12, 12> kappa_gradb_gradeT;
-        kappa_gradb_gradeT = ((coef * g_b) * grad_d) * e_g.transpose();
-
-        PEEHessian[cI] = kappa_gradb_gradeT + kappa_gradb_gradeT.transpose() + (coef * b) * e_H + ((coef * e * H_b) * grad_d) * grad_d.transpose() + (coef * e * g_b) * H_d;
-        IglUtils::makePD<double, 12>(PEEHessian[cI]);
-
-        //BH.H12x12.push_back(PEEHessian[cI]);
-    }
-#ifdef USE_TBB
-    );
-#endif
     BH.D4Index.insert(BH.D4Index.end(), tempD4.begin(), tempD4.end());
     BH.H12x12.insert(BH.H12x12.end(), PEEHessian.begin(), PEEHessian.end());
 }
@@ -4126,135 +3925,55 @@ void Self_largestFeasibleStepSize(const mesh3D& mesh,
     const std::vector<std::pair<int, int>>& constraintSet = mesh.Self_CCD_ActiveSet;
     if (constraintSet.size()) {
         Eigen::VectorXd largestAlphasAS(constraintSet.size());
-#ifdef USE_TBB
+
         tbb::parallel_for(0, (int)constraintSet.size(), 1, [&](int cI)
-#else
-        for (int cI = 0; cI < constraintSet.size(); ++cI)
-#endif
-        {
-            MMCVID MMCVIDI;
-            if (constraintSet[cI].first < 0) {
-                // PT
-                MMCVIDI[0] = -mesh.surfVerts[-constraintSet[cI].first - 1] - 1;
-                MMCVIDI[1] = mesh.surface[constraintSet[cI].second][0];
-                MMCVIDI[2] = mesh.surface[constraintSet[cI].second][1];
-                MMCVIDI[3] = mesh.surface[constraintSet[cI].second][2];
+            {
+                MMCVID MMCVIDI;
+                if (constraintSet[cI].first < 0) {
+                    // PT
+                    MMCVIDI[0] = -mesh.surfVerts[-constraintSet[cI].first - 1] - 1;
+                    MMCVIDI[1] = mesh.surface[constraintSet[cI].second][0];
+                    MMCVIDI[2] = mesh.surface[constraintSet[cI].second][1];
+                    MMCVIDI[3] = mesh.surface[constraintSet[cI].second][2];
+                }
+                else {
+                    // EE
+                    MMCVIDI[0] = mesh.surfEdges[constraintSet[cI].first].first;
+                    MMCVIDI[1] = mesh.surfEdges[constraintSet[cI].first].second;
+                    MMCVIDI[2] = mesh.surfEdges[constraintSet[cI].second].first;
+                    MMCVIDI[3] = mesh.surfEdges[constraintSet[cI].second].second;
+                }
+                if (MMCVIDI[0] < 0) {
+                    MMCVIDI[0] = -MMCVIDI[0] - 1;
+                    largestAlphasAS[cI] = 1.0;
+
+                    largestAlphasAS[cI] = point_triangle_ccd(mesh.vertexes[MMCVIDI[0]],
+                        mesh.vertexes[MMCVIDI[1]],
+                        mesh.vertexes[MMCVIDI[2]],
+                        mesh.vertexes[MMCVIDI[3]],
+                        -searchDir[MMCVIDI[0]],
+                        -searchDir[MMCVIDI[1]],
+                        -searchDir[MMCVIDI[2]],
+                        -searchDir[MMCVIDI[3]], CCDDistRatio, 0);
+                }
+                else {
+                    largestAlphasAS[cI] = 1.0;
+
+                    largestAlphasAS[cI] = edge_edge_ccd(mesh.vertexes[MMCVIDI[0]],
+                        mesh.vertexes[MMCVIDI[1]],
+                        mesh.vertexes[MMCVIDI[2]],
+                        mesh.vertexes[MMCVIDI[3]],
+                        -searchDir[MMCVIDI[0]],
+                        -searchDir[MMCVIDI[1]],
+                        -searchDir[MMCVIDI[2]],
+                        -searchDir[MMCVIDI[3]], CCDDistRatio, 0);
+
+                }
+
             }
-            else {
-                // EE
-                MMCVIDI[0] = mesh.surfEdges[constraintSet[cI].first].first;
-                MMCVIDI[1] = mesh.surfEdges[constraintSet[cI].first].second;
-                MMCVIDI[2] = mesh.surfEdges[constraintSet[cI].second].first;
-                MMCVIDI[3] = mesh.surfEdges[constraintSet[cI].second].second;
-            }
-            if (MMCVIDI[0] < 0) {
-                MMCVIDI[0] = -MMCVIDI[0] - 1;
-                largestAlphasAS[cI] = 1.0;
 
-                largestAlphasAS[cI] = point_triangle_ccd(mesh.vertexes[MMCVIDI[0]],
-                    mesh.vertexes[MMCVIDI[1]],
-                    mesh.vertexes[MMCVIDI[2]],
-                    mesh.vertexes[MMCVIDI[3]],
-                    -searchDir[MMCVIDI[0]],
-                    -searchDir[MMCVIDI[1]],
-                    -searchDir[MMCVIDI[2]],
-                    -searchDir[MMCVIDI[3]], CCDDistRatio, 0);
-            }
-            else {
-                largestAlphasAS[cI] = 1.0;
-
-                largestAlphasAS[cI] = edge_edge_ccd(mesh.vertexes[MMCVIDI[0]],
-                    mesh.vertexes[MMCVIDI[1]],
-                    mesh.vertexes[MMCVIDI[2]],
-                    mesh.vertexes[MMCVIDI[3]],
-                    -searchDir[MMCVIDI[0]],
-                    -searchDir[MMCVIDI[1]],
-                    -searchDir[MMCVIDI[2]],
-                    -searchDir[MMCVIDI[3]], CCDDistRatio, 0);
-
-            }
-            //if (MMCVIDI[0] >= 0) {
-            //    // edge-edge
-            //    double d_sqrt;
-            //    computeEdgeEdgeD(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]],
-            //        mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], d_sqrt);
-            //    d_sqrt = std::sqrt(d_sqrt);
-
-            //    largestAlphasAS[cI] = 1.0;
-            //    if (CTCD::edgeEdgeCTCD(mesh.vertexes[MMCVIDI[0]],
-            //        mesh.vertexes[MMCVIDI[1]],
-            //        mesh.vertexes[MMCVIDI[2]],
-            //        mesh.vertexes[MMCVIDI[3]],
-            //        mesh.vertexes[MMCVIDI[0]] - searchDir[MMCVIDI[0]],
-            //        mesh.vertexes[MMCVIDI[1]] - searchDir[MMCVIDI[1]],
-            //        mesh.vertexes[MMCVIDI[2]] - searchDir[MMCVIDI[2]],
-            //        mesh.vertexes[MMCVIDI[3]] - searchDir[MMCVIDI[3]],
-            //        CCDDistRatio * d_sqrt,
-            //        largestAlphasAS[cI])) {
-            //        if (largestAlphasAS[cI] < 1.0e-6) {
-            //            if (CTCD::edgeEdgeCTCD(mesh.vertexes[MMCVIDI[0]],
-            //                mesh.vertexes[MMCVIDI[1]],
-            //                mesh.vertexes[MMCVIDI[2]],
-            //                mesh.vertexes[MMCVIDI[3]],
-            //                mesh.vertexes[MMCVIDI[0]] - searchDir[MMCVIDI[0]],
-            //                mesh.vertexes[MMCVIDI[1]] - searchDir[MMCVIDI[1]],
-            //                mesh.vertexes[MMCVIDI[2]] - searchDir[MMCVIDI[2]],
-            //                mesh.vertexes[MMCVIDI[3]] - searchDir[MMCVIDI[3]],
-            //                0.0, largestAlphasAS[cI])) {
-            //                if (largestAlphasAS[cI] == 0.0) {
-            //                    // numerically parallel edge-edge causes CCD code to fail
-            //                    largestAlphasAS[cI] = 1.0;
-            //                }
-            //                largestAlphasAS[cI] *= slackness;
-            //            }
-            //            else {
-            //                largestAlphasAS[cI] = 1.0;
-            //            }
-            //        }
-            //    }
-            //}
-            //else {
-            //    // point-triangle
-            //    int vI = -MMCVIDI[0] - 1;
-            //    assert(MMCVIDI[1] >= 0);
-
-            //    double d_sqrt;
-            //    computePointTriD(mesh.vertexes[vI], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], d_sqrt);
-            //    d_sqrt = std::sqrt(d_sqrt);
-
-            //    largestAlphasAS[cI] = 1.0;
-            //    if (CTCD::vertexFaceCTCD(mesh.vertexes[vI],
-            //        mesh.vertexes[MMCVIDI[1]],
-            //        mesh.vertexes[MMCVIDI[2]],
-            //        mesh.vertexes[MMCVIDI[3]],
-            //        mesh.vertexes[vI] - searchDir[vI],
-            //        mesh.vertexes[MMCVIDI[1]] - searchDir[MMCVIDI[1]],
-            //        mesh.vertexes[MMCVIDI[2]] - searchDir[MMCVIDI[2]],
-            //        mesh.vertexes[MMCVIDI[3]] - searchDir[MMCVIDI[3]],
-            //        CCDDistRatio * d_sqrt,
-            //        largestAlphasAS[cI])) {
-            //        if (largestAlphasAS[cI] < 1.0e-6) {
-            //            if (CTCD::vertexFaceCTCD(mesh.vertexes[vI],
-            //                mesh.vertexes[MMCVIDI[1]],
-            //                mesh.vertexes[MMCVIDI[2]],
-            //                mesh.vertexes[MMCVIDI[3]],
-            //                mesh.vertexes[vI] - searchDir[vI],
-            //                mesh.vertexes[MMCVIDI[1]] - searchDir[MMCVIDI[1]],
-            //                mesh.vertexes[MMCVIDI[2]] - searchDir[MMCVIDI[2]],
-            //                mesh.vertexes[MMCVIDI[3]] - searchDir[MMCVIDI[3]],
-            //                0.0, largestAlphasAS[cI])) {
-            //                largestAlphasAS[cI] *= slackness;
-            //            }
-            //            else {
-            //                largestAlphasAS[cI] = 1.0;
-            //            }
-            //        }
-            //    }
-            //}
-        }
-#ifdef USE_TBB
         );
-#endif
+
         stepSize = std::min(stepSize, largestAlphasAS.minCoeff());
     }
 }
@@ -4267,149 +3986,69 @@ void Self_largestFeasibleStepSize_CCD(const mesh3D& mesh,
 {
     const double CCDDistRatio = 1.0 - slackness;
     Eigen::VectorXd largestAlphaTP(mesh.surfVerts.size());
-#ifdef USE_TBB
     tbb::parallel_for(0, (int)mesh.surfVerts.size(), 1, [&](int svI)
-#else
-    for (int vI = 0; vI < mesh.vertexes.size(); ++vI)
-#endif
-    {
-        int vI = mesh.surfVerts[svI];
-        largestAlphaTP[svI] = 1.0;
-        std::unordered_set<int> triInds; // NOTE: different constraint order will result in numerically different results
-        //sh.queryPointForPrimitives(mesh.vertexes[vI], Eigen::Matrix<double, 1, 3>::Zero(),
-        //    svInds, edgeInds, triInds);
-        sh.queryPointForTriangles(svI, triInds);
-        // triangle-point
-        for (const auto& sfI : triInds)
         {
-            const Vector3i& sfVInd = mesh.surface[sfI].block<3, 1>(0, 0);
+            int vI = mesh.surfVerts[svI];
+            largestAlphaTP[svI] = 1.0;
+            std::unordered_set<int> triInds; // NOTE: different constraint order will result in numerically different results
+            //sh.queryPointForPrimitives(mesh.vertexes[vI], Eigen::Matrix<double, 1, 3>::Zero(),
+            //    svInds, edgeInds, triInds);
+            sh.queryPointForTriangles(svI, triInds);
+            // triangle-point
+            for (const auto& sfI : triInds)
+            {
+                const Vector3i& sfVInd = mesh.surface[sfI].block<3, 1>(0, 0);
 
-            if (vI == sfVInd[0] || vI == sfVInd[1] || vI == sfVInd[2])continue;
-            //double d_sqrt;
-            //computePointTriD(mesh.vertexes[vI], mesh.vertexes[sfVInd[0]], mesh.vertexes[sfVInd[1]], mesh.vertexes[sfVInd[2]], d_sqrt);
-            //d_sqrt = std::sqrt(d_sqrt);
+                if (vI == sfVInd[0] || vI == sfVInd[1] || vI == sfVInd[2])continue;
 
-            //double largestAlpha = 1.0;
-            //if (CTCD::vertexFaceCTCD(mesh.vertexes[vI],
-            //    mesh.vertexes[sfVInd[0]],
-            //    mesh.vertexes[sfVInd[1]],
-            //    mesh.vertexes[sfVInd[2]],
-            //    mesh.vertexes[vI] - searchDir[vI],
-            //    mesh.vertexes[sfVInd[0]] - searchDir[sfVInd[0]],
-            //    mesh.vertexes[sfVInd[1]] - searchDir[sfVInd[1]],
-            //    mesh.vertexes[sfVInd[2]] - searchDir[sfVInd[2]],
-            //    CCDDistRatio * d_sqrt,
-            //    largestAlpha)) {
-            //    if (largestAlpha < 1.0e-6) {
-            //        if (CTCD::vertexFaceCTCD(mesh.vertexes[vI],
-            //            mesh.vertexes[sfVInd[0]],
-            //            mesh.vertexes[sfVInd[1]],
-            //            mesh.vertexes[sfVInd[2]],
-            //            mesh.vertexes[vI] - searchDir[vI],
-            //            mesh.vertexes[sfVInd[0]] - searchDir[sfVInd[0]],
-            //            mesh.vertexes[sfVInd[1]] - searchDir[sfVInd[1]],
-            //            mesh.vertexes[sfVInd[2]] - searchDir[sfVInd[2]],
-            //            0.0, largestAlpha)) {
-            //            largestAlpha *= slackness;
-            //        }
-            //        else {
-            //            largestAlpha = 1.0;
-            //        }
-            //    }
-            //}
+                double largestAlpha = point_triangle_ccd(mesh.vertexes[vI],
+                    mesh.vertexes[sfVInd[0]],
+                    mesh.vertexes[sfVInd[1]],
+                    mesh.vertexes[sfVInd[2]],
+                    -searchDir[vI],
+                    -searchDir[sfVInd[0]],
+                    -searchDir[sfVInd[1]],
+                    -searchDir[sfVInd[2]], CCDDistRatio, 0);
 
-
-            double largestAlpha = point_triangle_ccd(mesh.vertexes[vI],
-                mesh.vertexes[sfVInd[0]],
-                mesh.vertexes[sfVInd[1]],
-                mesh.vertexes[sfVInd[2]],
-                -searchDir[vI],
-                -searchDir[sfVInd[0]],
-                -searchDir[sfVInd[1]],
-                -searchDir[sfVInd[2]], CCDDistRatio, 0);
-
-            largestAlphaTP[svI] = std::min(largestAlpha, largestAlphaTP[svI]);
+                largestAlphaTP[svI] = std::min(largestAlpha, largestAlphaTP[svI]);
+            }
         }
-    }
-#ifdef USE_TBB
     );
-#endif
+
     stepSize = std::min(stepSize, largestAlphaTP.minCoeff());
 
     printf("2stepsize:%lf\n", stepSize);
     // edge-edge, point-edge
     Eigen::VectorXd largestAlphaEE(mesh.surfEdges.size());
-#ifdef USE_TBB
+
     tbb::parallel_for(0, (int)mesh.surfEdges.size(), 1, [&](int eJ)
-#else
-    for (int eJ = 0; eJ < mesh.surfEdges.size(); ++eJ)
-#endif
-    {
-        largestAlphaEE[eJ] = 1.0;
-        const auto& meshEJ = mesh.surfEdges[eJ];
-        std::unordered_set<int> edgeInds; // NOTE: different constraint order will result in numerically different results
-        //sh.queryEdgeForPE(mesh.vertexes[meshEJ.first], mesh.vertexes[meshEJ.second],
-        //    svInds, edgeInds);
-        sh.queryEdgeForEdgesWithBBoxCheck(mesh, searchDir, stepSize, eJ, edgeInds);
-        // edge-edge
-        for (const auto& eI : edgeInds) {
-            const auto& meshEI = mesh.surfEdges[eI];
-            if (meshEI.first == meshEJ.first || meshEI.first == meshEJ.second || meshEI.second == meshEJ.first || meshEI.second == meshEJ.second || eI < eJ)continue;
-            //double d_sqrt;
-            //computeEdgeEdgeD(mesh.vertexes[meshEI.first], mesh.vertexes[meshEI.second],
-            //    mesh.vertexes[meshEJ.first], mesh.vertexes[meshEJ.second], d_sqrt);
-            //d_sqrt = std::sqrt(d_sqrt);
+        {
+            largestAlphaEE[eJ] = 1.0;
+            const auto& meshEJ = mesh.surfEdges[eJ];
+            std::unordered_set<int> edgeInds; // NOTE: different constraint order will result in numerically different results
+            //sh.queryEdgeForPE(mesh.vertexes[meshEJ.first], mesh.vertexes[meshEJ.second],
+            //    svInds, edgeInds);
+            sh.queryEdgeForEdgesWithBBoxCheck(mesh, searchDir, stepSize, eJ, edgeInds);
+            // edge-edge
+            for (const auto& eI : edgeInds) {
+                const auto& meshEI = mesh.surfEdges[eI];
+                if (meshEI.first == meshEJ.first || meshEI.first == meshEJ.second || meshEI.second == meshEJ.first || meshEI.second == meshEJ.second || eI < eJ)continue;
 
-            //double largestAlphas = 1.0;
-            //if (CTCD::edgeEdgeCTCD(mesh.vertexes[meshEI.first],
-            //    mesh.vertexes[meshEI.second],
-            //    mesh.vertexes[meshEJ.first],
-            //    mesh.vertexes[meshEJ.second],
-            //    mesh.vertexes[meshEI.first] - searchDir[meshEI.first],
-            //    mesh.vertexes[meshEI.second] - searchDir[meshEI.second],
-            //    mesh.vertexes[meshEJ.first] - searchDir[meshEJ.first],
-            //    mesh.vertexes[meshEJ.second] - searchDir[meshEJ.second],
-            //    CCDDistRatio * d_sqrt,
-            //    largestAlphas)) {
-            //    if (largestAlphas < 1.0e-6) {
-            //        if (CTCD::edgeEdgeCTCD(mesh.vertexes[meshEI.first],
-            //            mesh.vertexes[meshEI.second],
-            //            mesh.vertexes[meshEJ.first],
-            //            mesh.vertexes[meshEJ.second],
-            //            mesh.vertexes[meshEI.first] - searchDir[meshEI.first],
-            //            mesh.vertexes[meshEI.second] - searchDir[meshEI.second],
-            //            mesh.vertexes[meshEJ.first] - searchDir[meshEJ.first],
-            //            mesh.vertexes[meshEJ.second] - searchDir[meshEJ.second],
-            //            0.0, largestAlphas)) {
-            //            if (largestAlphas == 0.0) {
-            //                // numerically parallel edge-edge causes CCD code to fail
-            //                largestAlphas = 1.0;
-            //            }
-            //            largestAlphas *= slackness;
-            //        }
-            //        else {
-            //            largestAlphas = 1.0;
-            //        }
-            //    }
-            //}
+                double largestAlphas = edge_edge_ccd(mesh.vertexes[meshEI.first],
+                    mesh.vertexes[meshEI.second],
+                    mesh.vertexes[meshEJ.first],
+                    mesh.vertexes[meshEJ.second],
+                    -searchDir[meshEI.first],
+                    -searchDir[meshEI.second],
+                    -searchDir[meshEJ.first],
+                    -searchDir[meshEJ.second], CCDDistRatio, 0);
+                largestAlphaEE[eJ] = std::min(largestAlphas, largestAlphaEE[eJ]);
+            }
 
 
-            double largestAlphas = edge_edge_ccd(mesh.vertexes[meshEI.first],
-                mesh.vertexes[meshEI.second],
-                mesh.vertexes[meshEJ.first],
-                mesh.vertexes[meshEJ.second],
-                -searchDir[meshEI.first],
-                -searchDir[meshEI.second],
-                -searchDir[meshEJ.first],
-                -searchDir[meshEJ.second], CCDDistRatio, 0);
-            largestAlphaEE[eJ] = std::min(largestAlphas, largestAlphaEE[eJ]);
         }
-
-
-    }
-#ifdef USE_TBB
     );
-#endif
+
     stepSize = std::min(stepSize, largestAlphaEE.minCoeff());
     printf("3stepsize:%lf\n", stepSize);
 }

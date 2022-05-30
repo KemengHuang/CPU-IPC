@@ -138,27 +138,24 @@ void Environment_largestFeasibleStepSize(const mesh3D& mesh, const Ground& gd,
     double& stepSize)
 {
     Eigen::VectorXd maxStepSizes(mesh.surfVerts.size());
-#ifdef USE_TBB
-    tbb::parallel_for(0, (int)mesh.surfVerts.size(), 1, [&](int svI)
-#else
-    for (int svI = 0; svI < mesh.surfVerts.size(); ++svI)
-#endif
-    {
-        maxStepSizes[svI] = 1.0;
-        int vI = mesh.surfVerts[svI];
 
-        double coef = gd.normal.dot(-searchDir[vI]);
-        if (coef < 0.0) { // if going towards the halfSpace
-            double dist = gd.normal.transpose().dot(mesh.vertexes[vI]) - gd.D;
-            maxStepSizes[svI] = -dist / coef * slackness;
-            if (maxStepSizes[svI] < 0.0)
-                maxStepSizes[svI] = 1.0;
+    tbb::parallel_for(0, (int)mesh.surfVerts.size(), 1, [&](int svI)
+
+        {
+            maxStepSizes[svI] = 1.0;
+            int vI = mesh.surfVerts[svI];
+
+            double coef = gd.normal.dot(-searchDir[vI]);
+            if (coef < 0.0) { // if going towards the halfSpace
+                double dist = gd.normal.transpose().dot(mesh.vertexes[vI]) - gd.D;
+                maxStepSizes[svI] = -dist / coef * slackness;
+                if (maxStepSizes[svI] < 0.0)
+                    maxStepSizes[svI] = 1.0;
+
+            }
 
         }
 
-    }
-#ifdef USE_TBB
     );
-#endif
     stepSize = std::min(stepSize, maxStepSizes.minCoeff());
 }

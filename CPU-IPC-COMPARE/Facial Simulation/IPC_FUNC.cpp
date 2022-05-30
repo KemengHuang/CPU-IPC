@@ -35,17 +35,14 @@ void computeXTilta(mesh3D& mesh)
 {
     mesh.xTilta.resize(mesh.vertexes.size());
     Vector3d gravityDtSq = Vector3d(0, -9.8, 0) * IPC_dt * IPC_dt;
-#ifdef USE_TBB
-        tbb::parallel_for(0, (int)mesh.vertexes.size(), 1, [&](int vI)
-#else
-        for (int vI = 0; vI < mesh.vertexes.size(); vI++)
-#endif
-        {         
+
+    tbb::parallel_for(0, (int)mesh.vertexes.size(), 1, [&](int vI)
+
+        {
             mesh.xTilta[vI] = (mesh.V_prev[vI] + (mesh.velocities[vI] * IPC_dt + gravityDtSq));
         }
-#ifdef USE_TBB
-        );
-#endif
+
+    );
    
 }
 
@@ -53,105 +50,89 @@ void computeEGradient(const mesh3D& mesh, vector<Vector3d>& gradient) {
     //Mass part
     Matrix3d massM;
     massM.setIdentity();
-#ifdef USE_TBB
+
     tbb::parallel_for(0, mesh.vertexNum, 1, [&](int vI)
-#else
-    for (int vI = 0; vI < mesh.vertexNum; vI++)
-#endif
-    {
-        gradient[vI] += (mesh.masses[vI] * massM * (mesh.vertexes[vI] - mesh.xTilta[vI]));
-    }
-#ifdef USE_TBB
+
+        {
+            gradient[vI] += (mesh.masses[vI] * massM * (mesh.vertexes[vI] - mesh.xTilta[vI]));
+        }
+
     );
-#endif
 
     //internal part
     //double tolerance = 1e-6;
     double fsum = 0;
-#ifdef USE_TBB
+
     vector<tbb::spin_mutex> countMutex(mesh.vertexNum);
     tbb::parallel_for(0, mesh.tetrahedraNum, 1, [&](int ii)
-#else
-    for (int ii = 0; ii < mesh.tetrahedraNum; ii++)
-#endif
-    {
-        MatrixXd PFPX = computePFPX3D_double(mesh.DM_triangle_inverse[ii]);
-        MatrixXd F = calculateDms3D_double(mesh.vertexes, mesh.tetrahedras[ii], 0) * mesh.DM_triangle_inverse[ii];
 
-        Matrix3d PEPF = computePEPF_StableNHK3D_2_double(F, lengthRate, volumeRate);
+        {
+            MatrixXd PFPX = computePFPX3D_double(mesh.DM_triangle_inverse[ii]);
+            MatrixXd F = calculateDms3D_double(mesh.vertexes, mesh.tetrahedras[ii], 0) * mesh.DM_triangle_inverse[ii];
 
-        MatrixXd pepf = vec_double(PEPF);
-        MatrixXd f = mesh.volum[ii] * PFPX.transpose() * pepf;
+            Matrix3d PEPF = computePEPF_StableNHK3D_2_double(F, lengthRate, volumeRate);
+
+            MatrixXd pepf = vec_double(PEPF);
+            MatrixXd f = mesh.volum[ii] * PFPX.transpose() * pepf;
 
 
 
-        for (int i = 0; i < 12; i++) {
-#ifdef USE_TBB
-            countMutex[mesh.tetrahedras[ii][i / 3]].lock();
-            gradient[mesh.tetrahedras[ii][i / 3]][i % 3] += IPC_dt * IPC_dt * f(i, 0);
-            countMutex[mesh.tetrahedras[ii][i / 3]].unlock();
-#else
-            gradient[mesh.tetrahedras[ii][i / 3]][i % 3] += IPC_dt * IPC_dt * f(i, 0);
-#endif
+            for (int i = 0; i < 12; i++) {
+
+                countMutex[mesh.tetrahedras[ii][i / 3]].lock();
+                gradient[mesh.tetrahedras[ii][i / 3]][i % 3] += IPC_dt * IPC_dt * f(i, 0);
+                countMutex[mesh.tetrahedras[ii][i / 3]].unlock();
+
+            }
         }
-    }
-#ifdef USE_TBB
+
     );
-#endif
 }
 
 void computeGradientAndHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessian& BH, const Ground& grd) {
     //Mass part
     Matrix3d massM;
     massM.setIdentity();
-#ifdef USE_TBB
+
     tbb::parallel_for(0, mesh.vertexNum, 1, [&](int vI)
-#else
-    for (int vI = 0; vI < mesh.vertexNum; vI++)
-#endif
-    {
-        gradient[vI] = (mesh.masses[vI] * massM * (mesh.vertexes[vI] - mesh.xTilta[vI]));
-    }
-#ifdef USE_TBB
-    );
-#endif
 
-    BH.H12x12.resize(mesh.tetrahedraNum);
-#ifdef USE_TBB
-    vector<tbb::spin_mutex> countMutex(mesh.vertexNum);
-    tbb::parallel_for(0, mesh.tetrahedraNum, 1, [&](int ii)
-#else
-    for (int ii = 0; ii < mesh.tetrahedraNum; ii++)
-#endif
-    {
-        MatrixXd PFPX = computePFPX3D_double(mesh.DM_triangle_inverse[ii]);
-        MatrixXd F = calculateDms3D_double(mesh.vertexes, mesh.tetrahedras[ii], 0) * mesh.DM_triangle_inverse[ii];
-
-        Matrix3d PEPF = computePEPF_StableNHK3D_2_double(F, lengthRate, volumeRate);
-
-        MatrixXd pepf = vec_double(PEPF);
-        MatrixXd f = mesh.volum[ii] * PFPX.transpose() * pepf;
-
-        for (int i = 0; i < 4; i++) {
-#ifdef USE_TBB
-            countMutex[mesh.tetrahedras[ii][i]].lock();
-            gradient[mesh.tetrahedras[ii][i]] += IPC_dt * IPC_dt * f.block<3, 1>(3 * i, 0);//f.template segment<3>(i * 3);//f(i, 0);
-            countMutex[mesh.tetrahedras[ii][i]].unlock();
-#else
-            gradient[mesh.tetrahedras[ii][i / 3]][i % 3] += IPC_dt * IPC_dt * f(i, 0);
-#endif
+        {
+            gradient[vI] = (mesh.masses[vI] * massM * (mesh.vertexes[vI] - mesh.xTilta[vI]));
         }
 
-        //std::cout << F << std::endl;
-        MatrixXd Hq = project_StabbleNHK_2_H_3D(F, lengthRate, volumeRate);
-
-        MatrixXd HE = mesh.volum[ii] * IPC_dt * IPC_dt * PFPX.transpose() * Hq * PFPX;
-        BH.H12x12[ii] = (HE);
-
-    }
-#ifdef USE_TBB
     );
-#endif
+
+
+    BH.H12x12.resize(mesh.tetrahedraNum);
+
+    vector<tbb::spin_mutex> countMutex(mesh.vertexNum);
+    tbb::parallel_for(0, mesh.tetrahedraNum, 1, [&](int ii)
+
+        {
+            MatrixXd PFPX = computePFPX3D_double(mesh.DM_triangle_inverse[ii]);
+            MatrixXd F = calculateDms3D_double(mesh.vertexes, mesh.tetrahedras[ii], 0) * mesh.DM_triangle_inverse[ii];
+
+            Matrix3d PEPF = computePEPF_StableNHK3D_2_double(F, lengthRate, volumeRate);
+
+            MatrixXd pepf = vec_double(PEPF);
+            MatrixXd f = mesh.volum[ii] * PFPX.transpose() * pepf;
+
+            for (int i = 0; i < 4; i++) {
+                countMutex[mesh.tetrahedras[ii][i]].lock();
+                gradient[mesh.tetrahedras[ii][i]] += IPC_dt * IPC_dt * f.block<3, 1>(3 * i, 0);//f.template segment<3>(i * 3);//f(i, 0);
+                countMutex[mesh.tetrahedras[ii][i]].unlock();
+
+            }
+
+            //std::cout << F << std::endl;
+            MatrixXd Hq = project_StabbleNHK_2_H_3D(F, lengthRate, volumeRate);
+
+            MatrixXd HE = mesh.volum[ii] * IPC_dt * IPC_dt * PFPX.transpose() * Hq * PFPX;
+            BH.H12x12[ii] = (HE);
+
+        }
+
+    );
     BH.D4Index = mesh.tetrahedras;
 
     VectorXd constraintVals;
@@ -316,14 +297,13 @@ vector<Vector3d> PCG_Solver(const mesh3D& mesh, const BHessian& BH, const vector
     vector<Vector3d> r(mesh.vertexNum, Vector3d(0, 0, 0));
     vector<Vector3d> c(mesh.vertexNum, Vector3d(0, 0, 0));
 
-#ifdef USE_TBB
     vector<tbb::spin_mutex> countMutex(mesh.vertexNum);
     delta0 = parallel_reduce(
         tbb::blocked_range<int>(0, mesh.vertexNum), 0.0, [&](const tbb::blocked_range<int>& r, double temp_delta) {
             for (int i = r.begin(); i != r.end(); i++) {
-                double vx = 1 / (P[i][0]);// abs(P(i * 3)) > 1e-5 ? 1 / (P(i * 3)) : 1;
-                double vy = 1 / (P[i][1]);// abs(P(i * 3) + 1) > 1e-5 ? 1 / (P(i * 3) + 1) : 1;
-                double vz = 1 / (P[i][2]);// abs(P(i * 3) + 2) > 1e-5 ? 1 / (P(i * 3) + 2) : 1;
+                double vx = 1 / (P[i][0]);
+                double vy = 1 / (P[i][1]);
+                double vz = 1 / (P[i][2]);
                 Vector3d filter_b = mesh.Constraints[i] * gradient[i];
                 temp_delta += filter_b[0] * filter_b[0] * vx;
                 temp_delta += filter_b[1] * filter_b[1] * vy;
@@ -335,19 +315,7 @@ vector<Vector3d> PCG_Solver(const mesh3D& mesh, const BHessian& BH, const vector
             return left + right;
         }
         );
-#else
-    for (int i = 0; i < mesh.vertexNum; i++) {
-        double vx = 1 / (P[i][0]);// abs(P(i * 3)) > 1e-5 ? 1 / (P(i * 3)) : 1;
-        double vy = 1 / (P[i][1]);// abs(P(i * 3) + 1) > 1e-5 ? 1 / (P(i * 3) + 1) : 1;
-        double vz = 1 / (P[i][2]);// abs(P(i * 3) + 2) > 1e-5 ? 1 / (P(i * 3) + 2) : 1;
-        Vector3d filter_b = mesh.Constraints[i] * gradient[i];
-        delta0 += filter_b[0] * filter_b[0] * vx;
-        delta0 += filter_b[1] * filter_b[1] * vy;
-        delta0 += filter_b[2] * filter_b[2] * vz;
-    }
-#endif
 
-#ifdef USE_TBB
     deltaN = parallel_reduce(
         tbb::blocked_range<int>(0, mesh.vertexNum), 0.0, [&](const tbb::blocked_range<int>& rg, double temp_deltaN) {
             for (int i = rg.begin(); i != rg.end(); i++) {
@@ -368,23 +336,8 @@ vector<Vector3d> PCG_Solver(const mesh3D& mesh, const BHessian& BH, const vector
             return left + right;
         }
         );
-#else
-    for (int i = 0; i < mesh.vertexNum; i++)
-    {
-        r[i] = gradient[i];
-        r[i] = mesh.Constraints[i] * r[i];
-        c[i][0] = r[i][0] * P[i][0];
-        c[i][1] = r[i][1] * P[i][1];
-        c[i][2] = r[i][2] * P[i][2];
-        c[i] = mesh.Constraints[i] * c[i];
 
-        deltaN += c[i][0] * r[i][0];
-        deltaN += c[i][1] * r[i][1];
-        deltaN += c[i][2] * r[i][2];
-    }
-#endif
-
-    double errorRate = 1e-6;
+    double errorRate = 1e-4;
     //std::cout << "cpu  delta0:   " << delta0 << "      deltaN:   " << deltaN << endl;
     //system("pause");
     //PCG main loop
@@ -393,135 +346,90 @@ vector<Vector3d> PCG_Solver(const mesh3D& mesh, const BHessian& BH, const vector
         cgCounts++;
         //std::cout << "delta0:   " << delta0 << "      deltaN:   " << deltaN  << endl;
         vector<Vector3d> q(mesh.vertexNum, Vector3d(0, 0, 0));
-#ifdef USE_TBB
+
         tbb::parallel_for(0, (int)BH.D4Index.size(), 1, [&](int ii)
-#else
-        for (int ii = 0; ii < BH.D4Index.size(); ii++)
-#endif
-        {
-            MatrixXd H = BH.H12x12[ii];
-            VectorXd tempC(12);
-            for (int i = 0; i < 12; i++) {
-                tempC(i) = c[BH.D4Index[ii][i / 3]][i % 3];
+            {
+                MatrixXd H = BH.H12x12[ii];
+                VectorXd tempC(12);
+                for (int i = 0; i < 12; i++) {
+                    tempC(i) = c[BH.D4Index[ii][i / 3]][i % 3];
+                }
+                VectorXd tempQ = H * tempC;
+                for (int i = 0; i < 12; i++) {
+                    countMutex[BH.D4Index[ii][i / 3]].lock();
+                    q[BH.D4Index[ii][i / 3]][i % 3] += tempQ(i);
+                    countMutex[BH.D4Index[ii][i / 3]].unlock();
+                }
             }
-            VectorXd tempQ = H * tempC;
-            for (int i = 0; i < 12; i++) {
-#ifdef USE_TBB
-                countMutex[BH.D4Index[ii][i / 3]].lock();
-                q[BH.D4Index[ii][i / 3]][i % 3] += tempQ(i);
-                countMutex[BH.D4Index[ii][i / 3]].unlock();
-#else
-                q[BH.D4Index[ii][i / 3]][i % 3] += tempQ(i);
-#endif
-            }
-        }
-#ifdef USE_TBB
         );
-#endif
 
-#ifdef USE_TBB
         tbb::parallel_for(0, (int)BH.D3Index.size(), 1, [&](int ii)
-#else
-        for (int ii = 0; ii < BH.D3Index.size(); ii++)
-#endif
-        {
-            MatrixXd H = BH.H9x9[ii];
+            {
+                MatrixXd H = BH.H9x9[ii];
 
-            VectorXd tempC(9);
+                VectorXd tempC(9);
 
-            for (int i = 0; i < 9; i++) {
-                tempC(i) = c[BH.D3Index[ii][i / 3]][i % 3];
+                for (int i = 0; i < 9; i++) {
+                    tempC(i) = c[BH.D3Index[ii][i / 3]][i % 3];
+                }
+                VectorXd tempQ = H * tempC;
+
+                for (int i = 0; i < 9; i++) {
+                    countMutex[BH.D3Index[ii][i / 3]].lock();
+                    q[BH.D3Index[ii][i / 3]][i % 3] += tempQ(i);
+                    countMutex[BH.D3Index[ii][i / 3]].unlock();
+                }
             }
-            VectorXd tempQ = H * tempC;
-
-            for (int i = 0; i < 9; i++) {
-#ifdef USE_TBB
-                countMutex[BH.D3Index[ii][i / 3]].lock();
-                q[BH.D3Index[ii][i / 3]][i % 3] += tempQ(i);
-                countMutex[BH.D3Index[ii][i / 3]].unlock();
-#else
-                q[BH.D3Index[ii][i / 3]][i % 3] += tempQ(i);
-#endif
-            }
-        }
-#ifdef USE_TBB
         );
-#endif
 
-#ifdef USE_TBB
+
         tbb::parallel_for(0, (int)BH.D2Index.size(), 1, [&](int ii)
-#else
-        for (int ii = 0; ii < BH.D2Index.size(); ii++)
-#endif
-        {
-            MatrixXd H = BH.H6x6[ii];
+            {
+                MatrixXd H = BH.H6x6[ii];
 
-            VectorXd tempC(6);
+                VectorXd tempC(6);
 
-            for (int i = 0; i < 6; i++) {
-                tempC(i) = c[BH.D2Index[ii][i / 3]][i % 3];
+                for (int i = 0; i < 6; i++) {
+                    tempC(i) = c[BH.D2Index[ii][i / 3]][i % 3];
+                }
+                VectorXd tempQ = H * tempC;
+
+                for (int i = 0; i < 6; i++) {
+                    countMutex[BH.D2Index[ii][i / 3]].lock();
+                    q[BH.D2Index[ii][i / 3]][i % 3] += tempQ(i);
+                    countMutex[BH.D2Index[ii][i / 3]].unlock();
+                }
             }
-            VectorXd tempQ = H * tempC;
-
-            for (int i = 0; i < 6; i++) {
-#ifdef USE_TBB
-                countMutex[BH.D2Index[ii][i / 3]].lock();
-                q[BH.D2Index[ii][i / 3]][i % 3] += tempQ(i);
-                countMutex[BH.D2Index[ii][i / 3]].unlock();
-#else
-                q[BH.D2Index[ii][i / 3]][i % 3] += tempQ(i);
-#endif
-            }
-        }
-#ifdef USE_TBB
         );
-#endif
 
-#ifdef USE_TBB
         tbb::parallel_for(0, mesh.vertexNum, 1, [&](int ii)
-#else
-        for (int ii = 0; ii < mesh.vertexNum; ii++)
-#endif
-        {
-            q[ii] += mesh.masses[ii] * c[ii];
-        }
-#ifdef USE_TBB
+            {
+                q[ii] += mesh.masses[ii] * c[ii];
+            }
         );
-#endif
 
 
-#ifdef USE_TBB
         tbb::parallel_for(0, (int)BH.D1Index.size(), 1, [&](int ii)
-#else
-        for (int ii = 0; ii < BH.D1Index.size(); ii++)
-#endif
-        {
-            MatrixXd H = BH.H3x3[ii];
+            {
+                MatrixXd H = BH.H3x3[ii];
 
-            VectorXd tempC(3);
+                VectorXd tempC(3);
 
-            for (int i = 0; i < 3; i++) {
-                tempC(i) = c[BH.D1Index[ii]][i];
+                for (int i = 0; i < 3; i++) {
+                    tempC(i) = c[BH.D1Index[ii]][i];
+                }
+                VectorXd tempQ = H * tempC;
+
+                for (int i = 0; i < 3; i++) {
+                    countMutex[BH.D1Index[ii]].lock();
+                    q[BH.D1Index[ii]][i] += tempQ(i);
+                    countMutex[BH.D1Index[ii]].unlock();
+                }
             }
-            VectorXd tempQ = H * tempC;
-
-            for (int i = 0; i < 3; i++) {
-#ifdef USE_TBB
-                countMutex[BH.D1Index[ii]].lock();
-                q[BH.D1Index[ii]][i] += tempQ(i);
-                countMutex[BH.D1Index[ii]].unlock();
-#else
-                q[BH.D1Index[ii]][i] += tempQ(i);
-#endif
-            }
-        }
-#ifdef USE_TBB
         );
-#endif
 
         double tempSum = 0;
 
-#ifdef USE_TBB
         tempSum = parallel_reduce(
             tbb::blocked_range<int>(0, mesh.vertexNum), 0.0, [&](const tbb::blocked_range<int>& rg, double temp_sum) {
                 for (int i = rg.begin(); i != rg.end(); i++) {
@@ -534,12 +442,6 @@ vector<Vector3d> PCG_Solver(const mesh3D& mesh, const BHessian& BH, const vector
                 return left + right;
             }
             );
-#else
-        for (int i = 0; i < mesh.vertexNum; i++) {
-            q[i] = mesh.Constraints[i] * q[i];
-            tempSum += (c[i][0] * q[i][0] + c[i][1] * q[i][1] + c[i][2] * q[i][2]);
-        }
-#endif
 
         double alpha = deltaN / tempSum;
         //cout << "tempSum:------------------"<<tempSum << endl;
@@ -548,7 +450,7 @@ vector<Vector3d> PCG_Solver(const mesh3D& mesh, const BHessian& BH, const vector
         deltaN = 0;
         vector<Vector3d> s(mesh.vertexNum, Vector3d(0, 0, 0));
 
-#ifdef USE_TBB
+
         deltaN = parallel_reduce(
             tbb::blocked_range<int>(0, mesh.vertexNum), 0.0, [&](const tbb::blocked_range<int>& rg, double temp_deltaN) {
                 for (int i = rg.begin(); i != rg.end(); i++) {
@@ -572,54 +474,28 @@ vector<Vector3d> PCG_Solver(const mesh3D& mesh, const BHessian& BH, const vector
                 return left + right;
             }
             );
-#else
-        for (int i = 0; i < mesh.vertexNum; i++) {
-            dX[i][0] = dX[i][0] + alpha * c[i][0];
-            dX[i][1] = dX[i][1] + alpha * c[i][1];
-            dX[i][2] = dX[i][2] + alpha * c[i][2];
 
-            r[i][0] = r[i][0] - alpha * q[i][0];
-            r[i][1] = r[i][1] - alpha * q[i][1];
-            r[i][2] = r[i][2] - alpha * q[i][2];
 
-            s[i][0] = r[i][0] * P[i][0];
-            s[i][1] = r[i][1] * P[i][1];
-            s[i][2] = r[i][2] * P[i][2];
-
-            deltaN += (r[i][0] * s[i][0] + r[i][1] * s[i][1] + r[i][2] * s[i][2]);
-        }
-#endif
-        
         if (deltaN < localOptimal) {
             localOptimal = deltaN;
             getLocalOpt = true;
-#ifdef USE_TBB
             tbb::parallel_for(0, mesh.vertexNum, 1, [&](int j)
-#else
-            for (int j = 0; j < mesh.vertexNum; j++)
-#endif
-            {
-                tempDeltaX[j] = Vector3d(dX[j]);
-            }
-#ifdef USE_TBB
+                {
+                    tempDeltaX[j] = Vector3d(dX[j]);
+                }
             );
-#endif
         }
 
-#ifdef USE_TBB
+
         tbb::parallel_for(0, mesh.vertexNum, 1, [&](int i)
-#else
-        for (int i = 0; i < mesh.vertexNum; i++)
-#endif
-        {
-            c[i][0] = s[i][0] + (deltaN / deltaO) * c[i][0];
-            c[i][1] = s[i][1] + (deltaN / deltaO) * c[i][1];
-            c[i][2] = s[i][2] + (deltaN / deltaO) * c[i][2];
-            c[i] = mesh.Constraints[i] * c[i];
-        }
-#ifdef USE_TBB
+            {
+                c[i][0] = s[i][0] + (deltaN / deltaO) * c[i][0];
+                c[i][1] = s[i][1] + (deltaN / deltaO) * c[i][1];
+                c[i][2] = s[i][2] + (deltaN / deltaO) * c[i][2];
+                c[i] = mesh.Constraints[i] * c[i];
+            }
         );
-#endif
+
     }
     printf("cg counts: %d\n", cgCounts);
     if (localOptimal)
@@ -643,7 +519,7 @@ void computeEnergyVal(const mesh3D& mesh, double& energyVal, const Ground& gd, d
     //energyVal += getObjEnergy_AniostroI5_3D(mesh.vertexes, mesh, lengthRate, contract_ratio);
     energyVal *= IPC_dt * IPC_dt;
     double deltaE = 0;
-#ifdef USE_TBB
+
     deltaE = parallel_reduce(
         tbb::blocked_range<int>(0, mesh.vertexNum), 0.0, [&](const tbb::blocked_range<int>& rg, double temp_deltaE) {
             for (int i = rg.begin(); i != rg.end(); i++) {
@@ -655,14 +531,7 @@ void computeEnergyVal(const mesh3D& mesh, double& energyVal, const Ground& gd, d
             return left + right;
         }
         );
-#else
-    //double tepsum = 0;
-    for (int i = 0; i < mesh.vertexNum; i++) {
-        double tep = ((mesh.vertexes[i] - mesh.xTilta[i]).squaredNorm() * mesh.masses[i] / 2.0);
-        deltaE += tep;
-        //energyVal += ((mesh.vertexes[i] - mesh.xTilta[i]).squaredNorm() * mesh.masses[i] / 2.0);
-    }
-#endif
+
     energyVal += deltaE;
     Eigen::VectorXd constraintVals, bVals;
     int startCI = constraintVals.size();
@@ -671,7 +540,6 @@ void computeEnergyVal(const mesh3D& mesh, double& energyVal, const Ground& gd, d
     
 
     tbb::parallel_for(startCI, (int)constraintVals.size(), 1, [&](int cI)
-        //for (int cI = startCI; cI < constraintVals.size(); ++cI) 
         {
 
             compute_b(constraintVals[cI], mesh.Hhat, bVals[cI]);
@@ -740,18 +608,15 @@ void stepForward(const vector<Vector3d>& dataV0,
     //assert(data.V.rows() * dim == searchDir.size());
     //assert(data.V.rows() == result.V.rows());
 
-#ifdef USE_TBB
+
     tbb::parallel_for(0, mesh.vertexNum, 1, [&](int vI)
-#else
-    for (int vI = 0; vI < mesh.vertexNum; vI++)
-#endif
-    {
-        if(mesh.boundaryTypes[vI]==0 || boundary_update)
-            mesh.vertexes[vI] = dataV0[vI] - stepSize * searchDir[vI];
-    }
-#ifdef USE_TBB
+
+        {
+            if (mesh.boundaryTypes[vI] == 0 || boundary_update)
+                mesh.vertexes[vI] = dataV0[vI] - stepSize * searchDir[vI];
+        }
+
     );
-#endif
 }
 
 
@@ -763,40 +628,32 @@ bool checkEdgeTriIntersectionIfAny(const mesh3D& mesh,
 {
     Eigen::ArrayXi intersected(mesh.surface.size());
     intersected.setZero();
-#ifdef USE_TBB
     tbb::parallel_for(0, (int)mesh.surface.size(), 1, [&](int sfI)
-#else
-    for (int sfI = 0; sfI < mesh.surface.size(); ++sfI)
-#endif
-    {
-        const Eigen::RowVector4i& sfVInd = mesh.surface[sfI].transpose();
-        int coDim_sfI = 3;
-#ifndef NUSE_SH_CCS
-        std::unordered_set<int> sEdgeInds;
-        sh.queryTriangleForEdges(mesh.vertexes[sfVInd[0]], mesh.vertexes[sfVInd[1]], mesh.vertexes[sfVInd[2]], 0.0, sEdgeInds);
-        for (const auto& eI : sEdgeInds)
-#else
-        for (int eI = 0; eI < mesh.surfEdges.size(); ++eI)
-#endif
+
         {
-            const auto& meshEI = mesh.surfEdges[eI];
-            if (meshEI.first == sfVInd[0] || meshEI.first == sfVInd[1] || meshEI.first == sfVInd[2] || meshEI.second == sfVInd[0] || meshEI.second == sfVInd[1] || meshEI.second == sfVInd[2]) {
-                continue;
-            }
+            const Eigen::RowVector4i& sfVInd = mesh.surface[sfI].transpose();
+            int coDim_sfI = 3;
+            std::unordered_set<int> sEdgeInds;
+            sh.queryTriangleForEdges(mesh.vertexes[sfVInd[0]], mesh.vertexes[sfVInd[1]], mesh.vertexes[sfVInd[2]], 0.0, sEdgeInds);
+            for (const auto& eI : sEdgeInds)
+            {
+                const auto& meshEI = mesh.surfEdges[eI];
+                if (meshEI.first == sfVInd[0] || meshEI.first == sfVInd[1] || meshEI.first == sfVInd[2] || meshEI.second == sfVInd[0] || meshEI.second == sfVInd[1] || meshEI.second == sfVInd[2]) {
+                    continue;
+                }
 
-            int coDim_eI = 3;//mesh.vICoDim(meshEI.first);
+                int coDim_eI = 3;//mesh.vICoDim(meshEI.first);
 
 
-            if (IglUtils::segTriIntersect(mesh.vertexes[meshEI.first], mesh.vertexes[meshEI.second],
-                mesh.vertexes[sfVInd[0]], mesh.vertexes[sfVInd[1]], mesh.vertexes[sfVInd[2]])) {
-                intersected[sfI] = 1;
-                break;
+                if (IglUtils::segTriIntersect(mesh.vertexes[meshEI.first], mesh.vertexes[meshEI.second],
+                    mesh.vertexes[sfVInd[0]], mesh.vertexes[sfVInd[1]], mesh.vertexes[sfVInd[2]])) {
+                    intersected[sfI] = 1;
+                    break;
+                }
             }
         }
-    }
-#ifdef USE_TBB
+
     );
-#endif
 
     if ((intersected != 0).any()) {
         return false;
@@ -865,7 +722,6 @@ bool lineSearch(mesh3D& mesh,
     double c1m = 0.0;
     armijoParam = 1e-4;
     if (armijoParam > 0.0) {
-#ifdef USE_TBB
         c1m = parallel_reduce(
             tbb::blocked_range<int>(0, mesh.vertexNum), 0.0, [&](const tbb::blocked_range<int>& rg, double temp_deltaE) {
                 for (int i = rg.begin(); i != rg.end(); i++) {
@@ -877,13 +733,6 @@ bool lineSearch(mesh3D& mesh,
                 return left + right;
             }
             );
-#else
-        //double test = 0;
-        for (int i = 0; i < mesh.vertexNum; i++) {
-            //test = searchDir[i].dot(searchDir[i]);
-            c1m += searchDir[i].dot(searchDir[i]);
-        }
-#endif
     }
     c1m *= armijoParam;
     vector<Vector3d> resultV0 = mesh.vertexes;
@@ -1120,7 +969,6 @@ void updateBoundaryMoveDir(mesh3D& mesh, vector<Vector3d>& moveDir, double ipc_d
 
 double calculate_distToOpt_PN(const vector<Vector3d>& moveDir) {
     double distToOpt_PN = 0;
-#ifdef USE_TBB
     distToOpt_PN = parallel_reduce(
         tbb::blocked_range<int>(0, (int)moveDir.size()), 0.0, [&](const tbb::blocked_range<int>& rg, double temp_max) {
             for (int i = rg.begin(); i != rg.end(); i++) {
@@ -1136,15 +984,7 @@ double calculate_distToOpt_PN(const vector<Vector3d>& moveDir) {
             return left > right ? left : right;
         }
         );
-#else
-    for (int ii = 0; ii < moveDir.size(); ii++) {
-        for (int jj = 0; jj < 3; jj++) {
-            if (distToOpt_PN < abs(moveDir[ii][jj])) {
-                distToOpt_PN = abs(moveDir[ii][jj]);
-            }
-        }
-    }
-#endif
+
     return distToOpt_PN;
 }
 
@@ -1172,7 +1012,7 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa) {
         cout << "distToOpt_PN" << endl;
         cout << distToOpt_PN << endl;
 
-        bool gradVanish = (distToOpt_PN < sqrt(4e-4 * mesh.bboxDiagSize2 * IPC_dt * IPC_dt));
+        bool gradVanish = (distToOpt_PN < sqrt(1e-4 * mesh.bboxDiagSize2 * IPC_dt * IPC_dt));
         if (k && gradVanish && totalTimeStep > 1 - 1e-3) {
             break;
         }
@@ -1335,17 +1175,14 @@ int IPC_Solver(model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
         }
     }
 
-#ifdef USE_TBB
+
     tbb::parallel_for(0, mesh.vertexNum, 1, [&](int i)
-#else
-    for (int i = 0;i < mesh.vertexNum;i++)
-#endif
-    {
-        mesh.velocities[i] = (mesh.vertexes[i] - mesh.V_prev[i]) / IPC_dt;
-    }
-#ifdef USE_TBB
+
+        {
+            mesh.velocities[i] = (mesh.vertexes[i] - mesh.V_prev[i]) / IPC_dt;
+        }
     );
-#endif
+
 
     mesh.V_prev = mesh.vertexes;
     computeXTilta(mesh);

@@ -30,9 +30,6 @@
     <ClInclude Include="fem3D.h">
       <Filter>CPU-H</Filter>
     </ClInclude>
-    <ClInclude Include="Eigen_Data.h">
-      <Filter>CPU-H</Filter>
-    </ClInclude>
     <ClInclude Include="collisionUtil.h">
       <Filter>CPU-H</Filter>
     </ClInclude>
@@ -52,6 +49,9 @@
       <Filter>CPU-H</Filter>
     </ClInclude>
     <ClInclude Include="ACCD.h">
+      <Filter>CPU-H</Filter>
+    </ClInclude>
+    <ClInclude Include="FEMTimeIntegrator.h">
       <Filter>CPU-H</Filter>
     </ClInclude>
   </ItemGroup>

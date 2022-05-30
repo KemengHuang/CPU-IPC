@@ -2,11 +2,10 @@
 #ifndef _FEM_TIME_INTEGRATOR_CUH_
 #define _FEM_TIME_INTEGRATOR_CUH_
 
-#include <cuda_runtime.h>
 #include "mesh.h"
-#include "FEMMeshes.cuh"
+//#include "FEMMeshes.cuh"
 #include <memory>
-#include "Device_PCG.cuh"
+//#include "Device_PCG.cuh"
 #include "collisionUtil.h"
 #include "IPC_FUNC.h"
 class FEMIntegrator {

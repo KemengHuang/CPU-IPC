@@ -1,6 +1,6 @@
-#include "FEMTimeIntegrator.cuh"
+#include "FEMTimeIntegrator.h"
 #include "fem_parameters.h"
-#include "fem3D_Device.cuh"
+//#include "fem3D_Device.cuh"
 
 
 

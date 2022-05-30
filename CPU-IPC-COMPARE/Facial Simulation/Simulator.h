@@ -2,11 +2,11 @@
 #ifndef FEM_SIMULATOR_H
 #define FEM_SIMULATOR_H
 
-#include "setting.h"
+//#include "setting.h"
 //#include "mesh.h"
 #include "collisionUtil.h"
-#include "FEMMeshes.cuh"
-#include "FEMTimeIntegrator.cuh"
+//#include "FEMMeshes.cuh"
+#include "FEMTimeIntegrator.h"
 
 class FEMSimulator {
 public:

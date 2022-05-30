@@ -1172,7 +1172,7 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa) {
         cout << "distToOpt_PN" << endl;
         cout << distToOpt_PN << endl;
 
-        bool gradVanish = (distToOpt_PN < sqrt(1e-4 * mesh.bboxDiagSize2 * IPC_dt * IPC_dt));
+        bool gradVanish = (distToOpt_PN < sqrt(4e-4 * mesh.bboxDiagSize2 * IPC_dt * IPC_dt));
         if (k && gradVanish && totalTimeStep > 1 - 1e-3) {
             break;
         }

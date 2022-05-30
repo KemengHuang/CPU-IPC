@@ -2,7 +2,6 @@
 #include "GL\freeglut.h"
 #include <fstream>
 #include <iostream>
-#include<cuda_runtime.h>
 #include "fem3D.h"
 #include "fem_timer.h"
 #include "Simulator.h"
@@ -323,353 +322,35 @@ void draw_lines(float ox, float oy, float oz, float width, float height, float l
 void draw_tet_mesh3D()
 {
     glEnable(GL_DEPTH_TEST);
-    glLineWidth(0.5f);
-    glColor3f(0.8f, 0.1f, 0.8f);
-    glBegin(GL_TRIANGLES);
-    int drawtype = 2;
-    model_tet tetrahedra_meshes = simulator.getTetrahedraMeshes();
-    for (int f = 0; f < tetrahedra_meshes.mesh3Ds.size(); f++) {
-        mesh3D& meshTemp = tetrahedra_meshes.mesh3Ds[f];
-        for (int i = 0; i < meshTemp.tetrahedraNum; i++) {
-            //if (meshTemp.isInside[i] != drawtype) continue;
-            //Vector3d center = meshTemp.vertexes[meshTemp.tetrahedras[i][0]] + meshTemp.vertexes[meshTemp.tetrahedras[i][1]] + meshTemp.vertexes[meshTemp.tetrahedras[i][2]] + meshTemp.vertexes[meshTemp.tetrahedras[i][3]];
-            //center = center / 4;
-            ////if (center[0] < 0) //continue;
-            //if (true)
-            //{
-            //    if (meshTemp.isInside[i] == -1 && !drawFat) {
-            //        continue;
-            //    }
-
-            //    if (meshTemp.isMuscle[i] && !drawMuscle) {
-            //        continue;
-            //    }
-            //}
-            //if (meshTemp.isJaw[i] && !drawJaw) {
-            //    continue;
-            //}
-            //if (meshTemp.isSkull[i] && !drawSkull) {
-            //    continue;
-            //}
-            //if (meshTemp.isMouth[i] && !drawMouth) {
-            //    continue;
-            //}
-
-            float red = 0, green = 0, blue = 0;
-                red = 0.3;
- 
-                blue = 0.6;
-
-                green = 0.3;
-            glColor3f(red, green, blue);
-            //if (meshTemp.rehabilitate[i] == -1) {
-
-                //glColor3f(red, green, blue);
-                for (int j = 0; j < 4; j++) {
-
-                    glColor3f(red, green, blue);
-                    if ((j) % 4 == 2) glColor3f(red / 2, green / 2, blue / 2);
-                    if (meshTemp.Constraints[meshTemp.tetrahedras[i][j]].determinant() < 0.5) glColor3f(1, 1, 1);
-                    glVertex3f(meshTemp.vertexes[meshTemp.tetrahedras[i][j]][0], meshTemp.vertexes[meshTemp.tetrahedras[i][j]][1], meshTemp.vertexes[meshTemp.tetrahedras[i][j]][2]);
-                    glColor3f(red, green, blue);
-                    if ((j + 1) % 4 == 2) glColor3f(red / 2, green / 2, blue / 2);
-                    if (meshTemp.Constraints[meshTemp.tetrahedras[i][(j + 1) % 4]].determinant() < 0.5) glColor3f(1, 1, 1);
-                    glVertex3f(meshTemp.vertexes[meshTemp.tetrahedras[i][(j + 1) % 4]][0], meshTemp.vertexes[meshTemp.tetrahedras[i][(j + 1) % 4]][1], meshTemp.vertexes[meshTemp.tetrahedras[i][(j + 1) % 4]][2]);
-                    glColor3f(red, green, blue);
-                    if ((j + 2) % 4 == 2) glColor3f(red / 2, green / 2, blue / 2);
-                    if (meshTemp.Constraints[meshTemp.tetrahedras[i][(j + 2) % 4]].determinant() < 0.5) glColor3f(1, 1, 1);
-                    glVertex3f(meshTemp.vertexes[meshTemp.tetrahedras[i][(j + 2) % 4]][0], meshTemp.vertexes[meshTemp.tetrahedras[i][(j + 2) % 4]][1], meshTemp.vertexes[meshTemp.tetrahedras[i][(j + 2) % 4]][2]);
-
-                }
-                //break;
-            //}
-        }
-    }
-    glEnd();
-    glColor3f(0.8f, 0.8f, 0.1f);
-    //glDisable(GL_DEPTH_TEST);
-    glLineWidth(0.5f);
-    glBegin(GL_LINES);
-    double offset = 1.0;
-    for (int f = 0; f < tetrahedra_meshes.mesh3Ds.size(); f++) {
-        mesh3D& meshTemp = tetrahedra_meshes.mesh3Ds[f];
-        for (int i = 0; i < meshTemp.tetrahedraNum; i++) {
-                for (int j = 0; j < 4; j++) {
-                    glVertex3f(meshTemp.vertexes[meshTemp.tetrahedras[i][j]][0] * offset, meshTemp.vertexes[meshTemp.tetrahedras[i][j]][1] * offset, meshTemp.vertexes[meshTemp.tetrahedras[i][j]][2] * offset);
-                    glVertex3f(meshTemp.vertexes[meshTemp.tetrahedras[i][(j + 1) % 4]][0] * offset, meshTemp.vertexes[meshTemp.tetrahedras[i][(j + 1) % 4]][1] * offset, meshTemp.vertexes[meshTemp.tetrahedras[i][(j + 1) % 4]][2] * offset);
-
-                    glVertex3f(meshTemp.vertexes[meshTemp.tetrahedras[i][(j + 1) % 4]][0] * offset, meshTemp.vertexes[meshTemp.tetrahedras[i][(j + 1) % 4]][1] * offset, meshTemp.vertexes[meshTemp.tetrahedras[i][(j + 1) % 4]][2] * offset);
-                    glVertex3f(meshTemp.vertexes[meshTemp.tetrahedras[i][(j + 2) % 4]][0] * offset, meshTemp.vertexes[meshTemp.tetrahedras[i][(j + 2) % 4]][1] * offset, meshTemp.vertexes[meshTemp.tetrahedras[i][(j + 2) % 4]][2] * offset);
-
-                    glVertex3f(meshTemp.vertexes[meshTemp.tetrahedras[i][j]][0] * offset, meshTemp.vertexes[meshTemp.tetrahedras[i][j]][1] * offset, meshTemp.vertexes[meshTemp.tetrahedras[i][j]][2] * offset);
-                    glVertex3f(meshTemp.vertexes[meshTemp.tetrahedras[i][(j + 2) % 4]][0] * offset, meshTemp.vertexes[meshTemp.tetrahedras[i][(j + 2) % 4]][1] * offset, meshTemp.vertexes[meshTemp.tetrahedras[i][(j + 2) % 4]][2] * offset);
-                }
-
-        }
-    }
-    glEnd();
-}
-
-
-
-
-//bool drawSkin = false;
-//void draw_mesh3D()
-//{
-//    glEnable(GL_DEPTH_TEST);
-//    glLineWidth(1.5f);
-//    glColor3f(0.5f, 0.5f, 0.5f);
-//    glBegin(GL_TRIANGLES);
-//    for (int i = 0; i < triangle_meshes.meshes.size(); i++) {
-//        if (!drawSkin && i == 2) continue;
-//        for (int j = 0; j < triangle_meshes.meshes[i].faceNum; j++) {
-//            for (int t = 0; t < 3; t++) {
-//                int p = triangle_meshes.meshes[i].faces[j][t];
-//               
-//                glVertex3f(triangle_meshes.meshes[i].vertexes[p][0], triangle_meshes.meshes[i].vertexes[p][1], triangle_meshes.meshes[i].vertexes[p][2]);
-//            }
-//        }
-//    }
-//    glEnd();
-//
-//    glColor3f(0.8f, 0.8f, 0.1f);
-//    //glDisable(GL_DEPTH_TEST);
-//    glLineWidth(0.1f);
-//    glBegin(GL_LINES);
-//    double offset = 1.0;
-//    for (int i = 0; i < triangle_meshes.meshes.size(); i++) {
-//        if (!drawSkin && i == 2) continue;
-//        for (int j = 0; j < triangle_meshes.meshes[i].faceNum; j++) {
-//            //for (int t = 0; t < 3; t++) {
-//            int p0 = triangle_meshes.meshes[i].faces[j][0];
-//            int p1 = triangle_meshes.meshes[i].faces[j][1];
-//            int p2 = triangle_meshes.meshes[i].faces[j][2];
-//
-//            //glVertex3f(xx, yy, zz);
-//            glVertex3f(triangle_meshes.meshes[i].vertexes[p0][0], triangle_meshes.meshes[i].vertexes[p0][1], triangle_meshes.meshes[i].vertexes[p0][2]);
-//            glVertex3f(triangle_meshes.meshes[i].vertexes[p1][0], triangle_meshes.meshes[i].vertexes[p1][1], triangle_meshes.meshes[i].vertexes[p1][2]);
-//
-//            glVertex3f(triangle_meshes.meshes[i].vertexes[p1][0], triangle_meshes.meshes[i].vertexes[p1][1], triangle_meshes.meshes[i].vertexes[p1][2]);
-//            glVertex3f(triangle_meshes.meshes[i].vertexes[p2][0], triangle_meshes.meshes[i].vertexes[p2][1], triangle_meshes.meshes[i].vertexes[p2][2]);
-//
-//            glVertex3f(triangle_meshes.meshes[i].vertexes[p2][0], triangle_meshes.meshes[i].vertexes[p2][1], triangle_meshes.meshes[i].vertexes[p2][2]);
-//            glVertex3f(triangle_meshes.meshes[i].vertexes[p0][0], triangle_meshes.meshes[i].vertexes[p0][1], triangle_meshes.meshes[i].vertexes[p0][2]);
-//            //}
-//        }
-//    }
-//    glEnd();
-//}
-
-void draw_mesh3D()
-{
-    glEnable(GL_DEPTH_TEST);
     glLineWidth(1.5f);
-    glColor3f(0.5f, 0.5f, 0.5f);
+    glColor3f(0.9f, 0.1f, 0.1f);
+    const model_tet& tetrahedra_meshes = simulator.getTetrahedraMeshes();
+    const mesh3D& tetMesh = tetrahedra_meshes.mesh3Ds[0];
+    const vector<Vector4i>& surf = tetMesh.surface;//obj.faces;
     glBegin(GL_TRIANGLES);
-    model_tet tetrahedra_meshes = simulator.getTetrahedraMeshes();
-    for (int f = 0; f < tetrahedra_meshes.mesh3Ds.size(); f++) {
 
-        const vector<Vector4i>& surf = tetrahedra_meshes.mesh3Ds[f].surface;
-
-        for (int j = 0; j < surf.size(); j++) {
-            if (mouthOnly) {
-                //Vector3d center = tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][0]] + tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][1]] + tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][2]];
-                //center /= 3;
-                //if (center.y() > 0.0 || center.y() < -0.35) continue;
-                //if (center.z() < 0.0) continue;
-                //if (center.x() > 0.23 || center.x() < -0.23) continue;
-                //if (tetrahedra_meshes.mesh3Ds[f].isJaw[surf[j][3]] || tetrahedra_meshes.mesh3Ds[f].isSkull[surf[j][3]]) {
-                //    glColor3f(0.8f, 0.1f, 0.8f);
-                //}
-                //else {
-                //    continue;//glColor3f(0.8f, 0.8f, 0.1f);
-                //}
-
-                for (int t = 0; t < 3; t++) {
-                    glVertex3f(tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][t]][0], tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][t]][1], tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][t]][2]);
-                }
-            }
-        }
+    for (int j = 0; j < tetMesh.surface.size(); j++) {
+        glVertex3f((tetMesh.vertexes[surf[j][0]][0]), (tetMesh.vertexes[surf[j][0]][1]), (tetMesh.vertexes[surf[j][0]][2]));
+        glVertex3f((tetMesh.vertexes[surf[j][1]][0]), (tetMesh.vertexes[surf[j][1]][1]), (tetMesh.vertexes[surf[j][1]][2]));
+        glVertex3f((tetMesh.vertexes[surf[j][2]][0]), (tetMesh.vertexes[surf[j][2]][1]), (tetMesh.vertexes[surf[j][2]][2]));
     }
     glEnd();
 
     glColor3f(0.9f, 0.9f, 0.9f);
-    //glDisable(GL_DEPTH_TEST);
     glLineWidth(0.1f);
     glBegin(GL_LINES);
-    //tetrahedra_meshes = simulator.getTetrahedraMeshes();
-    for (int f = 0; f < tetrahedra_meshes.mesh3Ds.size(); f++) {
 
-        const vector<Vector4i>& surf = tetrahedra_meshes.mesh3Ds[f].surface;
-        for (int j = 0; j < surf.size(); j++) {
-            //Vector3d center = tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][0]] + tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][1]] + tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][2]];
-            //center /= 3;
-            //if (mouthOnly) {
-            //    if (center.y() > 0.0 || center.y() < -0.35) continue;
-            //    if (center.z() < 0.0) continue;
-            //    if (center.x() > 0.23 || center.x() < -0.23) continue;
-            //    if (tetrahedra_meshes.mesh3Ds[f].isJaw[surf[j][3]] || tetrahedra_meshes.mesh3Ds[f].isSkull[surf[j][3]]) {
-            //        glColor3f(0.0f, 0.0f, 0.0f);
-            //    }
-            //    else {
-            //        glColor3f(0.8f, 0.8f, 0.1f);
-            //    }
-            //}
+    for (int j = 0; j < tetMesh.surfEdges.size(); j++) {
+        glVertex3f((tetMesh.vertexes[tetMesh.surfEdges[j].first][0]), (tetMesh.vertexes[tetMesh.surfEdges[j].first][1]), (tetMesh.vertexes[tetMesh.surfEdges[j].first][2]));
+        glVertex3f((tetMesh.vertexes[tetMesh.surfEdges[j].second][0]), (tetMesh.vertexes[tetMesh.surfEdges[j].second][1]), (tetMesh.vertexes[tetMesh.surfEdges[j].second][2]));
 
-            Vector3d v1 = tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][1]] - tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][0]];
-            Vector3d v2 = tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][2]] - tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][0]];
-            Vector3d normal = v1.cross(v2).normalized() * 0.01;
-
-            //glVertex3f(center[0], center[1], center[2]);
-            //glVertex3f(center[0] + normal[0], center[1] + normal[1], center[2] + normal[2]);
-            //glVertex3f(xx, yy, zz);
-            glVertex3f(tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][0]][0], tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][0]][1], tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][0]][2]);
-            glVertex3f(tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][1]][0], tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][1]][1], tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][1]][2]);
-
-            glVertex3f(tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][1]][0], tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][1]][1], tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][1]][2]);
-            glVertex3f(tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][2]][0], tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][2]][1], tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][2]][2]);
-
-            glVertex3f(tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][0]][0], tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][0]][1], tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][0]][2]);
-            glVertex3f(tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][2]][0], tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][2]][1], tetrahedra_meshes.mesh3Ds[f].vertexes[surf[j][2]][2]);
-            //}
-        }
+        glColor3f(0.9f, 0.9f, 0.9f);
+        glLineWidth(0.1f);
     }
     glEnd();
+
 }
 
-
-//void draw_Scene2D() {
-//    glEnable(GL_DEPTH_TEST);
-//    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);   //sf ±³¾°ÑÕÉ«
-//    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-//    draw_box2D(-1, -1, 2, 2);
-//    draw_mesh2D();
-//    glutSwapBuffers();
-//}
-int counttt = 0;
-vector<float3> getRenderGeometry(int& number) {
-    model_tet tetrahedra_meshes = simulator.getTetrahedraMeshes();
-    mesh3D& meshTemp = tetrahedra_meshes.mesh3Ds[0];
-    vector<Vector3d> meshNormal(meshTemp.vertexNum, Vector3d(0, 0, 0));
-    number = meshTemp.surface.size();
-    vector<float3> pos_normal_color(3 * number * 3);
-#ifdef USE_TBB
-    vector<tbb::spin_mutex> countMutex(meshTemp.vertexNum);
-    tbb::parallel_for(0, number, 1, [&](int i)
-#else
-    for (int i = 0; i < number; i++)
-#endif
-    {
-        int tetId = meshTemp.surface[i][3];
-        int v0 = meshTemp.surface[i][0];
-        int v1 = meshTemp.surface[i][1];
-        int v2 = meshTemp.surface[i][2];
-        Vector3d vt0 = meshTemp.vertexes[v0];// Vector3d(meshTemp.vertexes[v0][0], meshTemp.vertexes[v0][1], meshTemp.vertexes[v0][2]);
-        Vector3d vt1 = meshTemp.vertexes[v1];// Vector3d(meshTemp.vertexes[v1][0], meshTemp.vertexes[v1][1], meshTemp.vertexes[v1][2]);
-        Vector3d vt2 = meshTemp.vertexes[v2];// Vector3d(meshTemp.vertexes[v2][0], meshTemp.vertexes[v2][1], meshTemp.vertexes[v2][2]);
-        Vector3d vec1 = vt1 - vt0;
-        Vector3d vec2 = vt2 - vt0;
-        Vector3d normal = vec1.cross(vec2).normalized();
-
-        pos_normal_color[i * 9] = make_float3(vt0[0], vt0[1], vt0[2]);
-        pos_normal_color[i * 9 + 3] = make_float3(vt1[0], vt1[1], vt1[2]);
-        pos_normal_color[i * 9 + 6] = make_float3(vt2[0], vt2[1], vt2[2]);
-
-            pos_normal_color[i * 9 + 2] = make_float3(0.6875f, 0.51953f, 0.38671f);
-            pos_normal_color[i * 9 + 5] = make_float3(0.6875f, 0.51953f, 0.38671f);
-            pos_normal_color[i * 9 + 8] = make_float3(0.6875f, 0.51953f, 0.38671f);
-
-#ifdef USE_TBB
-        countMutex[v0].lock();
-        meshNormal[v0] += normal;
-        countMutex[v0].unlock();
-        countMutex[v1].lock();
-        meshNormal[v1] += normal;
-        countMutex[v1].unlock();
-        countMutex[v2].lock();
-        meshNormal[v2] += normal;
-        countMutex[v2].unlock();
-#else
-        meshNormal[v0] += normal;
-        meshNormal[v1] += normal;
-        meshNormal[v2] += normal;
-#endif
-    }
-#ifdef USE_TBB
-    );
-#endif
-
-#ifdef USE_TBB
-    tbb::parallel_for(0, number, 1, [&](int i)
-#else
-    for (int i = 0; i < number; i++)
-#endif
-    {
-        int v0 = meshTemp.surface[i][0];
-        int v1 = meshTemp.surface[i][1];
-        int v2 = meshTemp.surface[i][2];
-        //meshNormal[v0].normalize(); meshNormal[v1].normalize(); meshNormal[v2].normalize();
-        pos_normal_color[i * 9 + 1] = make_float3(meshNormal[v0][0], meshNormal[v0][1], meshNormal[v0][2]);
-        pos_normal_color[i * 9 + 4] = make_float3(meshNormal[v1][0], meshNormal[v1][1], meshNormal[v1][2]);
-        pos_normal_color[i * 9 + 7] = make_float3(meshNormal[v2][0], meshNormal[v2][1], meshNormal[v2][2]);
-    }
-#ifdef USE_TBB
-    );
-#endif
-    return pos_normal_color;
-}
-
-
-void draw_face_withShader() {
-
-
-    int number;
-    vector<float3> pos_normal_color = getRenderGeometry(number);
-
-    glBindBuffer(GL_ARRAY_BUFFER, PN_vbo_);
-    glBufferData(GL_ARRAY_BUFFER, 9 * number * sizeof(float3), &pos_normal_color[0], GL_DYNAMIC_DRAW);
-
-    glBindVertexArray(VAO);
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float3), (GLvoid*)0);
-    glEnableVertexAttribArray(0);
-
-    glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float3), (GLvoid*)(sizeof(float3)));
-    glEnableVertexAttribArray(1);
-
-    glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, 3 * sizeof(float3), (GLvoid*)(2 * sizeof(float3)));
-    glEnableVertexAttribArray(2);
-    //glBindVertexArray(0);
-
-    glUseProgram(shaderProgram);
-    //const glm::vec3 objectColor(0.9375f, 0.82031f, 0.78125f);
-    const glm::vec3 objectColor(0.6875f, 0.51953f, 0.38671f);
-    glUniform3fv(glGetUniformLocation(shaderProgram, "objectColor"), 1, &objectColor[0]);
-    const glm::vec3 lightColor(1.0f, 1.0f, 1.0f);
-
-    glUniform3fv(glGetUniformLocation(shaderProgram, "lightColor"), 1, &lightColor[0]);
-    const glm::vec3 lightPos(0.0f, 0.5f, 3.5f);
-    glUniform3fv(glGetUniformLocation(shaderProgram, "lightPos"), 1, &lightPos[0]);
-
-
-    // create transformations
-    glm::mat4 model = glm::mat4(1.0f); // make sure to initialize matrix to identity matrix first
-    glm::mat4 view = glm::mat4(1.0f);
-    glm::mat4 projection = glm::mat4(1.0f);
-    //model = glm::rotate(model, 45.f, glm::vec3(0.0f, 1.0f, 0.0f));
-    view = glm::translate(view, glm::vec3(xTrans, yTrans, zTrans - 3));
-    view = glm::rotate(view, xRot * 0.2f, glm::vec3(1.0f, 0.0f, 0.0f));
-    view = glm::rotate(view, yRot * 0.2f, glm::vec3(0.0f, 1.0f, 0.0f));
-    projection = glm::perspective(glm::radians(45.0f), (float)window_width / (float)window_height, 0.1f, 500.0f);
-    // retrieve the matrix uniform locations
-    unsigned int modelLoc = glGetUniformLocation(shaderProgram, "model");
-    unsigned int viewLoc = glGetUniformLocation(shaderProgram, "view");
-    glUniformMatrix4fv(modelLoc, 1, GL_FALSE, glm::value_ptr(model));
-    glUniformMatrix4fv(viewLoc, 1, GL_FALSE, &view[0][0]);
-    glUniformMatrix4fv(glGetUniformLocation(shaderProgram, "projection"), 1, GL_FALSE, &projection[0][0]);
-
-    glBindVertexArray(VAO);
-    glDrawArrays(GL_TRIANGLES, 0, 3 * number);
-}
 
 void draw_Scene3D() {
     //face.mesh3Ds[0] = mesh3d;
@@ -678,29 +359,19 @@ void draw_Scene3D() {
     glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-    if (!isSetShader) {
-        glMatrixMode(GL_MODELVIEW);
-        glPushMatrix();
-        glTranslatef(xTrans, yTrans, zTrans);
-        glRotatef(xRot, 1.0f, 0.0f, 0.0f);
-        glRotatef(yRot, 0.0f, 1.0f, 0.0f);
 
-        draw_box3D(-1, -1, -1, 2, 2, 2);
-        //draw_lines(-1, -1, -1, 2, 2, 2);
-        if (true) {
-            if (!drawSurface) {
-                draw_tet_mesh3D();
-            }
-            else {
-                draw_mesh3D();
-                //draw_landMarks();
-            }
-        }
-        glPopMatrix();
-    }
-    else {
-        draw_face_withShader();
-    }
+    glMatrixMode(GL_MODELVIEW);
+    glPushMatrix();
+    glTranslatef(xTrans, yTrans, zTrans);
+    glRotatef(xRot, 1.0f, 0.0f, 0.0f);
+    glRotatef(yRot, 0.0f, 1.0f, 0.0f);
+
+    draw_box3D(-1, -1, -1, 2, 2, 2);
+    //draw_lines(-1, -1, -1, 2, 2, 2);
+    draw_tet_mesh3D();
+    glPopMatrix();
+
+
     glutSwapBuffers();
     //glFlush();
 }

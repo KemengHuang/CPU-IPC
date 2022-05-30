@@ -4,7 +4,6 @@
 //#include "mesh.h"
 #include "fem_math.h"
 #include "collisionUtil.h"
-#include <cuda_runtime.h>
 
 //host functions
 void initMesh3D(mesh3D& mesh, int type, double scale);

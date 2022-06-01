@@ -131,29 +131,12 @@ public:
 	double dTol;
 	vector<Vector3d> vertexes;
 	vector<Vector3d> v_rest;
-	//vector<Vector3d> d_positions;
 	vector<Vector4i> tetrahedras;
-	//vector<Vector4i> tetrahedrasV;
-	//vector<Vector3d> forces;
 	vector<Vector3d> velocities;
-	//vector<Vector3d> d_velocities;
 	vector<Matrix3d> DM_triangle_inverse;
-	//vector<Matrix3d> DMiso_triangle_inverse;
-	//vector<int> rehabilitate;
-	//vector<int> ids;
-	//vector<Vector3d> tetra_fiberDir;
-	//vector<Vector4i> rehabilitateTetIndexes;
-	//vector<Vector3d> rehabilitateB;
-	//vector<Vector3d> rehabiRestNorm;
-	//vector<Vector3d> externalForce;
 	vector<Vector4i> surface;
 	vector<uint64_t> surfVerts;
 	vector<pair<uint64_t, uint64_t>> surfEdges;
-	//vector<int> isInside;
-	//vector<bool> isJaw;
-	//vector<bool> isMuscle;
-	//vector<bool> isMouth;
-	//vector<bool> isSkull;
 	vector<int> Environment_ActiveSet;
 	vector<MMCVID> Self_ActiveSet;
 	vector<MMCVID> Self_EE_ActiveSet;
@@ -181,6 +164,8 @@ public:
 	void load_test(double scale, int num = 1);
 	void getSurface();
 	bool output_tetrahedraMesh(const std::string& filename);
+	bool output_tetTempData();
+	bool load_tetTempData();
 };
 
 class mesh_obj {

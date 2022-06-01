@@ -12,12 +12,9 @@
 #include <chrono>
 #include "Solver.h"
 using namespace FEM;
-#define EXPORT_OBJ
 
-#ifdef EXPORT_OBJ
 //index count to export
 int step_index = 0;
-#endif
 double time_total = 0;
 int total_iter = 0;
 void buildConstraintStartIndsWithMM(const vector<int>& activeSet,
@@ -1107,9 +1104,21 @@ void export_obj(const mesh3D& mesh, int index) {
     }
     cloth_stream.close();
 }
+bool loadTempTimeInfo = true;
 int IPC_Solver(model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
-    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     mesh3D& mesh = meshTetes->mesh3Ds[0];
+
+    if (loadTempTimeInfo) {
+        std::string fileVertex = "tempData/timeCost.txt";
+        ifstream ifs(fileVertex);
+        if (ifs) {
+            ifs >> time_total >> total_iter >> step_index >> mesh.Kappa;
+            loadTempTimeInfo = false;
+        }
+        ifs.close();
+    }
+
+    std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     
     upperBoundKappa(mesh.Kappa, mesh.Hhat, mesh.bboxDiagSize2, mesh.meanMass);
     if (mesh.Kappa < 1e-16) {
@@ -1187,6 +1196,8 @@ int IPC_Solver(model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
     mesh.V_prev = mesh.vertexes;
     computeXTilta(mesh);
 
+    
+
     std::cout << "                                                finished a step" << endl;
 
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
@@ -1196,15 +1207,26 @@ int IPC_Solver(model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
     std::cout << "total  = "
         << time_total << "[ms]" << std::endl;
     std::cout << "total newton step:"<<total_iter << std::endl;
-#ifdef EXPORT_OBJ
+
     std::cout << "frame number  = "
         << step_index++ << std::endl;
-#endif // EXPORT_OBJ
+
     ofstream outTime("timeCost.txt");
     outTime << "time: " << time_total / 1000.0 << endl;
     outTime << "total iter: " << total_iter << endl;
     outTime << "frames: " << step_index << endl;
     outTime.close();
+    
+    {
+        ofstream outTime2("tempData/timeCost.txt");
+        outTime2 << time_total << endl;
+        outTime2 << total_iter << endl;
+        outTime2 << step_index << endl;
+        outTime2 << mesh.Kappa << endl;
+        outTime2.close();
+        mesh.output_tetTempData();
+    }
+
     //if (step_index == 250) {
     //    exit(0);
     //}

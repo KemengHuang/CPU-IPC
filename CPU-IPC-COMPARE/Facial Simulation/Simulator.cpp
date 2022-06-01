@@ -91,6 +91,7 @@ bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
 
     mesh3d.v_rest = mesh3d.vertexes;
     mesh3d.V_prev = mesh3d.vertexes;
+
     computeXTilta(mesh3d);
 
 
@@ -109,7 +110,12 @@ bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
 
     buildIntegrator(buildType, sceneType);
 
-    
+    if (!tetrahedra_meshes.mesh3Ds[0].load_tetTempData()) {
+        printf("no temp data\n");
+    }
+    else {
+        printf("load temp data\n");
+    }
 
     buildCollisionSets();
     return true;

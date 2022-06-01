@@ -381,6 +381,8 @@ bool mesh3D::load_tetrahedraMesh(const std::string& filename, double scale, Vect
 	return true;
 }
 
+
+
 bool mesh3D::load_tetrahedraMesh_IPC_TetMesh(const std::string& filename, double scale, Vector3d position_offset)
 {
 	ifstream ifs(filename);
@@ -617,6 +619,56 @@ bool mesh3D::output_tetrahedraMesh(const std::string& filename) {
 			tetrahedras[i][3] << endl;
 	}
 	outmsh1.close();
+	return true;
+}
+
+bool mesh3D::load_tetTempData() {
+	std::string fileVertex = "tempData/vertex.txt";
+	std::string fileXtileVertex = "tempData/vertexXtile.txt";
+	ifstream ifs1(fileVertex);
+	ifstream ifs2(fileXtileVertex);
+
+	if (!ifs1|| !ifs2) {
+		ifs1.close();
+		ifs2.close();
+		return false;
+	}
+	double x, y, z;
+	int index = 0;
+	while (ifs1 >> x >> y >> z) {
+		vertexes[index] = Vector3d(x, y, z);
+		V_prev[index] = vertexes[index];
+		index++;
+	}
+	index = 0;
+	while (ifs2 >> x >> y >> z) {
+		xTilta[index++] = Vector3d(x, y, z);
+	}
+	ifs1.close();
+	ifs2.close();
+	return true;
+}
+
+bool mesh3D::output_tetTempData() {
+	std::string fileVertex = "tempData/vertex.txt";
+	std::string vertexXtile = "tempData/vertexXtile.txt";
+
+
+	std::ofstream outmsh1(fileVertex);
+	for (int i = 0; i < vertexNum; i++) {
+		outmsh1 << vertexes[i][0] << " " <<
+			vertexes[i][1] << " " <<
+			vertexes[i][2] << endl;
+	}
+	outmsh1.close();
+
+	std::ofstream outmsh2(vertexXtile);
+	for (int i = 0; i < vertexNum; i++) {
+		outmsh2 << xTilta[i][0] << " " <<
+			xTilta[i][1] << " " <<
+			xTilta[i][2] << endl;
+	}
+	outmsh2.close();
 	return true;
 }
 

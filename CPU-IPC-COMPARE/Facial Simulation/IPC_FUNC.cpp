@@ -31,7 +31,7 @@ void buildConstraintStartIndsWithMM(const vector<int>& activeSet,
 void computeXTilta(mesh3D& mesh)
 {
     mesh.xTilta.resize(mesh.vertexes.size());
-    Vector3d gravityDtSq = Vector3d(0, -9.8, 0) * IPC_dt * IPC_dt;
+    Vector3d gravityDtSq = Vector3d(0, -0, 0) * IPC_dt * IPC_dt;
 
     tbb::parallel_for(0, (int)mesh.vertexes.size(), 1, [&](int vI)
 
@@ -1128,7 +1128,7 @@ int IPC_Solver(model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
     
 
 
-    if (false)
+    if (true)
     {
         vector<Vector3d> moveDir(mesh.vertexNum, Vector3d(0, 0, 0));
         double new_alpha = 1;
@@ -1217,6 +1217,7 @@ int IPC_Solver(model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
     outTime << "frames: " << step_index << endl;
     outTime.close();
     
+    if (step_index % 10 == 0)
     {
         ofstream outTime2("tempData/timeCost.txt");
         outTime2 << time_total << endl;

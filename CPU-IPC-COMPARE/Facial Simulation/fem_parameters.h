@@ -6,7 +6,7 @@ namespace FEM {
 	const static double PI = 3.1415926535897932;
 	const static double density = 1000;
 	const static double YoungModulus = 1e4;
-	const static double PoissonRate = 0.49;
+	const static double PoissonRate = 0.45;
 	const static double explicit_time_step = 0.000001;
 	const static double implicit_time_step = 0.0001;
 	const static double lengthRateLame = YoungModulus / (2 * (1 + PoissonRate));

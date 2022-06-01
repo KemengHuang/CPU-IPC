@@ -51,27 +51,27 @@ bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
     //    mesh3d.load_tetrahedraMesh("tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0.6, -0.65, -0.4));
     //    mesh3d.load_tetrahedraMesh("tetrahedraMesh/bunny2.msh", 0.2, Vector3d(-0.6, -0.65, -0.4));
     //}
-    mesh3d.load_tetrahedraMesh("tetrahedraMesh/twoBunny.msh", 2, Vector3d(-0, -0, -0));
+    //mesh3d.load_tetrahedraMesh("tetrahedraMesh/twoBunny.msh", 2, Vector3d(-0, -0, -0));
     //mesh3d.load_tetrahedraMesh("tetrahedraMesh/bunny.msh", 0.5, Vector3d(-0, 0.4, -0));
     //mesh3d.load_tetrahedraMesh("tetrahedraMesh/bunny.msh", 0.5, Vector3d(-0, -0.4, -0));
-    //{
-    //    mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/rod300x33.msh", 1, Vector3d(0, 0.1, 0));
-    //    mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/rod300x33.msh", 1, Vector3d(0, -0.1, 0));
-    //    mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/rod300x33.msh", 1, Vector3d(0, 0, 0.1));
-    //    mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/rod300x33.msh", 1, Vector3d(0, 0, -0.1));
+    {
+        //mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/rod300x33.msh", 1, Vector3d(0, 0.1, 0));
+        //mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/rod300x33.msh", 1, Vector3d(0, -0.1, 0));
+        //mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/rod300x33.msh", 1, Vector3d(0, 0, 0.1));
+        //mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/rod300x33.msh", 1, Vector3d(0, 0, -0.1));
 
-    //    //mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/mat150x150t40.msh", 1, Vector3d(0, 0, 0));
-    //    for (int j = 0; j < mesh3d.vertexNum; j++) {
-    //        if ((mesh3d.vertexes[j].x()) > 0.5 - 1e-4) {
-    //            mesh3d.boundaryTypes[j] = 1;
-    //            mesh3d.Constraints[j].setZero();
-    //        }
-    //        if (((mesh3d.vertexes[j].x()) < -0.5 + 1e-4)) {
-    //            mesh3d.boundaryTypes[j] = -1;
-    //            mesh3d.Constraints[j].setZero();
-    //        }
-    //    }
-    //}
+        mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/mat150x150t40.msh", 1, Vector3d(0, 0, 0));
+        for (int j = 0; j < mesh3d.vertexNum; j++) {
+            if ((mesh3d.vertexes[j].x()) > 0.5 - 1e-4) {
+                mesh3d.boundaryTypes[j] = 1;
+                mesh3d.Constraints[j].setZero();
+            }
+            if (((mesh3d.vertexes[j].x()) < -0.5 + 1e-4)) {
+                mesh3d.boundaryTypes[j] = -1;
+                mesh3d.Constraints[j].setZero();
+            }
+        }
+    }
     //for (int j = mesh3d.vertexNum/2; j < mesh3d.vertexNum; j++) {
     //    mesh3d.boundaryTypes[j] = 1;
     //    mesh3d.Constraints[j].setZero();

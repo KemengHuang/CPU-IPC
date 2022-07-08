@@ -7,9 +7,9 @@
 #include "Simulator.h"
 #include <tbb/parallel_for.h>
 #include <tbb/spin_mutex.h>
-
+#include "fem_parameters.h"
 using namespace std;
-int step = 0;
+
 int surfNumId = 0;
 float xRot = 0.0f;
 float yRot = 0.f;
@@ -25,7 +25,7 @@ float window_width = 1000;
 float window_height = 1000;
 int s_dimention = 3;
 bool stop = true;
-bool screenshot = false;
+bool screenshot = true;
 bool saveSurface = false;
 bool mouthOnly = false;
 bool isSetShader = false;
@@ -378,12 +378,13 @@ int total_cg_iterations = 0;
 int total_newton_iterations = 0;
 int start = -1;
 
-void saveScreenPic(const string& path) {
+void saveScreenPic(const string& path, int step_index) {
     std::stringstream ss;
     ss << path;
     ss.fill('0');
     ss.width(5);
-    ss << step;// / 10;
+    ss << step_index / 10;
+    if (step_index % 10 != 0) return;
     std::string file_path = ss.str();
     //if (step / 10 != start) {
         //start = step / 10;
@@ -430,20 +431,22 @@ void display(void)
 
     if (stop) return;
 
-    if (screenshot)
+    int step = 0;
+    int k = simulator.simulateStick(step);
+
+    if (true)
     {
-        saveScreenPic("saveScreen/step_");
-        step++;
-
+        saveScreenPic("saveScreen/step_", step);
     }
-    int k = simulator.simulateStick();
-    newtonIt.push_back(k);
 
-    ofstream outIte("newTonIter.txt");
-    for (auto value : newtonIt) {
-        outIte << value << endl;
-    }
-    outIte.close();
+
+    //newtonIt.push_back(k);
+
+    //ofstream outIte("newTonIter.txt");
+    //for (auto value : newtonIt) {
+    //    outIte << value << endl;
+    //}
+    //outIte.close();
 }
 
 void initScene0() {

@@ -759,7 +759,7 @@ bool lineSearch(mesh3D& mesh,
 
     int numOfLineSearch = 0;
     double LFStepSize = stepSize;
-    while ((testingE > lastEnergyVal + stepSize * c1m) && (stepSize > 1e-3 * LFStepSize) && abs(testingE - lastEnergyVal) / abs(lastEnergyVal - mesh.restSNKE) > 1e-8 / IPC_dt / (1 << (numOfLineSearch + 1))) {
+    while ((testingE > lastEnergyVal + stepSize * c1m) && (stepSize > 1e-3 * LFStepSize) /*&& abs(testingE - lastEnergyVal) / abs(lastEnergyVal - mesh.restSNKE) > 1e-8 / IPC_dt / (1 << (numOfLineSearch + 1))*/) {
         // fprintf(out, "%.9le %.9le\n", stepSize, testingE);
         //if (stepSize == 1.0) {
         //    stepSize /= 2.0;
@@ -1105,7 +1105,7 @@ void export_obj(const mesh3D& mesh, int index) {
     cloth_stream.close();
 }
 bool loadTempTimeInfo = true;
-int IPC_Solver(model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
+int IPC_Solver(int& stepId, model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
     mesh3D& mesh = meshTetes->mesh3Ds[0];
 
     if (loadTempTimeInfo) {
@@ -1117,6 +1117,8 @@ int IPC_Solver(model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
         }
         ifs.close();
     }
+
+    stepId = step_index;
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     

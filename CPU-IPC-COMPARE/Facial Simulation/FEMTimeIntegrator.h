@@ -13,7 +13,7 @@ public:
 	FEMIntegrator() {};
 	FEMIntegrator(int vertexNUm, int tetrahedraNum);
 	~FEMIntegrator() {};
-	virtual int integrate(double& mfsum, int& total_cg_iterations, int& total_newton_iterations, SpatialHash& sh, Ground& gd) = 0;
+	virtual int integrate(int& stepId, int& total_cg_iterations, int& total_newton_iterations, SpatialHash& sh, Ground& gd) = 0;
 	void solveCollision();
 public:
 	int vertex_Num;
@@ -30,7 +30,7 @@ class ImplicitFEMIntegrator : public FEMIntegrator {
 public:
 	ImplicitFEMIntegrator(model_tet* tetra_mesh3d, unsigned int sceneType);
 	~ImplicitFEMIntegrator() {}
-	virtual int integrate(double& mfsum, int& total_cg_iterations, int& total_newton_iterations, SpatialHash& sh, Ground& gd);
+	virtual int integrate(int& stepId, int& total_cg_iterations, int& total_newton_iterations, SpatialHash& sh, Ground& gd);
 private:
 
 	//void Projected_Newton3D(mesh3D& mesh, double& mfsum, int& total_cg_iterations, int& total_newton_iterations);

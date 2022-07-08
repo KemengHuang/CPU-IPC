@@ -18,7 +18,7 @@ public:
 	model_obj& getTriangleMeshes() { return triangle_meshes; }
 	model_tet& getTetrahedraMeshes() { return tetrahedra_meshes; }
 	fiber_obj& getFiberObj() { return fiber_obj; }
-	int simulateStick();
+	int simulateStick(int& stepId);
 private:
 	void buildIntegrator(const int integratorType, unsigned int sceneType);
 	void buildCollisionSets();

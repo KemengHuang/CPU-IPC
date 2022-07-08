@@ -135,11 +135,10 @@ void FEMSimulator::buildCollisionSets() {
     sh.calculateActivateSet(tetrahedra_meshes.mesh3Ds[0]);
 }
 
-int FEMSimulator::simulateStick() {
-    double fsum = 0;
+int FEMSimulator::simulateStick(int& stepId) {
     int cg_loops = 0;
     int newTon_loops = 0;
-    int k =  integrator->integrate(fsum, cg_loops, newTon_loops, sh, gd);
+    int k =  integrator->integrate(stepId, cg_loops, newTon_loops, sh, gd);
     //buildCollisionSets();
     return k;
 }

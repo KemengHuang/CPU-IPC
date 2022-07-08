@@ -13,13 +13,6 @@ namespace FEM {
 	const static double volumeRateLame = YoungModulus * PoissonRate / ((1 + PoissonRate) * (1 - 2 * PoissonRate));
 	const static double lengthRate = 4 * lengthRateLame / 3;
 	const static double volumeRate = volumeRateLame + 5 * lengthRateLame / 6;
-	const static double aniosScale = lengthRate * 100;
-	const static double iosToAnios = lengthRateLame * 1;
-	const static float contract_ratio = 1.0;
-	const static float iosStiff = 1;
-	const static float aniosStiff = 1;
-	const static bool isRehabitate = true;
-	const static double rehabit_threshold = 1e-7;
 	//static double Hhat = 1e-6;
 	const static double IPC_dt = 0.01;
 	//static double Kappa = 0;

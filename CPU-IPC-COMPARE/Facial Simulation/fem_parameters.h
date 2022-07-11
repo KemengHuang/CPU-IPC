@@ -13,6 +13,7 @@ namespace FEM {
 	const static double volumeRateLame = YoungModulus * PoissonRate / ((1 + PoissonRate) * (1 - 2 * PoissonRate));
 	const static double lengthRate = 4 * lengthRateLame / 3;
 	const static double volumeRate = volumeRateLame + 5 * lengthRateLame / 6;
+	const static double friction = 0.2;
 	//static double Hhat = 1e-6;
 	const static double IPC_dt = 0.01;
 	//static double Kappa = 0;

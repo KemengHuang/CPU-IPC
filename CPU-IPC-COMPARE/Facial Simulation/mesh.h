@@ -137,8 +137,12 @@ public:
 	vector<Vector4i> surface;
 	vector<uint64_t> surfVerts;
 	vector<pair<uint64_t, uint64_t>> surfEdges;
-	vector<int> Environment_ActiveSet;
-	vector<MMCVID> Self_ActiveSet;
+	vector<double> Self_lambda_lastH;
+	vector<double> Environment_lambda_lastH;
+	vector<Eigen::Vector2d> MMDistCoord;
+	vector<Eigen::Matrix<double, 3, 2>> MMTanBasis;
+	vector<double> Environment_ActiveSet, Environment_activeSet_lastH;
+	vector<MMCVID> Self_ActiveSet, Self_activeSet_lastH;
 	vector<MMCVID> Self_EE_ActiveSet;
 	vector<pair<int, int>> Self_EEeIe_ActiveSet;
 	vector<pair<int, int>> Self_CCD_ActiveSet;

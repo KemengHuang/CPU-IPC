@@ -434,19 +434,19 @@ void display(void)
     int step = 0;
     int k = simulator.simulateStick(step);
 
-    if (true)
+    if (false)
     {
         saveScreenPic("saveScreen/step_", step);
     }
 
 
-    newtonIt.push_back(k);
+    //newtonIt.push_back(k);
 
-    ofstream outIte("newTonIter.txt");
-    for (auto value : newtonIt) {
-        outIte << value << endl;
-    }
-    outIte.close();
+    //ofstream outIte("newTonIter.txt");
+    //for (auto value : newtonIt) {
+    //    outIte << value << endl;
+    //}
+    //outIte.close();
 }
 
 void initScene0() {

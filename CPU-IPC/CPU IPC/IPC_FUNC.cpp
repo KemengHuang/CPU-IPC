@@ -13,7 +13,7 @@
 #include "FrictionUtils.hpp"
 #include "Solver.h"
 using namespace FEM;
-#define NEWB
+#define NEWB2
 //index count to export
 int step_index = 0;
 double time_total = 0;
@@ -666,37 +666,156 @@ void computeGradientAndHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessia
 #else
     compute_H_dpt_new(mesh, BH, mesh.Hhat, mesh.Kappa, mesh.Hhat);
 #endif
-#ifdef FRICTION
+    compute_H_dee(mesh, BH, mesh.Hhat, mesh.Kappa);
+
+#ifdef USE_FRICTION
     compute_fiction_gradient(mesh, grd, gradient, mesh.Hhat * IPC_dt * IPC_dt, FEM::friction);
     compute_fiction_hessian(mesh, grd, BH, mesh.Hhat * IPC_dt * IPC_dt, FEM::friction);
 #endif
 }
 
-void PCG_Precondition(const mesh3D& mesh, const BHessian& BH, const vector<Vector3d>& gradient, vector<Vector3d>& P) {
-    for (int i = 0;i < BH.D4Index.size();i++) {
-        for (int j = 0;j < 12;j++) {
-            P[BH.D4Index[i][j / 3]][j % 3] += BH.H12x12[i](j, j);
+
+void __Inverse2(const Eigen::Matrix3d& input, Eigen::Matrix3d& result) {
+    double eps = 1e-15;
+    const int dim = 3;
+    double mat[dim * 2][dim * 2];
+    for (int i = 0;i < dim; i++)
+    {
+        for (int j = 0;j < 2 * dim; j++)
+        {
+            if (j < dim)
+            {
+                mat[i][j] = input(i, j);
+            }
+            else
+            {
+                mat[i][j] = j - dim == i ? 1 : 0;
+            }
         }
     }
-    for (int i = 0;i < BH.D3Index.size();i++) {
-        for (int j = 0;j < 9;j++) {
-            P[BH.D3Index[i][j / 3]][j % 3] += BH.H9x9[i](j, j);
+
+    for (int i = 0;i < dim; i++)
+    {
+        if (abs(mat[i][i]) < eps)
+        {
+            int j;
+            for (j = i + 1; j < dim; j++)
+            {
+                if (abs(mat[j][i]) > eps) break;
+            }
+            if (j == dim) return;
+            for (int r = i; r < 2 * dim; r++)
+            {
+                mat[i][r] += mat[j][r];
+            }
+        }
+        double ep = mat[i][i];
+        for (int r = i; r < 2 * dim; r++)
+        {
+            mat[i][r] /= ep;
+        }
+
+        for (int j = i + 1; j < dim; j++)
+        {
+            double e = -1 * (mat[j][i] / mat[i][i]);
+            for (int r = i; r < 2 * dim; r++)
+            {
+                mat[j][r] += e * mat[i][r];
+            }
         }
     }
-    for (int i = 0;i < BH.D2Index.size();i++) {
-        for (int j = 0;j < 6;j++) {
-            P[BH.D2Index[i][j / 3]][j % 3] += BH.H6x6[i](j, j);
+
+    for (int i = dim - 1; i >= 0; i--)
+    {
+        for (int j = i - 1; j >= 0; j--)
+        {
+            double e = -1 * (mat[j][i] / mat[i][i]);
+            for (int r = i; r < 2 * dim; r++)
+            {
+                mat[j][r] += e * mat[i][r];
+            }
         }
     }
-    for (int i = 0;i < BH.D1Index.size();i++) {
-        for (int j = 0;j < 3;j++) {
-            P[BH.D1Index[i]][j] += BH.H3x3[i](j, j);
+
+
+    for (int i = 0;i < dim; i++)
+    {
+        for (int r = dim; r < 2 * dim; r++)
+        {
+            result(i, r - dim) = mat[i][r];
         }
     }
-    for (int i = 0;i < mesh.vertexNum;i++) {
-        P[i] += Vector3d(mesh.masses[i], mesh.masses[i], mesh.masses[i]);
-        //P[i] = Vector3d(1, 1, 1);
-    }
+}
+
+void PCG_Precondition(const mesh3D& mesh, const BHessian& BH, const vector<Vector3d>& gradient, vector<Matrix3d>& P) {
+
+
+    vector<tbb::spin_mutex> countMutexVerts(mesh.vertexNum);//, countMutex9, countMutex6;//, countMutex3;
+    tbb::parallel_for(0, (int)mesh.vertexNum, 1, [&](int i)
+        {
+            P[i].setZero();
+            P[i](0, 0) = mesh.masses[i];
+            P[i](1, 1) = mesh.masses[i];
+            P[i](2, 2) = mesh.masses[i];
+        });
+
+
+    //for (int i = 0;i < BH.D4Index.size();i++) 
+    tbb::parallel_for(0, (int)BH.D4Index.size(), 1, [&](int i)
+        {
+            for (int j = 0;j < 12;j++) {
+                //P[BH.D4Index[i][j / 3]][j % 3] += BH.H12x12[i](j, j);
+                countMutexVerts[BH.D4Index[i][j / 3]].lock();
+                P[BH.D4Index[i][j / 3]](0, j % 3) += BH.H12x12[i]((j / 3) * 3, j);
+                P[BH.D4Index[i][j / 3]](1, j % 3) += BH.H12x12[i]((j / 3) * 3 + 1, j);
+                P[BH.D4Index[i][j / 3]](2, j % 3) += BH.H12x12[i]((j / 3) * 3 + 2, j);
+                countMutexVerts[BH.D4Index[i][j / 3]].unlock();
+            }
+        });
+    //for (int i = 0;i < BH.D3Index.size();i++) 
+    tbb::parallel_for(0, (int)BH.D3Index.size(), 1, [&](int i)
+        {
+            for (int j = 0;j < 9;j++) {
+                //P[BH.D3Index[i][j / 3]][j % 3] += BH.H9x9[i](j, j);
+                countMutexVerts[BH.D3Index[i][j / 3]].lock();
+                P[BH.D3Index[i][j / 3]](0, j % 3) += BH.H9x9[i]((j / 3) * 3, j);
+                P[BH.D3Index[i][j / 3]](1, j % 3) += BH.H9x9[i]((j / 3) * 3 + 1, j);
+                P[BH.D3Index[i][j / 3]](2, j % 3) += BH.H9x9[i]((j / 3) * 3 + 2, j);
+                countMutexVerts[BH.D3Index[i][j / 3]].unlock();
+            }
+        });
+    //for (int i = 0;i < BH.D2Index.size();i++) 
+    tbb::parallel_for(0, (int)BH.D2Index.size(), 1, [&](int i)
+        {
+            for (int j = 0;j < 6;j++) {
+                //P[BH.D2Index[i][j / 3]][j % 3] += BH.H6x6[i](j, j);
+                countMutexVerts[BH.D2Index[i][j / 3]].lock();
+                P[BH.D2Index[i][j / 3]](0, j % 3) += BH.H6x6[i]((j / 3) * 3, j);
+                P[BH.D2Index[i][j / 3]](1, j % 3) += BH.H6x6[i]((j / 3) * 3 + 1, j);
+                P[BH.D2Index[i][j / 3]](2, j % 3) += BH.H6x6[i]((j / 3) * 3 + 2, j);
+                countMutexVerts[BH.D2Index[i][j / 3]].unlock();
+            }
+        });
+    //for (int i = 0;i < BH.D1Index.size();i++) 
+    tbb::parallel_for(0, (int)BH.D1Index.size(), 1, [&](int i)
+        {
+            for (int j = 0;j < 3;j++) {
+                //P[BH.D1Index[i]][j] += BH.H3x3[i](j, j);
+                countMutexVerts[BH.D1Index[i]].lock();
+                P[BH.D1Index[i]](0, j) += BH.H3x3[i](0, j);
+                P[BH.D1Index[i]](1, j) += BH.H3x3[i](1, j);
+                P[BH.D1Index[i]](2, j) += BH.H3x3[i](2, j);
+                countMutexVerts[BH.D1Index[i]].unlock();
+            }
+        });
+    //for (int i = 0;i < mesh.vertexNum;i++) 
+    tbb::parallel_for(0, (int)mesh.vertexNum, 1, [&](int i)
+        {
+            Eigen::Matrix3d DMInverse;
+            __Inverse2(P[i], DMInverse);
+
+            P[i] = DMInverse;
+        });
 }
 
 
@@ -746,7 +865,8 @@ vector<Vector3d> cholmod_solver(BHessian& BH, std::vector<Eigen::Vector3d> gradi
 }
 
 vector<Vector3d> PCG_Solver(const mesh3D& mesh, const BHessian& BH, const vector<Vector3d>& gradient) {
-    std::vector<Vector3d> P(mesh.vertexNum, Vector3d(0, 0, 0));
+    //std::vector<Vector3d> P(mesh.vertexNum, Vector3d(0, 0, 0));
+    std::vector<Matrix3d> P(mesh.vertexNum);
     PCG_Precondition(mesh, BH, gradient, P);
 
     vector<Vector3d> tempDeltaX(mesh.vertexNum, Vector3d(0, 0, 0));
@@ -766,13 +886,9 @@ vector<Vector3d> PCG_Solver(const mesh3D& mesh, const BHessian& BH, const vector
     delta0 = parallel_reduce(
         tbb::blocked_range<int>(0, mesh.vertexNum), 0.0, [&](const tbb::blocked_range<int>& r, double temp_delta) {
             for (int i = r.begin(); i != r.end(); i++) {
-                double vx = 1 / (P[i][0]);
-                double vy = 1 / (P[i][1]);
-                double vz = 1 / (P[i][2]);
+
                 Vector3d filter_b = mesh.Constraints[i] * gradient[i];
-                temp_delta += filter_b[0] * filter_b[0] * vx;
-                temp_delta += filter_b[1] * filter_b[1] * vy;
-                temp_delta += filter_b[2] * filter_b[2] * vz;
+                temp_delta += filter_b.dot((P[i] * filter_b));
             }
             return temp_delta;
         },
@@ -786,14 +902,11 @@ vector<Vector3d> PCG_Solver(const mesh3D& mesh, const BHessian& BH, const vector
             for (int i = rg.begin(); i != rg.end(); i++) {
                 r[i] = gradient[i];
                 r[i] = mesh.Constraints[i] * r[i];
-                c[i][0] = r[i][0] / P[i][0];
-                c[i][1] = r[i][1] / P[i][1];
-                c[i][2] = r[i][2] / P[i][2];
+                c[i] = P[i] * r[i];
                 c[i] = mesh.Constraints[i] * c[i];
 
-                temp_deltaN += c[i][0] * r[i][0];
-                temp_deltaN += c[i][1] * r[i][1];
-                temp_deltaN += c[i][2] * r[i][2];
+                temp_deltaN += c[i].dot(r[i]);
+
             }
             return temp_deltaN;
         },
@@ -802,7 +915,7 @@ vector<Vector3d> PCG_Solver(const mesh3D& mesh, const BHessian& BH, const vector
         }
         );
 
-    double errorRate = 1e-4;
+    double errorRate = 1e-6;
     //std::cout << "cpu  delta0:   " << delta0 << "      deltaN:   " << deltaN << endl;
     //system("pause");
     //PCG main loop
@@ -876,20 +989,20 @@ vector<Vector3d> PCG_Solver(const mesh3D& mesh, const BHessian& BH, const vector
 
         tbb::parallel_for(0, (int)BH.D1Index.size(), 1, [&](int ii)
             {
-                MatrixXd H = BH.H3x3[ii];
+                Matrix3d H = BH.H3x3[ii];
 
-                VectorXd tempC(3);
+                Vector3d tempC;
 
-                for (int i = 0; i < 3; i++) {
-                    tempC(i) = c[BH.D1Index[ii]][i];
-                }
-                VectorXd tempQ = H * tempC;
+                //for (int i = 0; i < 3; i++) {
+                tempC = c[BH.D1Index[ii]];
+                //}
+                Vector3d tempQ = H * tempC;
 
-                for (int i = 0; i < 3; i++) {
-                    countMutex[BH.D1Index[ii]].lock();
-                    q[BH.D1Index[ii]][i] += tempQ(i);
-                    countMutex[BH.D1Index[ii]].unlock();
-                }
+
+                countMutex[BH.D1Index[ii]].lock();
+                q[BH.D1Index[ii]] += tempQ;
+                countMutex[BH.D1Index[ii]].unlock();
+
             }
         );
 
@@ -899,7 +1012,7 @@ vector<Vector3d> PCG_Solver(const mesh3D& mesh, const BHessian& BH, const vector
             tbb::blocked_range<int>(0, mesh.vertexNum), 0.0, [&](const tbb::blocked_range<int>& rg, double temp_sum) {
                 for (int i = rg.begin(); i != rg.end(); i++) {
                     q[i] = mesh.Constraints[i] * q[i];
-                    temp_sum += (c[i][0] * q[i][0] + c[i][1] * q[i][1] + c[i][2] * q[i][2]);
+                    temp_sum += (c[i].dot(q[i]));
                 }
                 return temp_sum;
             },
@@ -919,19 +1032,16 @@ vector<Vector3d> PCG_Solver(const mesh3D& mesh, const BHessian& BH, const vector
         deltaN = parallel_reduce(
             tbb::blocked_range<int>(0, mesh.vertexNum), 0.0, [&](const tbb::blocked_range<int>& rg, double temp_deltaN) {
                 for (int i = rg.begin(); i != rg.end(); i++) {
-                    dX[i][0] = dX[i][0] + alpha * c[i][0];
-                    dX[i][1] = dX[i][1] + alpha * c[i][1];
-                    dX[i][2] = dX[i][2] + alpha * c[i][2];
+                    dX[i] = dX[i] + alpha * c[i];
 
-                    r[i][0] = r[i][0] - alpha * q[i][0];
-                    r[i][1] = r[i][1] - alpha * q[i][1];
-                    r[i][2] = r[i][2] - alpha * q[i][2];
 
-                    s[i][0] = r[i][0] / P[i][0];
-                    s[i][1] = r[i][1] / P[i][1];
-                    s[i][2] = r[i][2] / P[i][2];
+                    r[i] = r[i] - alpha * q[i];
 
-                    temp_deltaN += (r[i][0] * s[i][0] + r[i][1] * s[i][1] + r[i][2] * s[i][2]);
+
+
+                    s[i] = P[i] * r[i];
+
+                    temp_deltaN += (r[i].dot(s[i]));
                 }
                 return temp_deltaN;
             },
@@ -940,34 +1050,23 @@ vector<Vector3d> PCG_Solver(const mesh3D& mesh, const BHessian& BH, const vector
             }
             );
 
-
-        if (deltaN < localOptimal) {
-            localOptimal = deltaN;
-            getLocalOpt = true;
-            tbb::parallel_for(0, mesh.vertexNum, 1, [&](int j)
-                {
-                    tempDeltaX[j] = Vector3d(dX[j]);
-                }
-            );
-        }
-
-
         tbb::parallel_for(0, mesh.vertexNum, 1, [&](int i)
             {
-                c[i][0] = s[i][0] + (deltaN / deltaO) * c[i][0];
-                c[i][1] = s[i][1] + (deltaN / deltaO) * c[i][1];
-                c[i][2] = s[i][2] + (deltaN / deltaO) * c[i][2];
+                c[i] = s[i] + (deltaN / deltaO) * c[i];
                 c[i] = mesh.Constraints[i] * c[i];
             }
         );
 
     }
     printf("cg counts: %d\n", cgCounts);
-    if (localOptimal)
-        return tempDeltaX;
+    if (cgCounts == 0) {
+        printf("indefinite exit\n");
+        exit(0);
+    }
+    //if (localOptimal)
+    //    return tempDeltaX;
     return dX;
 }
-
 void calculateMovingDirection(const mesh3D& mesh, BHessian& BH, vector<Vector3d> gradient, vector<Vector3d>& direction) {
 #ifdef NDEBUG
     direction = cholmod_solver(BH, gradient, mesh);
@@ -1062,7 +1161,7 @@ void computeEnergyVal(const mesh3D& mesh, double& energyVal, const Ground& gd, d
     );
     //double bE
     energyVal += Kappa * bVals.sum();
-#ifdef FRICTION
+#ifdef USE_FRICTION
     // self friction
     double fricDHat = mesh.Hhat * IPC_dt * IPC_dt;
     double eps = std::sqrt(fricDHat);
@@ -1675,7 +1774,7 @@ int IPC_Solver(int& stepId, model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
     }
     initKappa(mesh, gd, mesh.Kappa);
     
-#ifdef FRICTION
+#ifdef USE_FRICTION
     buildFriction(mesh, gd);
 #endif
     if (false)

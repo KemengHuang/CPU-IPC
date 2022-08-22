@@ -31,4 +31,5 @@ SVDResult2D_double SingularValueDecomposition2D_double(Matrix2d F);
 SVDResult3D_float SingularValueDecomposition3D_float(Matrix3f F);
 SVDResult3D_double SingularValueDecomposition3D_double(Matrix3d F);
 SVDResult3D_double QRSVD(Matrix3d F);
+
 #endif //FEM_SVD_H

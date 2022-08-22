@@ -76,6 +76,32 @@ SVDResult3D_float SingularValueDecomposition3D_float(Matrix3f F)
     return result;
 }
 
+SVDResult3D_double QRSVD(Matrix3d F)
+{
+    typename Eigen::JacobiSVD<Matrix3d>::SingularValuesType singularValues_flipped;
+    Matrix3d matrixU_flipped, matrixV_flipped;
+    JIXIE::singularValueDecomposition(F,
+        matrixU_flipped,
+        singularValues_flipped,
+        matrixV_flipped);
+
+    Matrix3d tempU = matrixU_flipped;
+    Matrix3d tempV = matrixV_flipped;
+
+    Vector3d singVals = singularValues_flipped;
+    Matrix3d tempSigma = Matrix3d::Zero();
+    tempSigma(0, 0) = singVals(0);
+    tempSigma(1, 1) = singVals(1);
+    tempSigma(2, 2) = singVals(2);
+
+
+    SVDResult3D_double result;
+    result.U = tempU;
+    result.V = tempV;
+    result.SIGMA = tempSigma;
+    return result;
+}
+
 SVDResult3D_double SingularValueDecomposition3D_double(Matrix3d F)
 {
     Eigen::JacobiSVD<Eigen::Matrix3d> svd(F, Eigen::ComputeFullU | Eigen::ComputeFullV);
@@ -111,32 +137,6 @@ SVDResult3D_double SingularValueDecomposition3D_double(Matrix3d F)
     //    tempSigma(1, 1) = tempRecord;
     //}
 
-    result.U = tempU;
-    result.V = tempV;
-    result.SIGMA = tempSigma;
-    return result;
-}
-
-SVDResult3D_double QRSVD(Matrix3d F)
-{
-    typename Eigen::JacobiSVD<Matrix3d>::SingularValuesType singularValues_flipped;
-    Matrix3d matrixU_flipped, matrixV_flipped;
-    JIXIE::singularValueDecomposition(F,
-        matrixU_flipped,
-        singularValues_flipped,
-        matrixV_flipped);
-
-    Matrix3d tempU = matrixU_flipped;
-    Matrix3d tempV = matrixV_flipped;
-
-    Vector3d singVals = singularValues_flipped;
-    Matrix3d tempSigma = Matrix3d::Zero();
-    tempSigma(0, 0) = singVals(0);
-    tempSigma(1, 1) = singVals(1);
-    tempSigma(2, 2) = singVals(2);
-
-   
-    SVDResult3D_double result;
     result.U = tempU;
     result.V = tempV;
     result.SIGMA = tempSigma;

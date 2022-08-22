@@ -1,7 +1,7 @@
 import cv2
 import os
 from tqdm import tqdm
-fsp = 30
+fsp = 10
 fourcc = cv2.VideoWriter_fourcc('D', 'I', 'V', 'X')
  
  

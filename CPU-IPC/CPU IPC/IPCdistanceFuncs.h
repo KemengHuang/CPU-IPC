@@ -115,7 +115,6 @@ void d_EE(const Eigen::Vector3d& v0,
     const Eigen::Vector3d& v3,
     double& d);
 void compute_b(double d, double dHat, double& b);
-void compute_b2(double d, double dHat, double& b);
 void compute_g_b(double d, double dHat, double& g);
 void compute_H_b(double d, double dHat, double& H);
 
@@ -163,11 +162,3 @@ void Self_largestFeasibleStepSize_CCD(const mesh3D& mesh,
     double& stepSize);
 
 double SelfConstraintVal(const mesh3D& mesh, const MMCVID& active);
-
-void PEGradAndHessianPE(const vector<Vector3d>& positions, vector<Vector3d>& output_incremental,
-    BHessian& BH,
-    double dHat, double coef);
-
-void PTGradAndHessianPT(const vector<Vector3d>& position, vector<Vector3d>& output_incremental,
-    BHessian& BH,
-    double dHat, double coef);

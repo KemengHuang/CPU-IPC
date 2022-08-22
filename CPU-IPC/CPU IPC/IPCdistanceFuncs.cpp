@@ -4,8 +4,7 @@
 #include <tbb/parallel_for.h>
 #include <tbb/spin_mutex.h>
 #include "ACCD.h"
-#include<iostream>
-using namespace std;
+
 
 std::vector<Eigen::Triplet<double>> BHessian::toTriplets(const vector<int>& Btype) {
     Eigen::Matrix3d identity3 = Eigen::Matrix3d::Identity();
@@ -813,7 +812,7 @@ inline void compute_e_H(
 void compute_eps_x(const mesh3D& mesh,
     int eI0, int eI1, int eJ0, int eJ1, double& eps_x)
 {
-    eps_x = 0 * (mesh.v_rest[eI0] - mesh.v_rest[eI1]).squaredNorm() * (mesh.v_rest[eJ0] - mesh.v_rest[eJ1]).squaredNorm();
+    eps_x = 1e-3 * (mesh.v_rest[eI0] - mesh.v_rest[eI1]).squaredNorm() * (mesh.v_rest[eJ0] - mesh.v_rest[eJ1]).squaredNorm();
 }
 
 void d_EE(const Eigen::Vector3d& v0,
@@ -830,11 +829,6 @@ void d_EE(const Eigen::Vector3d& v0,
 void compute_b(double d, double dHat, double& b)
 {
     b = -(d - dHat) * (d - dHat) * log(d / dHat);
-}
-
-void compute_b2(double d, double dHat, double& b)
-{
-    b = (d - dHat) * (d - dHat) * log(d / dHat) * log(d / dHat) * log(d / dHat) * log(d / dHat);
 }
 
 void compute_g_b(double d, double dHat, double& g)
@@ -2647,7 +2641,8 @@ void compute_g_dpt_new(const mesh3D& mesh,
                 mesh.vertexes[MMCVIDI[3]] - mesh.vertexes[MMCVIDI[2]]).normalized();
             double dis = (v1).dot(normal);
             double d_hat_sqrt = sqrt(d_hat);
-
+            //bool is_flip = false;
+            Eigen::Matrix<double, 9, 12> PDmPx;
             if (dis < 0) {
                 //is_flip = true;
                 normal = -normal;
@@ -2679,7 +2674,7 @@ void compute_g_dpt_new(const mesh3D& mesh,
             tmp.block<3, 1>(6, 0) = fnn.col(2);
             tmp *= 2;
             flatten_pk1 = -coef * (d_hat * d_hat * (I5 - 1) * (I5 + 2 * I5 * log(I5) - 1)) / I5 * tmp;
-
+            
             const double m = DmInv(0, 0);
             const double n = DmInv(0, 1);
             const double o = DmInv(0, 2);
@@ -2754,7 +2749,7 @@ void compute_g_dpt_new(const mesh3D& mesh,
                 Eigen::Vector3d vec = vec_normal.cross(target);
                 double cos = vec_normal.dot(target);
                 Eigen::Matrix3d rotation = Eigen::Matrix3d::Identity();
-
+                Eigen::Matrix<double, 1, 6> PDmPx;
                 double d_hat_sqrt = sqrt(d_hat);
                 if (cos + 1 == 0.0) {
                     rotation(0, 0) = -1;
@@ -2976,7 +2971,7 @@ void compute_g_dpt_new(const mesh3D& mesh,
                 tmp *= 2;
                 flatten_pk1 = 1 * coef * -(d_hat * d_hat * (I5 - 1) * (I5 + 2 * I5 * log(I5) - 1)) / I5 * tmp;
 
-
+                
                 const double m = DmInv(0, 0);
                 const double n = DmInv(0, 1);
                 const double o = DmInv(0, 2);
@@ -3181,7 +3176,8 @@ void compute_H_dpt_new(const mesh3D& mesh,
             double dis = (v1).dot(normal);
 
             double d_hat_sqrt = sqrt(d_hat);
-
+            //bool is_flip = false;
+            Eigen::Matrix<double, 9, 12> PDmPx;
             if (dis < 0) {
                 normal = -normal;
                 dis = -dis;
@@ -3254,23 +3250,15 @@ void compute_H_dpt_new(const mesh3D& mesh,
             PFPx(8, 11) = u;
 
             double lambda0 = 1 * coef * (2 * d_hat * d_hat * (6 * I5 + 2 * I5 * log(I5) - 7 * I5 * I5 - 6 * I5 * I5 * log(I5) + 1)) / I5;
-            if (lambda0 > 0) {
-                //if (lambda0 > 1e10) {
-                //    printf("I am super hessian %f\n", lambda0);
-                //    lambda0 = 1e10;
-                //    //system("pause");
-                //}
-
-                Eigen::Matrix<double, 3, 3> Q0 = 1 / sqrt(I5) * F * normal * normal.transpose();
-                Eigen::Matrix<double, 9, 1> q0;
-                q0.block<3, 1>(0, 0) = Q0.col(0);
-                q0.block<3, 1>(3, 0) = Q0.col(1);
-                q0.block<3, 1>(6, 0) = Q0.col(2);
-                Eigen::Matrix<double, 9, 9> H = lambda0 * q0 * q0.transpose();
-                Eigen::Matrix<double, 12, 12> hessian = PFPx.transpose() * H * PFPx;
-                BH.D4Index.push_back(Vector4i(MMCVIDI[0], MMCVIDI[1], MMCVIDI[2], MMCVIDI[3]));
-                BH.H12x12.push_back(hessian);
-            }
+            Eigen::Matrix<double, 3, 3> Q0 = 1 / sqrt(I5) * F * normal * normal.transpose();
+            Eigen::Matrix<double, 9, 1> q0;
+            q0.block<3, 1>(0, 0) = Q0.col(0);
+            q0.block<3, 1>(3, 0) = Q0.col(1);
+            q0.block<3, 1>(6, 0) = Q0.col(2);
+            Eigen::Matrix<double, 9, 9> H = lambda0 * q0 * q0.transpose();
+            Eigen::Matrix<double, 12, 12> hessian = PFPx.transpose() * H * PFPx;
+            BH.D4Index.push_back(Vector4i(MMCVIDI[0], MMCVIDI[1], MMCVIDI[2], MMCVIDI[3]));
+            BH.H12x12.push_back(hessian);
         }
         else {
 
@@ -3286,6 +3274,8 @@ void compute_H_dpt_new(const mesh3D& mesh,
                 double cos = vec_normal.dot(target);
                 Eigen::Matrix3d rotation = Eigen::Matrix3d::Identity();
 
+
+                Eigen::Matrix<double, 1, 6> PDmPx;
                 double d_hat_sqrt = sqrt(d_hat);
                 if (cos + 1 == 0.0) {
                     rotation(0, 0) = -1;
@@ -3321,20 +3311,13 @@ void compute_H_dpt_new(const mesh3D& mesh,
                 PFPx.block<3, 3>(0, 3) = Eigen::Matrix3d::Identity() * DmInv;
 
                 double lambda0 = 1 * coef * (2 * d_hat * d_hat * (6 * I5 + 2 * I5 * log(I5) - 7 * I5 * I5 - 6 * I5 * I5 * log(I5) + 1)) / I5;
-                if (lambda0 > 0) {
-                    //if (lambda0 > 1e10) {
-                    //    printf("I am super hessian %f\n", lambda0);
-                    //    lambda0 = 1e10;
-                    //    //system("pause");
-                    //}
-                    Eigen::Matrix<double, 3, 1> Q0 = 1 / sqrt(I5) * F;
-                    Eigen::Matrix<double, 3, 1> q0;
-                    q0.block<3, 1>(0, 0) = Q0.col(0);
-                    Eigen::Matrix<double, 3, 3> H = -MMCVIDI[3] * lambda0 * q0 * q0.transpose();
-                    Eigen::Matrix<double, 6, 6> hessian = PFPx.transpose() * H * PFPx;
-                    BH.D2Index.push_back(Vector2i(v0I, MMCVIDI[1]));
-                    BH.H6x6.push_back(hessian);
-                }
+                Eigen::Matrix<double, 3, 1> Q0 = 1 / sqrt(I5) * F;
+                Eigen::Matrix<double, 3, 1> q0;
+                q0.block<3, 1>(0, 0) = Q0.col(0);
+                Eigen::Matrix<double, 3, 3> H = -MMCVIDI[3] * lambda0 * q0 * q0.transpose();
+                Eigen::Matrix<double, 6, 6> hessian = PFPx.transpose() * H * PFPx;
+                BH.D2Index.push_back(Vector2i(v0I, MMCVIDI[1]));
+                BH.H6x6.push_back(hessian);
 
             }
             else if (MMCVIDI[3] < 0) {
@@ -3354,7 +3337,7 @@ void compute_H_dpt_new(const mesh3D& mesh,
                 Eigen::Vector3d vec = triangle_normal.cross(target);
                 double cos = triangle_normal.dot(target);
                 Eigen::Matrix3d rotation = Eigen::Matrix3d::Identity();
-
+                Eigen::Matrix<double, 4, 9> PDmPx;
                 double d_hat_sqrt = sqrt(d_hat);
                 if (cos + 1 == 0.0) {
                     rotation(0, 0) = -1;
@@ -3446,21 +3429,15 @@ void compute_H_dpt_new(const mesh3D& mesh,
                 PFPx(5, 8) = d3;
 
                 double lambda0 = coef * (2 * d_hat * d_hat * (6 * I5 + 2 * I5 * log(I5) - 7 * I5 * I5 - 6 * I5 * I5 * log(I5) + 1)) / I5;
-                if (lambda0 > 0) {
-                    //if (lambda0 > 1e10) {
-                    //    printf("I am super hessian %f\n", lambda0);
-                    //    lambda0 = 1e10;
-                    //    //system("pause");
-                    //}
-                    Eigen::Matrix<double, 3, 2> Q0 = 1 / sqrt(I5) * F * normal * normal.transpose();
-                    Eigen::Matrix<double, 6, 1> q0;
-                    q0.block<3, 1>(0, 0) = Q0.col(0);
-                    q0.block<3, 1>(3, 0) = Q0.col(1);
-                    Eigen::Matrix<double, 6, 6> H = -MMCVIDI[3] * lambda0 * q0 * q0.transpose();
-                    Eigen::Matrix<double, 9, 9> hessian = PFPx.transpose() * H * PFPx;
-                    BH.D3Index.push_back(Vector3i(v0I, MMCVIDI[1], MMCVIDI[2]));
-                    BH.H9x9.push_back(hessian);
-                }
+                Eigen::Matrix<double, 3, 2> Q0 = 1 / sqrt(I5) * F * normal * normal.transpose();
+                Eigen::Matrix<double, 6, 1> q0;
+                q0.block<3, 1>(0, 0) = Q0.col(0);
+                q0.block<3, 1>(3, 0) = Q0.col(1);
+                Eigen::Matrix<double, 6, 6> H = -MMCVIDI[3] * lambda0 * q0 * q0.transpose();
+                Eigen::Matrix<double, 9, 9> hessian = PFPx.transpose() * H * PFPx;
+                BH.D3Index.push_back(Vector3i(v0I, MMCVIDI[1], MMCVIDI[2]));
+                BH.H9x9.push_back(hessian);
+
             }
             else {
                 // PT
@@ -3551,22 +3528,15 @@ void compute_H_dpt_new(const mesh3D& mesh,
                 PFPx(8, 11) = u;
 
                 double lambda0 = coef * (2 * d_hat * d_hat * (6 * I5 + 2 * I5 * log(I5) - 7 * I5 * I5 - 6 * I5 * I5 * log(I5) + 1)) / I5;
-                if (lambda0 > 0) {
-                    //if (lambda0 > 1e10) {
-                    //    printf("I am super hessian %f\n", lambda0);
-                    //    lambda0 = 1e10;
-                    //    //system("pause");
-                    //}
-                    Eigen::Matrix<double, 3, 3> Q0 = 1 / sqrt(I5) * F * normal * normal.transpose();
-                    Eigen::Matrix<double, 9, 1> q0;
-                    q0.block<3, 1>(0, 0) = Q0.col(0);
-                    q0.block<3, 1>(3, 0) = Q0.col(1);
-                    q0.block<3, 1>(6, 0) = Q0.col(2);
-                    Eigen::Matrix<double, 9, 9> H = lambda0 * q0 * q0.transpose();
-                    Eigen::Matrix<double, 12, 12> hessian = PFPx.transpose() * H * PFPx;
-                    BH.D4Index.push_back(Vector4i(v0I, MMCVIDI[1], MMCVIDI[2], MMCVIDI[3]));
-                    BH.H12x12.push_back(hessian);
-                }
+                Eigen::Matrix<double, 3, 3> Q0 = 1 / sqrt(I5) * F * normal * normal.transpose();
+                Eigen::Matrix<double, 9, 1> q0;
+                q0.block<3, 1>(0, 0) = Q0.col(0);
+                q0.block<3, 1>(3, 0) = Q0.col(1);
+                q0.block<3, 1>(6, 0) = Q0.col(2);
+                Eigen::Matrix<double, 9, 9> H = lambda0 * q0 * q0.transpose();
+                Eigen::Matrix<double, 12, 12> hessian = PFPx.transpose() * H * PFPx;
+                BH.D4Index.push_back(Vector4i(v0I, MMCVIDI[1], MMCVIDI[2], MMCVIDI[3]));
+                BH.H12x12.push_back(hessian);
             }
         }
     }
@@ -4081,534 +4051,4 @@ void Self_largestFeasibleStepSize_CCD(const mesh3D& mesh,
 
     stepSize = std::min(stepSize, largestAlphaEE.minCoeff());
     printf("3stepsize:%lf\n", stepSize);
-}
-
-void PEGradAndHessianPE(const vector<Vector3d>& position, vector<Vector3d>& output_incremental,
-    BHessian& BH,
-    double dHat, double coef) {
-
-    Vector3d A = position[0];// -position[3];//Vector3d((1.0 / 2.0 - 0e-1) * 1e-3, 1.0 / 2.0 * 1e-3, 0);
-    Vector3d B = position[1];//Vector3d(0, 0, 0);
-    Vector3d C = position[2];//Vector3d(1e-3, 0, 0);
-
-    if (1) {
-        Eigen::Matrix<double, 9, 1> g0, g;
-
-        double d;
-
-        d_PE(A, B, C, d);
-        double g_b, H_b;
-        compute_g_b(d, dHat, g_b);
-
-        g_PE(A, B, C, g0);
-        g = coef * g_b * g0;
-        cout << g << endl << endl;
-        output_incremental[0] = g.template segment<3>(0);
-        output_incremental[1] = g.template segment<3>(3);
-        output_incremental[2] = g.template segment<3>(6);
-
-        Eigen::Matrix<double, 9, 9> H;
-        H_PE(A, B, C, H);
-        compute_H_b(d, dHat, H_b);
-
-        double coef_dup = coef;
-        Eigen::Matrix<double, 9, 9> HessianBlockA = ((coef_dup * H_b) * g0) * g0.transpose();
-        Eigen::Matrix<double, 9, 9> HessianBlockB = (coef_dup * g_b) * H;
-        Eigen::Matrix<double, 9, 9> HessianBlock = HessianBlockA + HessianBlockB;
-        IglUtils::makePD<double, 9>(HessianBlock);
-
-        BH.H9x9.push_back(HessianBlock);
-        std::cout << HessianBlockA << endl << endl;
-        std::cout << HessianBlockB << endl << endl;
-        std::cout << HessianBlock << endl << endl;
-        BH.D3Index.push_back(Vector3i(0, 1, 2));
-    }
-    else {
-        Eigen::Vector3d v0 = B - A;
-        Eigen::Vector3d v1 = C - A;
-
-
-        Eigen::Matrix<double, 3, 2> Ds;
-        Ds.col(0) = v0;
-        Ds.col(1) = v1;
-
-        Eigen::Vector3d triangle_normal = v0.cross(v1).normalized();
-        Eigen::Vector3d target = Eigen::Vector3d(0, 1, 0);
-
-
-        Eigen::Vector3d vec = triangle_normal.cross(target);
-        double cos = triangle_normal.dot(target);
-        Eigen::Matrix3d rotation = Eigen::Matrix3d::Identity();
-        double d_hat_sqrt = sqrt(dHat);
-        Eigen::Matrix<double, 4, 9> PDmPx;
-        //double d_hat_sqrt = sqrt(d_hat);
-        if (cos + 1 == 0.0) {
-            rotation(0, 0) = -1;
-            rotation(1, 1) = -1;
-            //pDmpx_pe_reflect(A, B, C, d_hat_sqrt, PDmPx);
-        }
-        else {
-            Eigen::Matrix3d cross_vec;
-            cross_vec << 0, -vec.z(), vec.y(),
-                vec.z(), 0, -vec.x(),
-                -vec.y(), vec.x(), 0;
-            rotation += cross_vec + cross_vec * cross_vec / (1 + cos);
-            //pDmpx_pe(A, B, C, d_hat_sqrt, PDmPx);
-        }
-
-
-        Eigen::Vector3d edge_normal = (B - C).cross(
-            triangle_normal).normalized();
-        double dis = (A - B).dot(edge_normal);
-        //                dis = dis * dis;
-        //if (dis > d_hat_sqrt)continue;
-        Eigen::Vector3d pos0 = A + (d_hat_sqrt - dis) * edge_normal;
-
-
-        auto rotate_uv0 = rotation * pos0;
-        auto rotate_uv1 = rotation * B;
-        auto rotate_uv2 = rotation * C;
-        auto rotate_normal = rotation * edge_normal;
-
-        auto uv0 = Eigen::Vector2d(rotate_uv0.x(), rotate_uv0.z());
-        auto uv1 = Eigen::Vector2d(rotate_uv1.x(), rotate_uv1.z());
-        auto uv2 = Eigen::Vector2d(rotate_uv2.x(), rotate_uv2.z());
-        auto normal = Eigen::Vector2d(rotate_normal.x(), rotate_normal.z());
-
-        auto u0 = uv1 - uv0;
-        auto u1 = uv2 - uv0;
-
-        Eigen::Matrix2d Dm;
-        Dm.col(0) = u0;
-        Dm.col(1) = u1;
-        auto DmInv = Dm.inverse();
-
-
-        Eigen::Matrix<double, 3, 2> F = Ds * DmInv;
-        double I5 = normal.transpose() * F.transpose() * F * normal;
-        Eigen::Matrix<double, 6, 1> flatten_pk1;
-
-        auto fnn = F * normal * normal.transpose();
-        Eigen::Matrix<double, 6, 1> tmp;
-        tmp.block<3, 1>(0, 0) = fnn.col(0);
-        tmp.block<3, 1>(3, 0) = fnn.col(1);
-        tmp *= 2;
-        flatten_pk1 = 1 * coef * -(dHat * dHat * (I5 - 1) * (I5 + 2 * I5 * log(I5) - 1)) / I5 * tmp;
-        cout << "grad:   " << 1 * coef * -(dHat * dHat * (I5 - 1) * (I5 + 2 * I5 * log(I5) - 1)) / I5 << endl;
-
-        double s0 = DmInv.col(0).sum();
-        double s1 = DmInv.col(1).sum();
-
-        double d0 = DmInv(0, 0);
-        double d1 = DmInv(1, 0);
-        double d2 = DmInv(0, 1);
-        double d3 = DmInv(1, 1);
-
-
-        Eigen::Matrix<double, 6, 9> PFPx;
-        PFPx.setZero();
-        // dF / dx0
-        PFPx(0, 0) = -s0;
-        PFPx(3, 0) = -s1;
-
-        // dF / dy0
-        PFPx(1, 1) = -s0;
-        PFPx(4, 1) = -s1;
-
-        // dF / dz0
-        PFPx(2, 2) = -s0;
-        PFPx(5, 2) = -s1;
-
-        // dF / dx1
-        PFPx(0, 3) = d0;
-        PFPx(3, 3) = d2;
-
-        // dF / dy1
-        PFPx(1, 4) = d0;
-        PFPx(4, 4) = d2;
-
-        // dF / dz1
-        PFPx(2, 5) = d0;
-        PFPx(5, 5) = d2;
-
-        // dF / dx2
-        PFPx(0, 6) = d1;
-        PFPx(3, 6) = d3;
-
-        // dF / dy2
-        PFPx(1, 7) = d1;
-        PFPx(4, 7) = d3;
-
-        // dF / dz2
-        PFPx(2, 8) = d1;
-        PFPx(5, 8) = d3;
-
-        //Eigen::Matrix<double, 6, 9> DsPDminvPx = Eigen::Matrix<double, 6, 9>::Zero();
-        //for (int i = 0; i < 9; i++) {
-        //    Eigen::Matrix<double, 2, 2> PDmPxi;
-        //    PDmPxi.col(0) = PDmPx.block<2, 1>(0, i);
-        //    PDmPxi.col(1) = PDmPx.block<2, 1>(2, i);
-        //    Eigen::Matrix<double, 3, 2> DsPDminvPxi = -Ds * DmInv * PDmPxi * DmInv;
-        //    DsPDminvPx.block<3, 1>(0, i) += DsPDminvPxi.col(0);
-        //    DsPDminvPx.block<3, 1>(3, i) += DsPDminvPxi.col(1);
-        //}
-        //cout << "DsPDminvPx" << endl;
-        //cout << DsPDminvPx << endl;
-        //PFPx = PFPx;
-        //auto gradient_vec = PFPx.transpose() * flatten_pk1;
-        //cout << gradient_vec << endl << endl;
-        ////PFPx = PFPx + DsPDminvPx;
-        auto gradient_vec2 = PFPx.transpose() * flatten_pk1;
-        cout << gradient_vec2 << endl << endl;
-        for (int i = 0; i < 3; i++) {
-            output_incremental[0][i] += gradient_vec2(i);
-            output_incremental[1][i] += gradient_vec2(i + 3);
-            output_incremental[2][i] += gradient_vec2(i + 6);
-        }
-
-        double lambda0 = 1 * coef * (2 * dHat * dHat * (6 * I5 + 2 * I5 * log(I5) - 7 * I5 * I5 - 6 * I5 * I5 * log(I5) + 1)) / I5;
-        cout << "lambda0:   " << lambda0 << endl;
-        Eigen::Matrix<double, 3, 2> Q0 = 1 / sqrt(I5) * F * normal * normal.transpose();
-        Eigen::Matrix<double, 6, 1> q0;
-        q0.block<3, 1>(0, 0) = Q0.col(0);
-        q0.block<3, 1>(3, 0) = Q0.col(1);
-        Eigen::Matrix<double, 6, 6> H = lambda0 * q0 * q0.transpose();
-        Eigen::Matrix<double, 9, 9> hessian = PFPx.transpose() * H * PFPx;
-        BH.D3Index.push_back(Vector3i(0, 1, 2));
-        BH.H9x9.push_back(hessian);
-
-        cout << hessian << endl << endl;
-    }
-
-}
-
-
-void PTGradAndHessianPT(const vector<Vector3d>& position, vector<Vector3d>& output_incremental,
-    BHessian& BH,
-    double dHat, double coef) {
-    Vector3d A = position[0];
-    Vector3d B = position[1];
-    Vector3d C = position[2];
-    Vector3d D = position[3];
-    double ddd;
-    d_PT(A, B, C, D, ddd);
-    //cout << "type:  " << dType_PT(A, B, C, D) << endl;;
-    //cout << "ddd:  " << ddd << endl;;
-    int ctype = 1;
-    if (ctype == 1) {
-        Eigen::Matrix<double, 12, 1> g0, g;
-        g_PT(A, B, C, D, g0);
-
-        double d;
-        d_PT(A, B, C, D, d);
-        //cout << "dis2:  " << d << endl << endl;;
-        double g_b, H_b;
-        compute_g_b(d, dHat, g_b);
-
-        g = g0 * coef * g_b;
-        //cout << "g:  " << g << endl << endl;
-        output_incremental[0] += g.template segment<3>(0);
-        output_incremental[1] += g.template segment<3>(3);
-        output_incremental[2] += g.template segment<3>(6);
-        output_incremental[3] += g.template segment<3>(9);
-        cout << g << endl << endl;
-        Eigen::Matrix<double, 12, 12> H;
-        H_PT(A, B, C, D, H);
-
-        compute_H_b(d, dHat, H_b);
-        Eigen::Matrix<double, 12, 12> IPHessian, IPHessianA, IPHessianB;
-        IPHessianA = (coef * H_b) * g0 * g0.transpose();
-        IPHessianB = (coef * g_b) * H;
-
-        for (int i = 0;i < 12;i++) {
-            for (int j = 0;j < 12;j++) {
-                if (abs(IPHessianA(i, j)) < 1e-14) {
-                    IPHessianA(i, j) = 0;
-                }
-            }
-        }
-
-        for (int i = 0;i < 12;i++) {
-            for (int j = 0;j < 12;j++) {
-                if (abs(IPHessianB(i, j)) < 1e-14) {
-                    IPHessianB(i, j) = 0;
-                }
-            }
-        }
-
-
-
-        IPHessian = IPHessianA + IPHessianB;
-        IglUtils::makePD<double, 12>(IPHessian);
-
-
-        for (int i = 0;i < 12;i++) {
-            for (int j = 0;j < 12;j++) {
-                if (abs(IPHessian(i, j)) < 1e-14) {
-                    IPHessian(i, j) = 0;
-                }
-            }
-        }
-
-        BH.H12x12.push_back(IPHessian);
-        BH.D4Index.push_back(Vector4i(0, 1, 2, 3));
-
-
-        Vector3d ed0 = C - B;
-        Vector3d ed1 = D - B;
-        Vector3d normal = ed0.cross(ed1).normalized();
-        //cout << "normal direction:  " << normal << endl << endl;;
-
-
-        //std::cout << IPHessianA << endl << endl;
-        //std::cout << IPHessianB << endl << endl;
-        //std::cout << IPHessian << endl << endl;
-
-        //std::cout << IPHessian << endl << endl;
-    }
-    else if (ctype == 2) {
-        Eigen::Vector3d v0 = B - A;
-        Eigen::Vector3d v1 = C - A;
-        Eigen::Vector3d v2 = D - A;
-        Eigen::Matrix3d Ds;
-        Ds.col(0) = v0;
-        Ds.col(1) = v1;
-        Ds.col(2) = v2;
-        Eigen::Vector3d normal = (C - B).cross(
-            D - B).normalized();
-        cout << "normal direction:  " << normal << endl << endl;;
-        double dis = (v0).dot(normal);
-        double d_hat_sqrt = sqrt(dHat);
-        Eigen::Matrix<double, 9, 12> PDmPx;
-        if (dis > 0) {
-            normal *= -1;
-            //dis = -dis;
-        }
-        else {
-            dis = -dis;
-        }
-        //if (dis > d_hat_sqrt)continue;
-        Eigen::Vector3d pos0 = A + normal * (d_hat_sqrt - dis);
-
-
-        Eigen::Vector3d u0 = B - pos0;
-        Eigen::Vector3d u1 = C - pos0;
-        Eigen::Vector3d u2 = D - pos0;
-        Eigen::Matrix3d Dm;
-        Dm.col(0) = u0;
-        Dm.col(1) = u1;
-        Dm.col(2) = u2;
-        auto DmInv = Dm.inverse();
-        Eigen::Matrix3d F = Ds * DmInv;
-        double I5 = normal.transpose() * F.transpose() * F * normal;
-
-        Eigen::Matrix<double, 9, 1> flatten_pk1;
-        auto fnn = F * normal * normal.transpose();
-        Eigen::Matrix<double, 9, 1> tmp;
-        tmp.block<3, 1>(0, 0) = fnn.col(0);
-        tmp.block<3, 1>(3, 0) = fnn.col(1);
-        tmp.block<3, 1>(6, 0) = fnn.col(2);
-        tmp *= 2;
-        flatten_pk1 = 1 * coef * -(dHat * dHat * (I5 - 1) * (I5 + 2 * I5 * log(I5) - 1)) / I5 * tmp;
-
-
-        const double m = DmInv(0, 0);
-        const double n = DmInv(0, 1);
-        const double o = DmInv(0, 2);
-        const double p = DmInv(1, 0);
-        const double q = DmInv(1, 1);
-        const double r = DmInv(1, 2);
-        const double s = DmInv(2, 0);
-        const double t = DmInv(2, 1);
-        const double u = DmInv(2, 2);
-        const double t1 = -m - p - s;
-        const double t2 = -n - q - t;
-        const double t3 = -o - r - u;
-        Eigen::Matrix<double, 9, 12> PFPx = Eigen::Matrix<double, 9, 12>::Zero();
-
-        PFPx(0, 0) = t1;
-        PFPx(0, 3) = m;
-        PFPx(0, 6) = p;
-        PFPx(0, 9) = s;
-        PFPx(1, 1) = t1;
-        PFPx(1, 4) = m;
-        PFPx(1, 7) = p;
-        PFPx(1, 10) = s;
-        PFPx(2, 2) = t1;
-        PFPx(2, 5) = m;
-        PFPx(2, 8) = p;
-        PFPx(2, 11) = s;
-        PFPx(3, 0) = t2;
-        PFPx(3, 3) = n;
-        PFPx(3, 6) = q;
-        PFPx(3, 9) = t;
-        PFPx(4, 1) = t2;
-        PFPx(4, 4) = n;
-        PFPx(4, 7) = q;
-        PFPx(4, 10) = t;
-        PFPx(5, 2) = t2;
-        PFPx(5, 5) = n;
-        PFPx(5, 8) = q;
-        PFPx(5, 11) = t;
-        PFPx(6, 0) = t3;
-        PFPx(6, 3) = o;
-        PFPx(6, 6) = r;
-        PFPx(6, 9) = u;
-        PFPx(7, 1) = t3;
-        PFPx(7, 4) = o;
-        PFPx(7, 7) = r;
-        PFPx(7, 10) = u;
-        PFPx(8, 2) = t3;
-        PFPx(8, 5) = o;
-        PFPx(8, 8) = r;
-        PFPx(8, 11) = u;
-
-        auto gradient_vec = PFPx.transpose() * flatten_pk1;
-        cout << "f:   " << gradient_vec << endl;
-        output_incremental[0] += gradient_vec.template segment<3>(0);
-        output_incremental[1] += gradient_vec.template segment<3>(3);
-        output_incremental[2] += gradient_vec.template segment<3>(6);
-        output_incremental[3] += gradient_vec.template segment<3>(9);
-
-        double lambda0 = coef * (2 * dHat * dHat * (6 * I5 + 2 * I5 * log(I5) - 7 * I5 * I5 - 6 * I5 * I5 * log(I5) + 1)) / I5;
-        //std::cout << lambda0 << endl << endl;
-        Eigen::Matrix<double, 3, 3> Q0 = 1 / sqrt(I5) * F * normal * normal.transpose();
-        Eigen::Matrix<double, 9, 1> q0;
-        q0.block<3, 1>(0, 0) = Q0.col(0);
-        q0.block<3, 1>(3, 0) = Q0.col(1);
-        q0.block<3, 1>(6, 0) = Q0.col(2);
-        Eigen::Matrix<double, 9, 9> H = lambda0 * q0 * q0.transpose();
-        Eigen::Matrix<double, 12, 12> hessian = PFPx.transpose() * H * PFPx;
-        BH.D4Index.push_back(Vector4i(0, 1, 2, 3));
-        BH.H12x12.push_back(hessian);
-        //std::cout << hessian << endl << endl;
-    }
-    else {
-        Eigen::Vector3d v0 = B - A;
-        Eigen::Vector3d v1 = C - A;
-        Eigen::Vector3d v2 = D - A;
-        Eigen::Matrix3d Ds;
-        Ds.col(0) = v0;
-        Ds.col(1) = v1;
-        Ds.col(2) = v2;
-        Eigen::Vector3d normal = (C - B).cross(
-            D - B).normalized();
-        cout << "3 normal direction:  " << normal << endl << endl;;
-        double dis = (v0).dot(normal);
-        double d_hat_sqrt = sqrt(dHat);
-        Eigen::Matrix<double, 9, 12> PDmPx;
-        if (dis > 0) {
-            normal *= -1;
-            //dis = -dis;
-        }
-        else {
-            dis = -dis;
-        }
-        //if (dis > d_hat_sqrt)continue;
-        Eigen::Vector3d pos0 = A + normal * (d_hat_sqrt - dis);
-
-
-        Eigen::Vector3d u0 = B - pos0;
-        Eigen::Vector3d u1 = C - pos0;
-        Eigen::Vector3d u2 = D - pos0;
-        Eigen::Matrix3d Dm;
-        Dm.col(0) = u0;
-        Dm.col(1) = u1;
-        Dm.col(2) = u2;
-        auto DmInv = Dm.inverse();
-        Eigen::Matrix3d F = Ds * DmInv;
-        double I5 = normal.transpose() * F.transpose() * F * normal;
-
-        Eigen::Matrix<double, 9, 1> flatten_pk1;
-        auto fnn = F * normal * normal.transpose();
-        Eigen::Matrix<double, 9, 1> tmp;
-        tmp.block<3, 1>(0, 0) = fnn.col(0);
-        tmp.block<3, 1>(3, 0) = fnn.col(1);
-        tmp.block<3, 1>(6, 0) = fnn.col(2);
-        tmp *= 2;
-        flatten_pk1 = 1 * coef * -(dHat * dHat * (I5 - 1) * (I5 + 2 * I5 * log(I5) - 1)) / I5 * tmp;
-
-
-        const double m = DmInv(0, 0);
-        const double n = DmInv(0, 1);
-        const double o = DmInv(0, 2);
-        const double p = DmInv(1, 0);
-        const double q = DmInv(1, 1);
-        const double r = DmInv(1, 2);
-        const double s = DmInv(2, 0);
-        const double t = DmInv(2, 1);
-        const double u = DmInv(2, 2);
-        const double t1 = -m - p - s;
-        const double t2 = -n - q - t;
-        const double t3 = -o - r - u;
-        Eigen::Matrix<double, 9, 12> PFPx = Eigen::Matrix<double, 9, 12>::Zero();
-
-        PFPx(0, 0) = t1;
-        PFPx(0, 3) = m;
-        PFPx(0, 6) = p;
-        PFPx(0, 9) = s;
-        PFPx(1, 1) = t1;
-        PFPx(1, 4) = m;
-        PFPx(1, 7) = p;
-        PFPx(1, 10) = s;
-        PFPx(2, 2) = t1;
-        PFPx(2, 5) = m;
-        PFPx(2, 8) = p;
-        PFPx(2, 11) = s;
-        PFPx(3, 0) = t2;
-        PFPx(3, 3) = n;
-        PFPx(3, 6) = q;
-        PFPx(3, 9) = t;
-        PFPx(4, 1) = t2;
-        PFPx(4, 4) = n;
-        PFPx(4, 7) = q;
-        PFPx(4, 10) = t;
-        PFPx(5, 2) = t2;
-        PFPx(5, 5) = n;
-        PFPx(5, 8) = q;
-        PFPx(5, 11) = t;
-        PFPx(6, 0) = t3;
-        PFPx(6, 3) = o;
-        PFPx(6, 6) = r;
-        PFPx(6, 9) = u;
-        PFPx(7, 1) = t3;
-        PFPx(7, 4) = o;
-        PFPx(7, 7) = r;
-        PFPx(7, 10) = u;
-        PFPx(8, 2) = t3;
-        PFPx(8, 5) = o;
-        PFPx(8, 8) = r;
-        PFPx(8, 11) = u;
-
-        auto gradient_vec = PFPx.transpose() * flatten_pk1;
-        cout << "f:   " << gradient_vec << endl;
-        output_incremental[0] += gradient_vec.template segment<3>(0);
-        output_incremental[1] += gradient_vec.template segment<3>(3);
-        output_incremental[2] += gradient_vec.template segment<3>(6);
-        output_incremental[3] += gradient_vec.template segment<3>(9);
-        Eigen::Matrix<double, 9, 9> kro;
-        Eigen::Matrix3d aat2 = 2 * normal * normal.transpose();
-        for (int i = 0; i < 3; i++) {
-            for (int j = 0; j < 3; j++) {
-                kro.block<3, 3>(3 * i, 3 * j) = aat2(i, j) * Eigen::Matrix3d::Identity();
-            }
-        }
-        //                auto H = 2 * ((1 / (I5 * I5)) * tmp * tmp.transpose() + (-1 / I5) * kro);
-        //tmp *= 0.5;
-        Eigen::Matrix<double, 9, 9> H =
-            coef * dHat * dHat * (1 / (I5 * I5) + 2 / I5 - 2 * log(I5) - 3) * tmp *
-            tmp.transpose() + coef * dHat * dHat * (-(I5 - 1) * (I5 + 2 * I5 * log(I5) - 1) / I5) * kro;
-
-
-        IglUtils::makePD<double, 9>(H);
-
-
-
-
-        Eigen::Matrix<double, 12, 12> hessian = PFPx.transpose() * H * PFPx;
-        BH.D4Index.push_back(Vector4i(0, 1, 2, 3));
-        BH.H12x12.push_back(hessian);
-        //std::cout << hessian << endl << endl;
-
-    }
 }

@@ -13,6 +13,5 @@
 int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa);
 int IPC_Solver(int& stepId, model_tet* meshTetes, SpatialHash& sh, Ground& gd);
 void computeXTilta(mesh3D& mesh);
-void PPTest(mesh3D& mesh);
 #endif // !_IPC_FUNC_H_
 

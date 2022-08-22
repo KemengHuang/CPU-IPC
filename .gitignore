@@ -1,8 +1,8 @@
 CPU-IPC/.vs
 CPU-IPC/x64
-CPU-IPC/Facial Simulation/x64
+CPU-IPC/CPU IPC/x64
 CPU-IPC/*.zip
-CPU-IPC/Facial Simulation/saveScreen*
-CPU-IPC/Facial Simulation/saveSurface*
-CPU-IPC/Facial Simulation/*.mp4
-CPU-IPC/Facial Simulation/tetrahedraMesh
+CPU-IPC/CPU IPC/saveScreen*
+CPU-IPC/CPU IPC/saveSurface*
+CPU-IPC/CPU IPC/*.mp4
+CPU-IPC/CPU IPC/tetrahedraMesh

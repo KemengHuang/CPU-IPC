@@ -12,8 +12,7 @@ ImplicitFEMIntegrator::ImplicitFEMIntegrator(model_tet* tetra_mesh3d, unsigned i
 
 
 int ImplicitFEMIntegrator::integrate(int& stepId, int& total_cg_iterations, int& total_newton_iterations, SpatialHash& sh, Ground& gd) {
-    PPTest(meshTetes->mesh3Ds[0]);
-    return 1;//IPC_Solver(stepId, meshTetes, sh, gd);
+    return IPC_Solver(stepId, meshTetes, sh, gd);
 }
 
 

@@ -93,7 +93,7 @@ std::vector<double> NewtonSolverForCubicEquation_snk(const double& a, const doub
 	double start = specialPoint - DX;
 	double x0 = start;
 	double result[3];
-	
+
 	for (int i = 0; i < solves; i++) {
 		double x1 = 0;
 		int itCount = 0;

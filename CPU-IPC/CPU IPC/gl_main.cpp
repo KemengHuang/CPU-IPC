@@ -11,7 +11,7 @@
 using namespace std;
 
 int surfNumId = 0;
-float xRot = 90.0f;
+float xRot = 0.0f;
 float yRot = 0.f;
 float xTrans = 0;
 float yTrans = 0;
@@ -25,7 +25,7 @@ float window_width = 1000;
 float window_height = 1000;
 int s_dimention = 3;
 bool stop = true;
-bool screenshot = false;
+bool screenshot = true;
 bool saveSurface = false;
 bool mouthOnly = false;
 bool isSetShader = false;
@@ -353,7 +353,7 @@ void draw_Scene3D() {
     //face.mesh3Ds[0] = mesh3d;
     glEnable(GL_DEPTH_TEST);
     glDepthFunc(GL_LESS);
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
+    glClearColor(0.5f, 0.5f, 0.5f, 1.0f);
     glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 
@@ -363,7 +363,7 @@ void draw_Scene3D() {
     glRotatef(xRot, 1.0f, 0.0f, 0.0f);
     glRotatef(yRot, 0.0f, 1.0f, 0.0f);
 
-    //draw_box3D(-1, -1, -1, 2, 2, 2);
+    draw_box3D(-1, -1, -1, 2, 2, 2);
     //draw_lines(-1, -1, -1, 2, 2, 2);
     draw_tet_mesh3D();
     glPopMatrix();
@@ -383,8 +383,8 @@ void saveScreenPic(const string& path, int step_index) {
     ss << path;
     ss.fill('0');
     ss.width(5);
-    ss << step_index / 1;
-    //if (step_index % 10 != 0) return;
+    ss << step_index / 10;
+    if (step_index % 10 != 0) return;
     std::string file_path = ss.str();
     //if (step / 10 != start) {
         //start = step / 10;
@@ -418,185 +418,35 @@ void saveSurfaceMesh(const string& path) {
 }
 vector<int> newtonIt;
 
-
-void draw_pe()
-{
-    model_tet& tetrahedra_meshes = simulator.getTetrahedraMeshes();
-    mesh3D& tetMesh = tetrahedra_meshes.mesh3Ds[0];
-
-    glLineWidth(6.f);
-    glColor3f(0.8f, 0.8f, 0.8f);
-
-    glBegin(GL_LINES);
-
-    glVertex3f(tetMesh.vertexes[1][0] * 1e3 - 0.5, tetMesh.vertexes[1][1] * 1e3 - 0.5, tetMesh.vertexes[1][2] * 1e3);
-    glVertex3f(tetMesh.vertexes[2][0] * 1e3 - 0.5, tetMesh.vertexes[2][1] * 1e3 - 0.5, tetMesh.vertexes[2][2] * 1e3);
-
-
-    
-    glEnd();
-
-    glPointSize(6);
-    glBegin(GL_POINTS);
-    
-    glVertex3f(tetMesh.vertexes[0][0] * 1e3 - 0.5, tetMesh.vertexes[0][1] * 1e3 - 0.5, tetMesh.vertexes[0][2] * 1e3);
-   
-
-    glEnd();
-
-
-
-    glLineWidth(3.f);
-    glColor3f(0.8f, 0.0f, 0.0f);
-
-    glBegin(GL_LINES);
-
-    glVertex3f(tetMesh.vertexes[0][0] * 1e3 - 0.5, tetMesh.vertexes[0][1] * 1e3 - 0.5, tetMesh.vertexes[0][2] * 1e3);
-    Vector3d tgp = tetMesh.vertexes[0] + tetMesh.vertexes[4];
-    glVertex3f(tgp[0] * 1e3 - 0.5, tgp[1] * 1e3 - 0.5, tgp[2] * 1e3);
-
-    glVertex3f(tetMesh.vertexes[1][0] * 1e3 - 0.5, tetMesh.vertexes[1][1] * 1e3 - 0.5, tetMesh.vertexes[1][2] * 1e3);
-    tgp = tetMesh.vertexes[1] + tetMesh.vertexes[5];
-    glVertex3f(tgp[0] * 1e3 - 0.5, tgp[1] * 1e3 - 0.5, tgp[2] * 1e3);
-
-    glVertex3f(tetMesh.vertexes[2][0] * 1e3 - 0.5, tetMesh.vertexes[2][1] * 1e3 - 0.5, tetMesh.vertexes[2][2] * 1e3);
-    tgp = tetMesh.vertexes[2] + tetMesh.vertexes[6];
-    glVertex3f(tgp[0] * 1e3 - 0.5, tgp[1] * 1e3 - 0.5, tgp[2] * 1e3);
-
-
-
-    glEnd();
-
-
-
-
-
-
-    //tetMesh.vertexes[0][0] += 0.005 * 1e-3;
-}
-
-void draw_pt()
-{
-    model_tet& tetrahedra_meshes = simulator.getTetrahedraMeshes();
-    mesh3D& tetMesh = tetrahedra_meshes.mesh3Ds[0];
-
-    glLineWidth(6.f);
-    glColor3f(0.8f, 0.8f, 0.0f);
-
-    //glBegin(GL_LINES);
-
-    //glVertex3f(tetMesh.vertexes[1][0] * 1e3 - 0.5, tetMesh.vertexes[1][1] * 1e3 - 0.5, tetMesh.vertexes[1][2] * 1e3);
-    //glVertex3f(tetMesh.vertexes[2][0] * 1e3 - 0.5, tetMesh.vertexes[2][1] * 1e3 - 0.5, tetMesh.vertexes[2][2] * 1e3);
-
-
-
-    //glEnd();
-
-    glBegin(GL_TRIANGLES);
-    glVertex3f(tetMesh.vertexes[1][0] * 1e3 - 0.5, tetMesh.vertexes[1][1] * 1e3 - 0.5, tetMesh.vertexes[1][2] * 1e3);
-    glVertex3f(tetMesh.vertexes[2][0] * 1e3 - 0.5, tetMesh.vertexes[2][1] * 1e3 - 0.5, tetMesh.vertexes[2][2] * 1e3);
-    glVertex3f(tetMesh.vertexes[3][0] * 1e3 - 0.5, tetMesh.vertexes[3][1] * 1e3 - 0.5, tetMesh.vertexes[3][2] * 1e3);
-    glEnd();
-
-    glPointSize(6);
-    glBegin(GL_POINTS);
-
-    glVertex3f(tetMesh.vertexes[0][0] * 1e3 - 0.5, tetMesh.vertexes[0][1] * 1e3 - 0.5, tetMesh.vertexes[0][2] * 1e3);
-
-
-    glEnd();
-
-
-
-    glLineWidth(3.f);
-    glColor3f(0.8f, 0.0f, 0.0f);
-
-    glBegin(GL_LINES);
-
-    glVertex3f(tetMesh.vertexes[0][0] * 1e3 - 0.5, tetMesh.vertexes[0][1] * 1e3 - 0.5, tetMesh.vertexes[0][2] * 1e3);
-    Vector3d tgp = tetMesh.vertexes[0] + tetMesh.vertexes[4];
-    glVertex3f(tgp[0] * 1e3 - 0.5, tgp[1] * 1e3 - 0.5, tgp[2] * 1e3);
-
-    glVertex3f(tetMesh.vertexes[1][0] * 1e3 - 0.5, tetMesh.vertexes[1][1] * 1e3 - 0.5, tetMesh.vertexes[1][2] * 1e3);
-    tgp = tetMesh.vertexes[1] + tetMesh.vertexes[5];
-    glVertex3f(tgp[0] * 1e3 - 0.5, tgp[1] * 1e3 - 0.5, tgp[2] * 1e3);
-
-    glVertex3f(tetMesh.vertexes[2][0] * 1e3 - 0.5, tetMesh.vertexes[2][1] * 1e3 - 0.5, tetMesh.vertexes[2][2] * 1e3);
-    tgp = tetMesh.vertexes[2] + tetMesh.vertexes[6];
-    glVertex3f(tgp[0] * 1e3 - 0.5, tgp[1] * 1e3 - 0.5, tgp[2] * 1e3);
-
-    glVertex3f(tetMesh.vertexes[3][0] * 1e3 - 0.5, tetMesh.vertexes[3][1] * 1e3 - 0.5, tetMesh.vertexes[3][2] * 1e3);
-    tgp = tetMesh.vertexes[3] + tetMesh.vertexes[7];
-    glVertex3f(tgp[0] * 1e3 - 0.5, tgp[1] * 1e3 - 0.5, tgp[2] * 1e3);
-
-    glEnd();
-
-
-
-
-
-
-    //tetMesh.vertexes[0][0] += 0.005 * 1e-3;
-}
-
-
-void draw_PES() {
-    //face.mesh3Ds[0] = mesh3d;
-    glEnable(GL_DEPTH_TEST);
-    glDepthFunc(GL_LESS);
-    glClearColor(0.0f, 0.0f, 0.0f, 1.0f);
-    glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
-
-
-    glMatrixMode(GL_MODELVIEW);
-    glPushMatrix();
-    glTranslatef(xTrans, yTrans, zTrans);
-    glRotatef(xRot, 1.0f, 0.0f, 0.0f);
-    glRotatef(yRot, 0.0f, 1.0f, 0.0f);
-    //glRotatef(3.14159 / 2, 0.0f, 1.0f, 0.0f);
-    //glRotatef(yRot, 0.0f, 1.0f, 0.0f);
-    //printf("xRot:  %f      yRot:  %f\n", xRot, yRot);
-    //draw_pe();
-
-    draw_pt();
-
-    glPopMatrix();
-
-
-    glutSwapBuffers();
-    //glFlush();
-}
-
-int step = 0;
 void display(void)
 {
 
-    //draw_Scene3D();
+    draw_Scene3D();
 
-    //if (saveSurface)
-    //{
-    //    saveSurfaceMesh("OBJ/saveSurface/surf_");
-    //}
-
-    
-    //if (stop) return;
-
-    
-    int k = simulator.simulateStick(step);
-    draw_PES();
-    if (screenshot)
+    if (saveSurface)
     {
-        saveScreenPic("saveScreen/step_", step++);
+        saveSurfaceMesh("OBJ/saveSurface/surf_");
     }
 
 
-    //newtonIt.push_back(k);
+    if (stop) return;
 
-    //ofstream outIte("newTonIter.txt");
-    //for (auto value : newtonIt) {
-    //    outIte << value << endl;
-    //}
-    //outIte.close();
+    int step = 0;
+    int k = simulator.simulateStick(step);
+
+    if (true)
+    {
+        saveScreenPic("saveScreen/step_", step);
+    }
+
+
+    newtonIt.push_back(k);
+
+    ofstream outIte("newTonIter.txt");
+    for (auto value : newtonIt) {
+        outIte << value << endl;
+    }
+    outIte.close();
 }
 
 void initScene0() {
@@ -655,15 +505,12 @@ void reshape_func(GLint width, GLint height)
         glMatrixMode(GL_MODELVIEW);
         glLoadIdentity();
         glTranslatef(0.0f, 0.0f, -3.0f);
-        
     }
     //glTranslatef(0.5f, 0.5f, -4.0f);
 }
 
 void keyboard_func(unsigned char key, int x, int y)
 {
-    model_tet& tetrahedra_meshes = simulator.getTetrahedraMeshes();
-    mesh3D& tetMesh = tetrahedra_meshes.mesh3Ds[0];
     if (key == 'w')
     {
         zTrans += .01f;
@@ -692,42 +539,6 @@ void keyboard_func(unsigned char key, int x, int y)
     if (key == 'e')
     {
         yTrans += .01f;
-    }
-
-    if (key == 'j')
-    {
-        //xTrans += .01f;
-        tetMesh.vertexes[0][0]-= .015f * 1e-3;
-    }
-
-    if (key == 'l')
-    {
-        //xTrans -= .01f;
-        tetMesh.vertexes[0][0] += .015f * 1e-3;
-    }
-
-    if (key == 'i')
-    {
-        //yTrans -= .01f;
-        tetMesh.vertexes[0][2] -= .015f * 1e-3;
-    }
-
-    if (key == 'k')
-    {
-        //yTrans += .01f;
-        tetMesh.vertexes[0][2] += .015f * 1e-3;
-    }
-
-    if (key == 'u')
-    {
-        //yTrans -= .01f;
-        tetMesh.vertexes[0][1] -= .015f * 1e-3;
-    }
-
-    if (key == 'o')
-    {
-        //yTrans += .01f;
-        tetMesh.vertexes[0][1] += .015f * 1e-3;
     }
 
     if (key == ' ')
@@ -833,7 +644,7 @@ int main(int argc, char** argv)
     glutInit(&argc, argv);
     //glutInitDisplayMode(GLUT_DEPTH | GLUT_DOUBLE | GLUT_RGBA);
 
-    glutSetOption(GLUT_MULTISAMPLE, 30);
+    glutSetOption(GLUT_MULTISAMPLE, 16);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_MULTISAMPLE);
 
     glutInitWindowSize(window_width, window_height);

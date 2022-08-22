@@ -288,15 +288,7 @@ double edge_edge_ccd(
     double dist_cur = std::sqrt(dist2_cur);
     double gap = eta * dFunc / (dist_cur + thickness);
     double toc = 0.0;
-    int count = 0;
     while (true) {
-        count++;
-        //if (count > 20000) {
-        //    
-        //    printf("hello %d\n", count);
-        //    //return toc;
-        //    //system("pause");
-        //}
         double toc_lower_bound = (1 - eta) * dFunc / ((dist_cur + thickness) * max_disp_mag);
         ea0 += toc_lower_bound * dea0;
         ea1 += toc_lower_bound * dea1;
@@ -346,15 +338,7 @@ double point_triangle_ccd(
     double dist_cur = std::sqrt(dist2_cur);
     double gap = eta * (dist2_cur - thickness * thickness) / (dist_cur + thickness);
     double toc = 0.0;
-    int count = 0;
     while (true) {
-        count++;
-        //if (count > 20000) {
-        //    
-        //    printf("hello %d\n", count);
-        //    //return toc;
-        //    //system("pause");
-        //}
         double toc_lower_bound = (1 - eta) * (dist2_cur - thickness * thickness) / ((dist_cur + thickness) * max_disp_mag);
         p += toc_lower_bound * dp;
         t0 += toc_lower_bound * dt0;

@@ -270,6 +270,79 @@ Matrix3d calculateIsoDms_double(const vector<Vector3d>& vertexes, const vector<u
     return M;
 }
 
+void __Inverse(const Eigen::Matrix3d& input, Eigen::Matrix3d& result) {
+    double eps = 1e-15;
+    const int dim = 3;
+    double mat[dim * 2][dim * 2];
+    for (int i = 0;i < dim; i++)
+    {
+        for (int j = 0;j < 2 * dim; j++)
+        {
+            if (j < dim)
+            {
+                mat[i][j] = input(i, j);
+            }
+            else
+            {
+                mat[i][j] = j - dim == i ? 1 : 0;
+            }
+        }
+    }
+
+    for (int i = 0;i < dim; i++)
+    {
+        if (abs(mat[i][i]) < eps)
+        {
+            int j;
+            for (j = i + 1; j < dim; j++)
+            {
+                if (abs(mat[j][i]) > eps) break;
+            }
+            if (j == dim) return;
+            for (int r = i; r < 2 * dim; r++)
+            {
+                mat[i][r] += mat[j][r];
+            }
+        }
+        double ep = mat[i][i];
+        for (int r = i; r < 2 * dim; r++)
+        {
+            mat[i][r] /= ep;
+        }
+
+        for (int j = i + 1; j < dim; j++)
+        {
+            double e = -1 * (mat[j][i] / mat[i][i]);
+            for (int r = i; r < 2 * dim; r++)
+            {
+                mat[j][r] += e * mat[i][r];
+            }
+        }
+    }
+
+    for (int i = dim - 1; i >= 0; i--)
+    {
+        for (int j = i - 1; j >= 0; j--)
+        {
+            double e = -1 * (mat[j][i] / mat[i][i]);
+            for (int r = i; r < 2 * dim; r++)
+            {
+                mat[j][r] += e * mat[i][r];
+            }
+        }
+    }
+
+
+    for (int i = 0;i < dim; i++)
+    {
+        for (int r = dim; r < 2 * dim; r++)
+        {
+            result(i, r - dim) = mat[i][r];
+        }
+    }
+}
+
+
 double calculateVolum(const vector<Vector3d>& vertexes, const Vector4i& index) {
     int id0 = 0;
     int id1 = 1;
@@ -398,29 +471,6 @@ double getObjEnergy_StableNHK2_3D(const vector<Vector3d>& vertexes, const mesh3D
     return energy;
 }
 
-
-double getObjEnergy_ARAP_3D(const vector<Vector3d>& vertexes, const mesh3D& mesh, const double& lengthRate, const double& volumeRate) {
-    double energy = parallel_reduce(
-        tbb::blocked_range<int>(0, mesh.tetrahedraNum), 0.0, [&](const tbb::blocked_range<int>& rg, double temp_sum) {
-            for (int i = rg.begin(); i != rg.end(); i++) {
-                MatrixXd F = calculateDms3D_double(vertexes, mesh.tetrahedras[i], 0) * mesh.DM_triangle_inverse[i];
-
-                SVDResult3D_double svdResult = QRSVD(F);
-                Matrix3d R = svdResult.U * svdResult.V.transpose();
-                Matrix3d G = F - R;
-                double tsum = G.squaredNorm();
-                temp_sum += (0.5 * lengthRate * tsum) * mesh.volum[i];
-
-            }
-            return temp_sum;
-        },
-        [&](double left, double right) {
-            return left + right;
-        }
-        );
-    return energy;
-}
-
 double getObjRestEnergy_StableNHK2_3D(const vector<Vector3d>& vertexes, const mesh3D& mesh, const double& lengthRate, const double& volumeRate) {
     double energy = parallel_reduce(
         tbb::blocked_range<int>(0, mesh.tetrahedraNum), 0.0, [&](const tbb::blocked_range<int>& rg, double temp_sum) {
@@ -434,8 +484,7 @@ double getObjRestEnergy_StableNHK2_3D(const vector<Vector3d>& vertexes, const me
                 S = V * sigma * V.transpose();
                 double I2 = (S * S).trace();
                 double I3 = S.determinant();
-                temp_sum += (0.5 * lengthRate * (I2 - 3) + 0.5 * volumeRate * (I3 - 1 - 3 * lengthRate / 4 / volumeRate) * (I3 - 1 - 3 * lengthRate / 4 / volumeRate) - 0.5 * lengthRate * log(I2 + 1)) * mesh.volum[i];
-                //temp_sum += (0.5 * volumeRate * (3 * lengthRate / 4 / volumeRate) * (3 * lengthRate / 4 / volumeRate) - 0.5 * lengthRate * log(4)) * mesh.volum[i];
+                temp_sum += (0.5 * volumeRate * (3 * lengthRate / 4 / volumeRate) * (3 * lengthRate / 4 / volumeRate) - 0.5 * lengthRate * log(4)) * mesh.volum[i];
             }
             return temp_sum;
         },
@@ -565,79 +614,6 @@ float distance(Vector3d x, Vector3d y) {
 }
 
 
-void __Inverse(const Eigen::Matrix3d& input, Eigen::Matrix3d& result) {
-    double eps = 1e-15;
-    const int dim = 3;
-    double mat[dim * 2][dim * 2];
-    for (int i = 0;i < dim; i++)
-    {
-        for (int j = 0;j < 2 * dim; j++)
-        {
-            if (j < dim)
-            {
-                mat[i][j] = input(i, j);
-            }
-            else
-            {
-                mat[i][j] = j - dim == i ? 1 : 0;
-            }
-        }
-    }
-
-    for (int i = 0;i < dim; i++)
-    {
-        if (abs(mat[i][i]) < eps)
-        {
-            int j;
-            for (j = i + 1; j < dim; j++)
-            {
-                if (abs(mat[j][i]) > eps) break;
-            }
-            if (j == dim) return;
-            for (int r = i; r < 2 * dim; r++)
-            {
-                mat[i][r] += mat[j][r];
-            }
-        }
-        double ep = mat[i][i];
-        for (int r = i; r < 2 * dim; r++)
-        {
-            mat[i][r] /= ep;
-        }
-
-        for (int j = i + 1; j < dim; j++)
-        {
-            double e = -1 * (mat[j][i] / mat[i][i]);
-            for (int r = i; r < 2 * dim; r++)
-            {
-                mat[j][r] += e * mat[i][r];
-            }
-        }
-    }
-
-    for (int i = dim - 1; i >= 0; i--)
-    {
-        for (int j = i - 1; j >= 0; j--)
-        {
-            double e = -1 * (mat[j][i] / mat[i][i]);
-            for (int r = i; r < 2 * dim; r++)
-            {
-                mat[j][r] += e * mat[i][r];
-            }
-        }
-    }
-
-
-    for (int i = 0;i < dim; i++)
-    {
-        for (int r = dim; r < 2 * dim; r++)
-        {
-            result(i, r - dim) = mat[i][r];
-        }
-    }
-}
-
-
 void initMesh3D(mesh3D& mesh, int type, double scale) {
 
     mesh.masses = vector<double>(mesh.vertexNum, 0);
@@ -693,16 +669,6 @@ Matrix3d computePEPF_StableNHK3D_double(const Matrix3d& F, const double& lengthR
     pI3pF(2, 2) = F(0, 0) * F(1, 1) - F(0, 1) * F(1, 0);
     Matrix3d PEPF = u * F + (r * (S.determinant() - 1) - u) * pI3pF;
     return PEPF;
-}
-
-
-Matrix3d computePEPF_ARAP_double(const Matrix3d& F, const double& lengthRate, const double& volumRate) {
-    SVDResult3D_double svdResult = QRSVD(F);
-
-    Matrix3d R = svdResult.U * svdResult.V.transpose();
-    Matrix3d G = F - R;
-
-    return lengthRate * G;
 }
 
 Matrix3d computePEPF_StableNHK3D_2_double(const Matrix3d& F, const double& lengthRate, const double& volumRate) {
@@ -767,45 +733,6 @@ Matrix3d computePEPF_AniostropicRehabi3D_double(const Matrix3d& F, Vector3d dire
     direction.normalize();
     Matrix3d PEPF = 2 * u_anios * F * direction * direction.transpose();
     return PEPF;
-}
-
-MatrixXd project_ARAP_3D(const Matrix3d& F, const double& lengthRate, const double& volumRate) {
-    SVDResult3D_double svdResult = QRSVD(F);
-    Matrix3d U, sigma, V, A;
-    U = svdResult.U;
-    sigma = svdResult.SIGMA;
-    V = svdResult.V;
-
-    Matrix3d T0, T1, T2;
-    T0 << 0, -1, 0, 1, 0, 0, 0, 0, 0;
-    T1 << 0, 0, 0, 0, 0, 1, 0, -1, 0;
-    T2 << 0, 0, 1, 0, 0, 0, -1, 0, 0;
-
-
-    double ml = 1 / sqrt(2);
-    T0 = U * (ml * T0) * V.transpose();
-    T1 = U * (ml * T1) * V.transpose();
-    T2 = U * (ml * T2) * V.transpose();
-
-    double sx = sigma(0, 0);
-    double sy = sigma(1, 1);
-    double sz = sigma(2, 2);
-    double lambda0 = 2 / (sx + sy);
-    double lambda1 = 2 / (sz + sy);
-    double lambda2 = 2 / (sx + sz);
-
-    if (sx + sy < 2)lambda0 = 1;
-    if (sz + sy < 2)lambda1 = 1;
-    if (sx + sz < 2)lambda2 = 1;
-
-
-    MatrixXd H = MatrixXd::Identity(9, 9);
-    //H.setZero(9, 9);
-
-    H = H - lambda0 * vec_double(T0) * vec_double(T0).transpose();
-    H = H - lambda1 * vec_double(T1) * vec_double(T1).transpose();
-    H = H - lambda2 * vec_double(T2) * vec_double(T2).transpose();
-    return 2 * lengthRate * H;
 }
 
 MatrixXd project_StabbleNHK_H_3D(const Matrix3d& F, const double& lengthRate, const double& volumRate) {
@@ -897,7 +824,6 @@ MatrixXd project_StabbleNHK_H_3D(const Matrix3d& F, const double& lengthRate, co
     }
     return H;
 }
-
 
 MatrixXd project_StabbleNHK_2_H_3D(const Matrix3d& F, const double& lengthRate, const double& volumRate) {
     SVDResult3D_double svdResult = QRSVD(F);

@@ -127,7 +127,6 @@ public:
 	double averageEdgeLenth;
 	double Hhat;
 	double Kappa;
-	double IPC_dt;
 	double bboxDiagSize2;
 	double dTol;
 	vector<Vector3d> vertexes;
@@ -138,8 +137,12 @@ public:
 	vector<Vector4i> surface;
 	vector<uint64_t> surfVerts;
 	vector<pair<uint64_t, uint64_t>> surfEdges;
-	vector<int> Environment_ActiveSet;
-	vector<MMCVID> Self_ActiveSet;
+	vector<double> Self_lambda_lastH;
+	vector<double> Environment_lambda_lastH;
+	vector<Eigen::Vector2d> MMDistCoord;
+	vector<Eigen::Matrix<double, 3, 2>> MMTanBasis;
+	vector<int> Environment_ActiveSet, Environment_activeSet_lastH;
+	vector<MMCVID> Self_ActiveSet, Self_activeSet_lastH;
 	vector<MMCVID> Self_EE_ActiveSet;
 	vector<pair<int, int>> Self_EEeIe_ActiveSet;
 	vector<pair<int, int>> Self_CCD_ActiveSet;
@@ -161,12 +164,7 @@ public:
 	int tetrahedraNum;
 	void InitMesh(int type, double scale);
 	bool load_tetrahedraMesh(const std::string& filename, double scale, Vector3d offset);
-	bool load_tetrahedraMesh_IPC_TetMesh(const std::string& filename, Vector3d scale, Vector3d position_offset);
-
-	bool load_UnitTest(vector<Vector3d> verts, Vector3d scale, Vector3d position_offset);
-	bool load_UnitTest2(Vector3d scale, Vector3d position_offset);
-
-
+	bool load_tetrahedraMesh_IPC_TetMesh(const std::string& filename, double scale, Vector3d position_offset);
 	void load_test(double scale, int num = 1);
 	void getSurface();
 	bool output_tetrahedraMesh(const std::string& filename);

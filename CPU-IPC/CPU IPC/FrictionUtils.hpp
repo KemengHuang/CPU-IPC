@@ -12,7 +12,7 @@
 
 #include <iostream>
 #include <array>
-
+#define SFCLAMPING_ORDER 1
 namespace IPC {
 
 // Point - Triangle

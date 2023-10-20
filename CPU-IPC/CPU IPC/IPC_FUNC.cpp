@@ -12,23 +12,33 @@
 #include <chrono>
 #include "FrictionUtils.hpp"
 #include "Solver.h"
+
+
+
 using namespace FEM;
 #define NEWB2
 //index count to export
 int step_index = 0;
 double time_total = 0;
+
+double ttime0 = 0;
+double ttime1 = 0;
+double ttime2 = 0;
+double ttime3 = 0;
+double ttime4 = 0;
+double totalCollision = 0;
 int total_iter = 0;
-void buildConstraintStartIndsWithMM(const vector<int>& activeSet,
-    const std::vector<MMCVID>& MMActiveSet,
-    std::vector<int>& constraintStartInds)
-{
+
+void buildConstraintStartIndsWithMM(const vector<int> &activeSet,
+                                    const std::vector<MMCVID> &MMActiveSet,
+                                    std::vector<int> &constraintStartInds) {
     constraintStartInds.resize(1);
     constraintStartInds[0] = 0;
     constraintStartInds.emplace_back(constraintStartInds.back() + activeSet.size());
     constraintStartInds.emplace_back(constraintStartInds.back() + MMActiveSet.size());
 }
 
-void buildFriction(mesh3D& mesh, const Ground& grd) {
+void buildFriction(mesh3D &mesh, const Ground &grd) {
     Eigen::VectorXd constraintVals;
 
     {
@@ -48,39 +58,40 @@ void buildFriction(mesh3D& mesh, const Ground& grd) {
         mesh.MMDistCoord.resize(mesh.Self_ActiveSet.size());
         mesh.MMTanBasis.resize(mesh.Self_ActiveSet.size());
         for (int cI = 0; cI < mesh.Self_ActiveSet.size(); ++cI) {
-            const auto& MMCVIDI = mesh.Self_ActiveSet[cI];
+            const auto &MMCVIDI = mesh.Self_ActiveSet[cI];
             if (MMCVIDI[0] >= 0) {
                 // edge-edge
                 IPC::computeClosestPoint_EE(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]],
-                    mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], mesh.MMDistCoord[cI]);
+                                            mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], mesh.MMDistCoord[cI]);
                 IPC::computeTangentBasis_EE(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]],
-                    mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], mesh.MMTanBasis[cI]);
-            }
-            else {
+                                            mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], mesh.MMTanBasis[cI]);
+            } else {
                 // point-triangle and degenerate edge-edge
                 assert(MMCVIDI[1] >= 0);
                 if (MMCVIDI[2] < 0) {
                     // PP
                     mesh.MMDistCoord[cI].setZero(); // Store something instead of random memory
                     IPC::computeTangentBasis_PP(mesh.vertexes[-MMCVIDI[0] - 1], mesh.vertexes[MMCVIDI[1]],
-                        mesh.MMTanBasis[cI]);
-                }
-                else if (MMCVIDI[3] < 0) {
+                                                mesh.MMTanBasis[cI]);
+                } else if (MMCVIDI[3] < 0) {
                     // PE
                     IPC::computeClosestPoint_PE(mesh.vertexes[-MMCVIDI[0] - 1],
-                        mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.MMDistCoord[cI][0]);
+                                                mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]],
+                                                mesh.MMDistCoord[cI][0]);
                     mesh.MMDistCoord[cI][1] = 0; // Store something instead of random memory
                     IPC::computeTangentBasis_PE(mesh.vertexes[-MMCVIDI[0] - 1],
-                        mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.MMTanBasis[cI]);
-                }
-                else {
+                                                mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]],
+                                                mesh.MMTanBasis[cI]);
+                } else {
                     // PT
                     IPC::computeClosestPoint_PT(mesh.vertexes[-MMCVIDI[0] - 1],
-                        mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]],
-                        mesh.MMDistCoord[cI]);
+                                                mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]],
+                                                mesh.vertexes[MMCVIDI[3]],
+                                                mesh.MMDistCoord[cI]);
                     IPC::computeTangentBasis_PT(mesh.vertexes[-MMCVIDI[0] - 1],
-                        mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]],
-                        mesh.MMTanBasis[cI]);
+                                                mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]],
+                                                mesh.vertexes[MMCVIDI[3]],
+                                                mesh.MMTanBasis[cI]);
                 }
             }
         }
@@ -102,27 +113,27 @@ void buildFriction(mesh3D& mesh, const Ground& grd) {
 }
 
 
-void compute_fiction_gradient(mesh3D& mesh, const Ground& grd, std::vector<Eigen::Vector3d>& grad_inc, double eps2, double coef) {
+void compute_fiction_gradient(mesh3D &mesh, const Ground &grd, std::vector<Eigen::Vector3d> &grad_inc, double eps2,
+                              double coef) {
     double eps = std::sqrt(eps2);
     //TODO: parallelize
     for (int cI = 0; cI < mesh.Self_activeSet_lastH.size(); ++cI) {
         Eigen::RowVector3d relDX3D;
 
-        const auto& MMCVIDI = mesh.Self_activeSet_lastH[cI];
+        const auto &MMCVIDI = mesh.Self_activeSet_lastH[cI];
         if (MMCVIDI[0] >= 0) {
             // edge-edge
             IPC::computeRelDX_EE(mesh.vertexes[MMCVIDI[0]] - mesh.V_prev[MMCVIDI[0]],
-                mesh.vertexes[MMCVIDI[1]] - mesh.V_prev[MMCVIDI[1]],
-                mesh.vertexes[MMCVIDI[2]] - mesh.V_prev[MMCVIDI[2]],
-                mesh.vertexes[MMCVIDI[3]] - mesh.V_prev[MMCVIDI[3]],
-                mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], relDX3D);
+                                 mesh.vertexes[MMCVIDI[1]] - mesh.V_prev[MMCVIDI[1]],
+                                 mesh.vertexes[MMCVIDI[2]] - mesh.V_prev[MMCVIDI[2]],
+                                 mesh.vertexes[MMCVIDI[3]] - mesh.V_prev[MMCVIDI[3]],
+                                 mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], relDX3D);
 
             Eigen::Vector2d relDX = (relDX3D * mesh.MMTanBasis[cI]).transpose();
             double relDXSqNorm = relDX.squaredNorm();
             if (relDXSqNorm > eps2) {
                 relDX /= std::sqrt(relDXSqNorm);
-            }
-            else {
+            } else {
                 double f1_div_relDXNorm;
                 IPC::f1_SF_div_relDXNorm(relDXSqNorm, eps, f1_div_relDXNorm);
                 relDX *= f1_div_relDXNorm;
@@ -130,7 +141,7 @@ void compute_fiction_gradient(mesh3D& mesh, const Ground& grd, std::vector<Eigen
 
             Eigen::Matrix<double, 12, 1> TTTDX;
             IPC::liftRelDXTanToMesh_EE(relDX, mesh.MMTanBasis[cI],
-                mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], TTTDX);
+                                       mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], TTTDX);
             TTTDX *= coef * mesh.Self_lambda_lastH[cI];
             //            for (int i = 0; i < 4; i++) {
             //                grad_inc[MMCVIDI[i]] += TTTDX.template segment<3>(3 * i);
@@ -144,21 +155,19 @@ void compute_fiction_gradient(mesh3D& mesh, const Ground& grd, std::vector<Eigen
             //            grad_inc.template segment<3>(MMCVIDI[1] * 3) += TTTDX.template segment<3>(3);
             //            grad_inc.template segment<3>(MMCVIDI[2] * 3) += TTTDX.template segment<3>(6);
             //            grad_inc.template segment<3>(MMCVIDI[3] * 3) += TTTDX.template segment<3>(9);
-        }
-        else {
+        } else {
             // point-triangle and degenerate edge-edge
             assert(MMCVIDI[1] >= 0);
             if (MMCVIDI[2] < 0) {
                 // PP
                 IPC::computeRelDX_PP(mesh.vertexes[-MMCVIDI[0] - 1] - mesh.V_prev[-MMCVIDI[0] - 1],
-                    mesh.vertexes[MMCVIDI[1]] - mesh.V_prev[MMCVIDI[1]], relDX3D);
+                                     mesh.vertexes[MMCVIDI[1]] - mesh.V_prev[MMCVIDI[1]], relDX3D);
 
                 Eigen::Vector2d relDX = (relDX3D * mesh.MMTanBasis[cI]).transpose();
                 double relDXSqNorm = relDX.squaredNorm();
                 if (relDXSqNorm > eps2) {
                     relDX /= std::sqrt(relDXSqNorm);
-                }
-                else {
+                } else {
                     double f1_div_relDXNorm;
                     IPC::f1_SF_div_relDXNorm(relDXSqNorm, eps, f1_div_relDXNorm);
                     relDX *= f1_div_relDXNorm;
@@ -170,20 +179,18 @@ void compute_fiction_gradient(mesh3D& mesh, const Ground& grd, std::vector<Eigen
 
                 grad_inc[-MMCVIDI[0] - 1] += TTTDX.template segment<3>(0);
                 grad_inc[MMCVIDI[1]] += TTTDX.template segment<3>(3);
-            }
-            else if (MMCVIDI[3] < 0) {
+            } else if (MMCVIDI[3] < 0) {
                 // PE
                 IPC::computeRelDX_PE(mesh.vertexes[-MMCVIDI[0] - 1] - mesh.V_prev[-MMCVIDI[0] - 1],
-                    mesh.vertexes[MMCVIDI[1]] - mesh.V_prev[MMCVIDI[1]],
-                    mesh.vertexes[MMCVIDI[2]] - mesh.V_prev[MMCVIDI[2]],
-                    mesh.MMDistCoord[cI][0], relDX3D);
+                                     mesh.vertexes[MMCVIDI[1]] - mesh.V_prev[MMCVIDI[1]],
+                                     mesh.vertexes[MMCVIDI[2]] - mesh.V_prev[MMCVIDI[2]],
+                                     mesh.MMDistCoord[cI][0], relDX3D);
 
                 Eigen::Vector2d relDX = (relDX3D * mesh.MMTanBasis[cI]).transpose();
                 double relDXSqNorm = relDX.squaredNorm();
                 if (relDXSqNorm > eps2) {
                     relDX /= std::sqrt(relDXSqNorm);
-                }
-                else {
+                } else {
                     double f1_div_relDXNorm;
                     IPC::f1_SF_div_relDXNorm(relDXSqNorm, eps, f1_div_relDXNorm);
                     relDX *= f1_div_relDXNorm;
@@ -196,21 +203,19 @@ void compute_fiction_gradient(mesh3D& mesh, const Ground& grd, std::vector<Eigen
                 grad_inc[-MMCVIDI[0] - 1] += TTTDX.template segment<3>(0);
                 grad_inc[MMCVIDI[1]] += TTTDX.template segment<3>(3);
                 grad_inc[MMCVIDI[2]] += TTTDX.template segment<3>(6);
-            }
-            else {
+            } else {
                 // PT
                 IPC::computeRelDX_PT(mesh.vertexes[-MMCVIDI[0] - 1] - mesh.V_prev[-MMCVIDI[0] - 1],
-                    mesh.vertexes[MMCVIDI[1]] - mesh.V_prev[MMCVIDI[1]],
-                    mesh.vertexes[MMCVIDI[2]] - mesh.V_prev[MMCVIDI[2]],
-                    mesh.vertexes[MMCVIDI[3]] - mesh.V_prev[MMCVIDI[3]],
-                    mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], relDX3D);
+                                     mesh.vertexes[MMCVIDI[1]] - mesh.V_prev[MMCVIDI[1]],
+                                     mesh.vertexes[MMCVIDI[2]] - mesh.V_prev[MMCVIDI[2]],
+                                     mesh.vertexes[MMCVIDI[3]] - mesh.V_prev[MMCVIDI[3]],
+                                     mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], relDX3D);
 
                 Eigen::Vector2d relDX = (relDX3D * mesh.MMTanBasis[cI]).transpose();
                 double relDXSqNorm = relDX.squaredNorm();
                 if (relDXSqNorm > eps2) {
                     relDX /= std::sqrt(relDXSqNorm);
-                }
-                else {
+                } else {
                     double f1_div_relDXNorm;
                     IPC::f1_SF_div_relDXNorm(relDXSqNorm, eps, f1_div_relDXNorm);
                     relDX *= f1_div_relDXNorm;
@@ -218,7 +223,7 @@ void compute_fiction_gradient(mesh3D& mesh, const Ground& grd, std::vector<Eigen
 
                 Eigen::Matrix<double, 12, 1> TTTDX;
                 IPC::liftRelDXTanToMesh_PT(relDX, mesh.MMTanBasis[cI],
-                    mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], TTTDX);
+                                           mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], TTTDX);
                 TTTDX *= coef * mesh.Self_lambda_lastH[cI];
 
                 grad_inc[-MMCVIDI[0] - 1] += TTTDX.template segment<3>(0);
@@ -230,17 +235,16 @@ void compute_fiction_gradient(mesh3D& mesh, const Ground& grd, std::vector<Eigen
     }
     // ground
     int contactPairI = 0;
-    for (const auto& vI : mesh.Environment_activeSet_lastH) {
+    for (const auto &vI: mesh.Environment_activeSet_lastH) {
         Eigen::Matrix<double, 3, 1> VDiff = (mesh.vertexes[vI] - mesh.V_prev[vI]).transpose();
         //        VDiff -= Base::velocitydt;
         Eigen::Matrix<double, 3, 1> VProj = VDiff - VDiff.dot(grd.normal) * grd.normal;
         double VProjMag2 = VProj.squaredNorm();
         if (VProjMag2 > eps2) {
             grad_inc[vI] +=
-                coef * mesh.Environment_lambda_lastH[contactPairI] / std::sqrt(VProjMag2) * VProj;
+                    coef * mesh.Environment_lambda_lastH[contactPairI] / std::sqrt(VProjMag2) * VProj;
 
-        }
-        else {
+        } else {
             grad_inc[vI] += coef * mesh.Environment_lambda_lastH[contactPairI] / eps * VProj;
 
         }
@@ -248,11 +252,11 @@ void compute_fiction_gradient(mesh3D& mesh, const Ground& grd, std::vector<Eigen
     }
 }
 
-void compute_fiction_hessian(mesh3D& mesh, const Ground& grd, BHessian& BH, double eps2, double coef) {
+void compute_fiction_hessian(mesh3D &mesh, const Ground &grd, BHessian &BH, double eps2, double coef) {
     double eps = std::sqrt(eps2);
 
     int contactPairI = 0;
-    for (const auto& vI : mesh.Environment_activeSet_lastH) {
+    for (const auto &vI: mesh.Environment_activeSet_lastH) {
         double multiplier_vI = coef * mesh.Environment_lambda_lastH[contactPairI];
         Eigen::Matrix<double, 3, 3> H_vI;
 
@@ -265,13 +269,12 @@ void compute_fiction_hessian(mesh3D& mesh, const Ground& grd, BHessian& BH, doub
 
             H_vI = (VProj * (-multiplier_vI / VProjMag2 / VProjMag)) * VProj.transpose();
             H_vI += (Eigen::Matrix<double, 3, 3>::Identity() - grd.normal * grd.normal.transpose()) *
-                (multiplier_vI / VProjMag);
+                    (multiplier_vI / VProjMag);
 
             IglUtils::makePD<double, 3>(H_vI);
-        }
-        else {
+        } else {
             H_vI = (Eigen::Matrix<double, 3, 3>::Identity() - grd.normal * grd.normal.transpose()) *
-                (multiplier_vI / eps);
+                   (multiplier_vI / eps);
             // already SPD
         }
 
@@ -284,237 +287,229 @@ void compute_fiction_hessian(mesh3D& mesh, const Ground& grd, BHessian& BH, doub
 
     std::vector<Eigen::Matrix<double, 12, 12>> IPHessian(mesh.Self_activeSet_lastH.size());
     tbb::spin_mutex countMutex2, countMutex3, countMutex4;
-    tbb::parallel_for(0, (int)mesh.Self_activeSet_lastH.size(), 1, [&](int cI)
-    {
-        const auto& MMCVIDI = mesh.Self_activeSet_lastH[cI];
-        if (MMCVIDI[0] >= 0) {
-            // edge-edge
-            Eigen::RowVector3d relDX3D;
-            IPC::computeRelDX_EE(mesh.vertexes[MMCVIDI[0]] - mesh.V_prev[MMCVIDI[0]],
-                mesh.vertexes[MMCVIDI[1]] - mesh.V_prev[MMCVIDI[1]],
-                mesh.vertexes[MMCVIDI[2]] - mesh.V_prev[MMCVIDI[2]],
-                mesh.vertexes[MMCVIDI[3]] - mesh.V_prev[MMCVIDI[3]],
-                mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], relDX3D);
+    tbb::parallel_for(0, (int) mesh.Self_activeSet_lastH.size(), 1, [&](int cI) {
+                          const auto &MMCVIDI = mesh.Self_activeSet_lastH[cI];
+                          if (MMCVIDI[0] >= 0) {
+                              // edge-edge
+                              Eigen::RowVector3d relDX3D;
+                              IPC::computeRelDX_EE(mesh.vertexes[MMCVIDI[0]] - mesh.V_prev[MMCVIDI[0]],
+                                                   mesh.vertexes[MMCVIDI[1]] - mesh.V_prev[MMCVIDI[1]],
+                                                   mesh.vertexes[MMCVIDI[2]] - mesh.V_prev[MMCVIDI[2]],
+                                                   mesh.vertexes[MMCVIDI[3]] - mesh.V_prev[MMCVIDI[3]],
+                                                   mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], relDX3D);
 
-            Eigen::Vector2d relDX = (relDX3D * mesh.MMTanBasis[cI]).transpose();
-            double relDXSqNorm = relDX.squaredNorm();
-            double relDXNorm = std::sqrt(relDXSqNorm);
+                              Eigen::Vector2d relDX = (relDX3D * mesh.MMTanBasis[cI]).transpose();
+                              double relDXSqNorm = relDX.squaredNorm();
+                              double relDXNorm = std::sqrt(relDXSqNorm);
 
-            IPC::computeTTT_EE(mesh.MMTanBasis[cI], mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], IPHessian[cI]);
-            if (relDXSqNorm > eps2) {
-                IPHessian[cI] *= coef * mesh.Self_lambda_lastH[cI] / relDXNorm;
+                              IPC::computeTTT_EE(mesh.MMTanBasis[cI], mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], IPHessian[cI]);
+                              if (relDXSqNorm > eps2) {
+                                  IPHessian[cI] *= coef * mesh.Self_lambda_lastH[cI] / relDXNorm;
 
-                Eigen::Matrix<double, 12, 1> TTTDX;
-                IPC::liftRelDXTanToMesh_EE(relDX, mesh.MMTanBasis[cI],
-                    mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], TTTDX);
-                IPHessian[cI] -=
-                    (TTTDX * (coef * mesh.Self_lambda_lastH[cI] / (relDXSqNorm * relDXNorm))) * TTTDX.transpose();
+                                  Eigen::Matrix<double, 12, 1> TTTDX;
+                                  IPC::liftRelDXTanToMesh_EE(relDX, mesh.MMTanBasis[cI],
+                                                             mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], TTTDX);
+                                  IPHessian[cI] -=
+                                          (TTTDX * (coef * mesh.Self_lambda_lastH[cI] / (relDXSqNorm * relDXNorm))) * TTTDX.transpose();
 
-                IglUtils::makePD<double, 12>(IPHessian[cI]);
-            }
-            else {
-                double f1_div_relDXNorm;
-                IPC::f1_SF_div_relDXNorm(relDXSqNorm, eps, f1_div_relDXNorm);
+                                  IglUtils::makePD<double, 12>(IPHessian[cI]);
+                              } else {
+                                  double f1_div_relDXNorm;
+                                  IPC::f1_SF_div_relDXNorm(relDXSqNorm, eps, f1_div_relDXNorm);
 
-                IPHessian[cI] *= coef * mesh.Self_lambda_lastH[cI] * f1_div_relDXNorm;
+                                  IPHessian[cI] *= coef * mesh.Self_lambda_lastH[cI] * f1_div_relDXNorm;
 
-                double f2;
-                IPC::f2_SF(relDXSqNorm, eps, f2);
-                if (f2 != f1_div_relDXNorm && relDXSqNorm) {
-                    // higher order clamping and not exactly static
-                    Eigen::Matrix<double, 12, 1> TTTDX;
-                    IPC::liftRelDXTanToMesh_EE(relDX, mesh.MMTanBasis[cI],
-                        mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], TTTDX);
-                    IPHessian[cI] += (TTTDX * (coef * mesh.Self_lambda_lastH[cI] * (f2 - f1_div_relDXNorm) / relDXSqNorm)) *
-                        TTTDX.transpose();
+                                  double f2;
+                                  IPC::f2_SF(relDXSqNorm, eps, f2);
+                                  if (f2 != f1_div_relDXNorm && relDXSqNorm) {
+                                      // higher order clamping and not exactly static
+                                      Eigen::Matrix<double, 12, 1> TTTDX;
+                                      IPC::liftRelDXTanToMesh_EE(relDX, mesh.MMTanBasis[cI],
+                                                                 mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], TTTDX);
+                                      IPHessian[cI] +=
+                                              (TTTDX * (coef * mesh.Self_lambda_lastH[cI] * (f2 - f1_div_relDXNorm) / relDXSqNorm)) *
+                                              TTTDX.transpose();
 
-                    IglUtils::makePD<double, 12>(IPHessian[cI]);
-                }
-            }
-            countMutex4.lock();
-            BH.H12x12.emplace_back(IPHessian[cI]);
-            BH.D4Index.emplace_back(MMCVIDI[0], MMCVIDI[1], MMCVIDI[2], MMCVIDI[3]);
-            countMutex4.unlock();
-        }
-        else {
-            // point-triangle and degenerate edge-edge
-            assert(MMCVIDI[1] >= 0);
-            int v0I = -MMCVIDI[0] - 1;
-            if (MMCVIDI[2] < 0) {
-                // PP
-                Eigen::RowVector3d relDX3D;
-                IPC::computeRelDX_PP(mesh.vertexes[v0I] - mesh.V_prev[v0I],
-                    mesh.vertexes[MMCVIDI[1]] - mesh.V_prev[MMCVIDI[1]], relDX3D);
+                                      IglUtils::makePD<double, 12>(IPHessian[cI]);
+                                  }
+                              }
+                              countMutex4.lock();
+                              BH.H12x12.emplace_back(IPHessian[cI]);
+                              BH.D4Index.emplace_back(MMCVIDI[0], MMCVIDI[1], MMCVIDI[2], MMCVIDI[3]);
+                              countMutex4.unlock();
+                          } else {
+                              // point-triangle and degenerate edge-edge
+                              assert(MMCVIDI[1] >= 0);
+                              int v0I = -MMCVIDI[0] - 1;
+                              if (MMCVIDI[2] < 0) {
+                                  // PP
+                                  Eigen::RowVector3d relDX3D;
+                                  IPC::computeRelDX_PP(mesh.vertexes[v0I] - mesh.V_prev[v0I],
+                                                       mesh.vertexes[MMCVIDI[1]] - mesh.V_prev[MMCVIDI[1]], relDX3D);
 
-                Eigen::Vector2d relDX = (relDX3D * mesh.MMTanBasis[cI]).transpose();
-                double relDXSqNorm = relDX.squaredNorm();
-                double relDXNorm = std::sqrt(relDXSqNorm);
+                                  Eigen::Vector2d relDX = (relDX3D * mesh.MMTanBasis[cI]).transpose();
+                                  double relDXSqNorm = relDX.squaredNorm();
+                                  double relDXNorm = std::sqrt(relDXSqNorm);
 
-                Eigen::Matrix<double, 6, 6> HessianBlock;
-                IPC::computeTTT_PP(mesh.MMTanBasis[cI], HessianBlock);
-                if (relDXSqNorm > eps2) {
-                    HessianBlock *= coef * mesh.Self_lambda_lastH[cI] / relDXNorm;
+                                  Eigen::Matrix<double, 6, 6> HessianBlock;
+                                  IPC::computeTTT_PP(mesh.MMTanBasis[cI], HessianBlock);
+                                  if (relDXSqNorm > eps2) {
+                                      HessianBlock *= coef * mesh.Self_lambda_lastH[cI] / relDXNorm;
 
-                    Eigen::Matrix<double, 6, 1> TTTDX;
-                    IPC::liftRelDXTanToMesh_PP(relDX, mesh.MMTanBasis[cI], TTTDX);
-                    HessianBlock -=
-                        (TTTDX * (coef * mesh.Self_lambda_lastH[cI] / (relDXSqNorm * relDXNorm))) * TTTDX.transpose();
+                                      Eigen::Matrix<double, 6, 1> TTTDX;
+                                      IPC::liftRelDXTanToMesh_PP(relDX, mesh.MMTanBasis[cI], TTTDX);
+                                      HessianBlock -=
+                                              (TTTDX * (coef * mesh.Self_lambda_lastH[cI] / (relDXSqNorm * relDXNorm))) *
+                                              TTTDX.transpose();
 
-                    IglUtils::makePD<double, 6>(HessianBlock);
-                }
-                else {
-                    double f1_div_relDXNorm;
-                    IPC::f1_SF_div_relDXNorm(relDXSqNorm, eps, f1_div_relDXNorm);
+                                      IglUtils::makePD<double, 6>(HessianBlock);
+                                  } else {
+                                      double f1_div_relDXNorm;
+                                      IPC::f1_SF_div_relDXNorm(relDXSqNorm, eps, f1_div_relDXNorm);
 
-                    HessianBlock *= coef * mesh.Self_lambda_lastH[cI] * f1_div_relDXNorm;
+                                      HessianBlock *= coef * mesh.Self_lambda_lastH[cI] * f1_div_relDXNorm;
 
-                    double f2;
-                    IPC::f2_SF(relDXSqNorm, eps, f2);
-                    if (f2 != f1_div_relDXNorm && relDXSqNorm) {
-                        // higher order clamping and not exactly static
-                        Eigen::Matrix<double, 6, 1> TTTDX;
-                        IPC::liftRelDXTanToMesh_PP(relDX, mesh.MMTanBasis[cI], TTTDX);
-                        HessianBlock +=
-                            (TTTDX * (coef * mesh.Self_lambda_lastH[cI] * (f2 - f1_div_relDXNorm) / relDXSqNorm)) *
-                            TTTDX.transpose();
+                                      double f2;
+                                      IPC::f2_SF(relDXSqNorm, eps, f2);
+                                      if (f2 != f1_div_relDXNorm && relDXSqNorm) {
+                                          // higher order clamping and not exactly static
+                                          Eigen::Matrix<double, 6, 1> TTTDX;
+                                          IPC::liftRelDXTanToMesh_PP(relDX, mesh.MMTanBasis[cI], TTTDX);
+                                          HessianBlock +=
+                                                  (TTTDX * (coef * mesh.Self_lambda_lastH[cI] * (f2 - f1_div_relDXNorm) / relDXSqNorm)) *
+                                                  TTTDX.transpose();
 
-                        IglUtils::makePD<double, 6>(HessianBlock);
-                    }
-                }
-                countMutex2.lock();
-                BH.H6x6.emplace_back(HessianBlock);
-                BH.D2Index.emplace_back(v0I, MMCVIDI[1]);
-                countMutex2.unlock();
-            }
-            else if (MMCVIDI[3] < 0) {
-                // PE
-                Eigen::RowVector3d relDX3D;
-                IPC::computeRelDX_PE(mesh.vertexes[v0I] - mesh.V_prev[v0I],
-                    mesh.vertexes[MMCVIDI[1]] - mesh.V_prev[MMCVIDI[1]],
-                    mesh.vertexes[MMCVIDI[2]] - mesh.V_prev[MMCVIDI[2]],
-                    mesh.MMDistCoord[cI][0], relDX3D);
+                                          IglUtils::makePD<double, 6>(HessianBlock);
+                                      }
+                                  }
+                                  countMutex2.lock();
+                                  BH.H6x6.emplace_back(HessianBlock);
+                                  BH.D2Index.emplace_back(v0I, MMCVIDI[1]);
+                                  countMutex2.unlock();
+                              } else if (MMCVIDI[3] < 0) {
+                                  // PE
+                                  Eigen::RowVector3d relDX3D;
+                                  IPC::computeRelDX_PE(mesh.vertexes[v0I] - mesh.V_prev[v0I],
+                                                       mesh.vertexes[MMCVIDI[1]] - mesh.V_prev[MMCVIDI[1]],
+                                                       mesh.vertexes[MMCVIDI[2]] - mesh.V_prev[MMCVIDI[2]],
+                                                       mesh.MMDistCoord[cI][0], relDX3D);
 
-                Eigen::Vector2d relDX = (relDX3D * mesh.MMTanBasis[cI]).transpose();
-                double relDXSqNorm = relDX.squaredNorm();
-                double relDXNorm = std::sqrt(relDXSqNorm);
+                                  Eigen::Vector2d relDX = (relDX3D * mesh.MMTanBasis[cI]).transpose();
+                                  double relDXSqNorm = relDX.squaredNorm();
+                                  double relDXNorm = std::sqrt(relDXSqNorm);
 
-                Eigen::Matrix<double, 9, 9> HessianBlock;
-                IPC::computeTTT_PE(mesh.MMTanBasis[cI], mesh.MMDistCoord[cI][0], HessianBlock);
-                if (relDXSqNorm > eps2) {
-                    HessianBlock *= coef * mesh.Self_lambda_lastH[cI] / relDXNorm;
+                                  Eigen::Matrix<double, 9, 9> HessianBlock;
+                                  IPC::computeTTT_PE(mesh.MMTanBasis[cI], mesh.MMDistCoord[cI][0], HessianBlock);
+                                  if (relDXSqNorm > eps2) {
+                                      HessianBlock *= coef * mesh.Self_lambda_lastH[cI] / relDXNorm;
 
-                    Eigen::Matrix<double, 9, 1> TTTDX;
-                    IPC::liftRelDXTanToMesh_PE(relDX, mesh.MMTanBasis[cI], mesh.MMDistCoord[cI][0], TTTDX);
-                    HessianBlock -=
-                        (TTTDX * (coef * mesh.Self_lambda_lastH[cI] / (relDXSqNorm * relDXNorm))) * TTTDX.transpose();
+                                      Eigen::Matrix<double, 9, 1> TTTDX;
+                                      IPC::liftRelDXTanToMesh_PE(relDX, mesh.MMTanBasis[cI], mesh.MMDistCoord[cI][0], TTTDX);
+                                      HessianBlock -=
+                                              (TTTDX * (coef * mesh.Self_lambda_lastH[cI] / (relDXSqNorm * relDXNorm))) *
+                                              TTTDX.transpose();
 
-                    IglUtils::makePD<double, 9>(HessianBlock);
-                }
-                else {
-                    double f1_div_relDXNorm;
-                    IPC::f1_SF_div_relDXNorm(relDXSqNorm, eps, f1_div_relDXNorm);
+                                      IglUtils::makePD<double, 9>(HessianBlock);
+                                  } else {
+                                      double f1_div_relDXNorm;
+                                      IPC::f1_SF_div_relDXNorm(relDXSqNorm, eps, f1_div_relDXNorm);
 
-                    HessianBlock *= coef * mesh.Self_lambda_lastH[cI] * f1_div_relDXNorm;
+                                      HessianBlock *= coef * mesh.Self_lambda_lastH[cI] * f1_div_relDXNorm;
 
-                    double f2;
-                    IPC::f2_SF(relDXSqNorm, eps, f2);
-                    if (f2 != f1_div_relDXNorm && relDXSqNorm) {
-                        // higher order clamping and not exactly static
-                        Eigen::Matrix<double, 9, 1> TTTDX;
-                        IPC::liftRelDXTanToMesh_PE(relDX, mesh.MMTanBasis[cI], mesh.MMDistCoord[cI][0], TTTDX);
-                        HessianBlock +=
-                            (TTTDX * (coef * mesh.Self_lambda_lastH[cI] * (f2 - f1_div_relDXNorm) / relDXSqNorm)) *
-                            TTTDX.transpose();
+                                      double f2;
+                                      IPC::f2_SF(relDXSqNorm, eps, f2);
+                                      if (f2 != f1_div_relDXNorm && relDXSqNorm) {
+                                          // higher order clamping and not exactly static
+                                          Eigen::Matrix<double, 9, 1> TTTDX;
+                                          IPC::liftRelDXTanToMesh_PE(relDX, mesh.MMTanBasis[cI], mesh.MMDistCoord[cI][0], TTTDX);
+                                          HessianBlock +=
+                                                  (TTTDX * (coef * mesh.Self_lambda_lastH[cI] * (f2 - f1_div_relDXNorm) / relDXSqNorm)) *
+                                                  TTTDX.transpose();
 
-                        IglUtils::makePD<double, 9>(HessianBlock);
-                    }
-                }
-                countMutex3.lock();
-                BH.H9x9.emplace_back(HessianBlock);
-                BH.D3Index.emplace_back(v0I, MMCVIDI[1], MMCVIDI[2]);
-                countMutex3.unlock();
-            }
-            else {
-                // PT
-                Eigen::RowVector3d relDX3D;
-                IPC::computeRelDX_PT(mesh.vertexes[v0I] - mesh.V_prev[v0I],
-                    mesh.vertexes[MMCVIDI[1]] - mesh.V_prev[MMCVIDI[1]],
-                    mesh.vertexes[MMCVIDI[2]] - mesh.V_prev[MMCVIDI[2]],
-                    mesh.vertexes[MMCVIDI[3]] - mesh.V_prev[MMCVIDI[3]],
-                    mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], relDX3D);
+                                          IglUtils::makePD<double, 9>(HessianBlock);
+                                      }
+                                  }
+                                  countMutex3.lock();
+                                  BH.H9x9.emplace_back(HessianBlock);
+                                  BH.D3Index.emplace_back(v0I, MMCVIDI[1], MMCVIDI[2]);
+                                  countMutex3.unlock();
+                              } else {
+                                  // PT
+                                  Eigen::RowVector3d relDX3D;
+                                  IPC::computeRelDX_PT(mesh.vertexes[v0I] - mesh.V_prev[v0I],
+                                                       mesh.vertexes[MMCVIDI[1]] - mesh.V_prev[MMCVIDI[1]],
+                                                       mesh.vertexes[MMCVIDI[2]] - mesh.V_prev[MMCVIDI[2]],
+                                                       mesh.vertexes[MMCVIDI[3]] - mesh.V_prev[MMCVIDI[3]],
+                                                       mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], relDX3D);
 
-                Eigen::Vector2d relDX = (relDX3D * mesh.MMTanBasis[cI]).transpose();
-                double relDXSqNorm = relDX.squaredNorm();
-                double relDXNorm = std::sqrt(relDXSqNorm);
+                                  Eigen::Vector2d relDX = (relDX3D * mesh.MMTanBasis[cI]).transpose();
+                                  double relDXSqNorm = relDX.squaredNorm();
+                                  double relDXNorm = std::sqrt(relDXSqNorm);
 
-                IPC::computeTTT_PT(mesh.MMTanBasis[cI], mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], IPHessian[cI]);
-                if (relDXSqNorm > eps2) {
-                    IPHessian[cI] *= coef * mesh.Self_lambda_lastH[cI] / relDXNorm;
-                    Eigen::Matrix<double, 12, 1> TTTDX;
-                    IPC::liftRelDXTanToMesh_PT(relDX, mesh.MMTanBasis[cI],
-                        mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], TTTDX);
-                    IPHessian[cI] -=
-                        (TTTDX * (coef * mesh.Self_lambda_lastH[cI] / (relDXSqNorm * relDXNorm))) * TTTDX.transpose();
+                                  IPC::computeTTT_PT(mesh.MMTanBasis[cI], mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1],
+                                                     IPHessian[cI]);
+                                  if (relDXSqNorm > eps2) {
+                                      IPHessian[cI] *= coef * mesh.Self_lambda_lastH[cI] / relDXNorm;
+                                      Eigen::Matrix<double, 12, 1> TTTDX;
+                                      IPC::liftRelDXTanToMesh_PT(relDX, mesh.MMTanBasis[cI],
+                                                                 mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], TTTDX);
+                                      IPHessian[cI] -=
+                                              (TTTDX * (coef * mesh.Self_lambda_lastH[cI] / (relDXSqNorm * relDXNorm))) *
+                                              TTTDX.transpose();
 
-                    IglUtils::makePD<double, 12>(IPHessian[cI]);
-                }
-                else {
-                    double f1_div_relDXNorm;
-                    IPC::f1_SF_div_relDXNorm(relDXSqNorm, eps, f1_div_relDXNorm);
+                                      IglUtils::makePD<double, 12>(IPHessian[cI]);
+                                  } else {
+                                      double f1_div_relDXNorm;
+                                      IPC::f1_SF_div_relDXNorm(relDXSqNorm, eps, f1_div_relDXNorm);
 
-                    IPHessian[cI] *= coef * mesh.Self_lambda_lastH[cI] * f1_div_relDXNorm;
+                                      IPHessian[cI] *= coef * mesh.Self_lambda_lastH[cI] * f1_div_relDXNorm;
 
-                    double f2;
-                    IPC::f2_SF(relDXSqNorm, eps, f2);
-                    if (f2 != f1_div_relDXNorm && relDXSqNorm) {
-                        // higher order clamping and not exactly static
-                        Eigen::Matrix<double, 12, 1> TTTDX;
-                        IPC::liftRelDXTanToMesh_PT(relDX, mesh.MMTanBasis[cI],
-                            mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], TTTDX);
-                        IPHessian[cI] +=
-                            (TTTDX * (coef * mesh.Self_lambda_lastH[cI] * (f2 - f1_div_relDXNorm) / relDXSqNorm)) *
-                            TTTDX.transpose();
+                                      double f2;
+                                      IPC::f2_SF(relDXSqNorm, eps, f2);
+                                      if (f2 != f1_div_relDXNorm && relDXSqNorm) {
+                                          // higher order clamping and not exactly static
+                                          Eigen::Matrix<double, 12, 1> TTTDX;
+                                          IPC::liftRelDXTanToMesh_PT(relDX, mesh.MMTanBasis[cI],
+                                                                     mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], TTTDX);
+                                          IPHessian[cI] +=
+                                                  (TTTDX * (coef * mesh.Self_lambda_lastH[cI] * (f2 - f1_div_relDXNorm) / relDXSqNorm)) *
+                                                  TTTDX.transpose();
 
-                        IglUtils::makePD<double, 12>(IPHessian[cI]);
-                    }
-                }
-                countMutex4.lock();
-                BH.H12x12.emplace_back(IPHessian[cI]);
-                BH.D4Index.emplace_back(v0I, MMCVIDI[1], MMCVIDI[2], MMCVIDI[3]);
-                countMutex4.unlock();
-            }
-        }
-    }
+                                          IglUtils::makePD<double, 12>(IPHessian[cI]);
+                                      }
+                                  }
+                                  countMutex4.lock();
+                                  BH.H12x12.emplace_back(IPHessian[cI]);
+                                  BH.D4Index.emplace_back(v0I, MMCVIDI[1], MMCVIDI[2], MMCVIDI[3]);
+                                  countMutex4.unlock();
+                              }
+                          }
+                      }
     );
 
 
 }
 
-void computeXTilta(mesh3D& mesh)
-{
+void computeXTilta(mesh3D &mesh) {
     mesh.xTilta.resize(mesh.vertexes.size());
     Vector3d gravityDtSq = Vector3d(0, -9.8, 0) * IPC_dt * IPC_dt;
 
-    tbb::parallel_for(0, (int)mesh.vertexes.size(), 1, [&](int vI)
-
-        {
-            mesh.xTilta[vI] = (mesh.V_prev[vI] + (mesh.velocities[vI] * IPC_dt + gravityDtSq));
-        }
+    tbb::parallel_for(0, (int) mesh.vertexes.size(), 1, [&](int vI) {
+                          mesh.xTilta[vI] = (mesh.V_prev[vI] + (mesh.velocities[vI] * IPC_dt + gravityDtSq));
+                      }
 
     );
-   
+
 }
 
-void computeEGradient(const mesh3D& mesh, vector<Vector3d>& gradient) {
+void computeEGradient(const mesh3D &mesh, vector<Vector3d> &gradient) {
     //Mass part
     Matrix3d massM;
     massM.setIdentity();
 
-    tbb::parallel_for(0, mesh.vertexNum, 1, [&](int vI)
-
-        {
-            gradient[vI] += (mesh.masses[vI] * massM * (mesh.vertexes[vI] - mesh.xTilta[vI]));
-        }
+    tbb::parallel_for(0, mesh.vertexNum, 1, [&](int vI) {
+                          gradient[vI] += (mesh.masses[vI] * massM * (mesh.vertexes[vI] - mesh.xTilta[vI]));
+                      }
 
     );
 
@@ -523,41 +518,59 @@ void computeEGradient(const mesh3D& mesh, vector<Vector3d>& gradient) {
     double fsum = 0;
 
     vector<tbb::spin_mutex> countMutex(mesh.vertexNum);
-    tbb::parallel_for(0, mesh.tetrahedraNum, 1, [&](int ii)
+    tbb::parallel_for(0, mesh.tetrahedraNum, 1, [&](int ii) {
+                          MatrixXd PFPX = computePFPX3D_double(mesh.DM_tetrahedra_inverse[ii]);
+                          MatrixXd F = calculateDms3D_double(mesh.vertexes, mesh.tetrahedras[ii], 0) * mesh.DM_tetrahedra_inverse[ii];
 
-        {
-            MatrixXd PFPX = computePFPX3D_double(mesh.DM_triangle_inverse[ii]);
-            MatrixXd F = calculateDms3D_double(mesh.vertexes, mesh.tetrahedras[ii], 0) * mesh.DM_triangle_inverse[ii];
+                          Matrix3d PEPF = computePEPF_StableNHK3D_2_double(F, lengthRate, volumeRate);
 
-            Matrix3d PEPF = computePEPF_StableNHK3D_2_double(F, lengthRate, volumeRate);
-
-            MatrixXd pepf = vec_double(PEPF);
-            MatrixXd f = mesh.volum[ii] * PFPX.transpose() * pepf;
+                          MatrixXd pepf = vec_double(PEPF);
+                          MatrixXd f = mesh.volum[ii] * PFPX.transpose() * pepf;
 
 
+                          for (int i = 0; i < 12; i++) {
 
-            for (int i = 0; i < 12; i++) {
+                              countMutex[mesh.tetrahedras[ii][i / 3]].lock();
+                              gradient[mesh.tetrahedras[ii][i / 3]][i % 3] += IPC_dt * IPC_dt * f(i, 0);
+                              countMutex[mesh.tetrahedras[ii][i / 3]].unlock();
 
-                countMutex[mesh.tetrahedras[ii][i / 3]].lock();
-                gradient[mesh.tetrahedras[ii][i / 3]][i % 3] += IPC_dt * IPC_dt * f(i, 0);
-                countMutex[mesh.tetrahedras[ii][i / 3]].unlock();
+                          }
+                      }
 
-            }
-        }
+    );
+    printf("triangle num: %d\n", mesh.triangleNum);
+    tbb::parallel_for(0, mesh.triangleNum, 1, [&](int ii) {
+                          MatrixXd PFPX = computePFPX32D_double(mesh.DM_triangle_inverse[ii]);
+                          Matrix<double, 3, 2> F =
+                                  calculateDs32D_double(mesh.vertexes, mesh.triangles[ii]) * mesh.DM_triangle_inverse[ii];
+                          Vector2d anisotropic_a = Vector2d(1, 0), anisotropic_b = Vector2d(0, 1);
+                          Matrix<double, 3, 2> PEPF = computePEPF_baraffwitkin_double(F, anisotropic_a, anisotropic_b, stretchStiffness,
+                                                                                      shearStiffness);
+
+                          MatrixXd pepf = vec_double(PEPF);
+                          MatrixXd f = IPC_dt * IPC_dt * mesh.areas[ii] * PFPX.transpose() * pepf;
+
+                          for (int i = 0; i < 3; i++) {
+                              countMutex[mesh.triangles[ii][i]].lock();
+                              gradient[mesh.triangles[ii][i]] +=
+                                      f.block<3, 1>(3 * i, 0);//f.template segment<3>(i * 3);//f(i, 0);
+                              countMutex[mesh.triangles[ii][i]].unlock();
+
+                          }
+
+                      }
 
     );
 }
 
-void computeGradientAndHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessian& BH, const Ground& grd) {
+int computeGradientAndHessian(mesh3D &mesh, vector<Vector3d> &gradient, BHessian &BH, const Ground &grd) {
     //Mass part
     Matrix3d massM;
     massM.setIdentity();
-
-    tbb::parallel_for(0, mesh.vertexNum, 1, [&](int vI)
-
-        {
-            gradient[vI] = (mesh.masses[vI] * massM * (mesh.vertexes[vI] - mesh.xTilta[vI]));
-        }
+    int collisionNum=0;
+    tbb::parallel_for(0, mesh.vertexNum, 1, [&](int vI) {
+                          gradient[vI] = (mesh.masses[vI] * massM * (mesh.vertexes[vI] - mesh.xTilta[vI]));
+                      }
 
     );
 
@@ -565,35 +578,66 @@ void computeGradientAndHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessia
     BH.H12x12.resize(mesh.tetrahedraNum);
 
     vector<tbb::spin_mutex> countMutex(mesh.vertexNum);
-    tbb::parallel_for(0, mesh.tetrahedraNum, 1, [&](int ii)
+    tbb::parallel_for(0, mesh.tetrahedraNum, 1, [&](int ii) {
+                          MatrixXd PFPX = computePFPX3D_double(mesh.DM_tetrahedra_inverse[ii]);
+                          MatrixXd F = calculateDms3D_double(mesh.vertexes, mesh.tetrahedras[ii], 0) * mesh.DM_tetrahedra_inverse[ii];
 
-        {
-            MatrixXd PFPX = computePFPX3D_double(mesh.DM_triangle_inverse[ii]);
-            MatrixXd F = calculateDms3D_double(mesh.vertexes, mesh.tetrahedras[ii], 0) * mesh.DM_triangle_inverse[ii];
+                          Matrix3d PEPF = computePEPF_StableNHK3D_2_double(F, lengthRate, volumeRate);
 
-            Matrix3d PEPF = computePEPF_StableNHK3D_2_double(F, lengthRate, volumeRate);
+                          MatrixXd pepf = vec_double(PEPF);
+                          MatrixXd f = mesh.volum[ii] * PFPX.transpose() * pepf;
 
-            MatrixXd pepf = vec_double(PEPF);
-            MatrixXd f = mesh.volum[ii] * PFPX.transpose() * pepf;
+                          for (int i = 0; i < 4; i++) {
+                              countMutex[mesh.tetrahedras[ii][i]].lock();
+                              gradient[mesh.tetrahedras[ii][i]] +=
+                                      IPC_dt * IPC_dt * f.block<3, 1>(3 * i, 0);//f.template segment<3>(i * 3);//f(i, 0);
+                              countMutex[mesh.tetrahedras[ii][i]].unlock();
 
-            for (int i = 0; i < 4; i++) {
-                countMutex[mesh.tetrahedras[ii][i]].lock();
-                gradient[mesh.tetrahedras[ii][i]] += IPC_dt * IPC_dt * f.block<3, 1>(3 * i, 0);//f.template segment<3>(i * 3);//f(i, 0);
-                countMutex[mesh.tetrahedras[ii][i]].unlock();
+                          }
 
-            }
+                          //std::cout << F << std::endl;
+                          MatrixXd Hq = project_StabbleNHK_2_H_3D(F, lengthRate, volumeRate);
 
-            //std::cout << F << std::endl;
-            MatrixXd Hq = project_StabbleNHK_2_H_3D(F, lengthRate, volumeRate);
+                          MatrixXd HE = mesh.volum[ii] * IPC_dt * IPC_dt * PFPX.transpose() * Hq * PFPX;
+                          BH.H12x12[ii] = (HE);
 
-            MatrixXd HE = mesh.volum[ii] * IPC_dt * IPC_dt * PFPX.transpose() * Hq * PFPX;
-            BH.H12x12[ii] = (HE);
-
-        }
+                      }
 
     );
     BH.D4Index = mesh.tetrahedras;
 
+    BH.H9x9.resize(mesh.triangleNum);
+    tbb::parallel_for(0, mesh.triangleNum, 1, [&](int ii) {
+                          MatrixXd PFPX = computePFPX32D_double(mesh.DM_triangle_inverse[ii]);
+                          Matrix<double, 3, 2> F =
+                                  calculateDs32D_double(mesh.vertexes, mesh.triangles[ii]) * mesh.DM_triangle_inverse[ii];
+                          Vector2d anisotropic_a = Vector2d(1, 0), anisotropic_b = Vector2d(0, 1);
+                          Matrix<double, 3, 2> PEPF = computePEPF_baraffwitkin_double(F, anisotropic_a, anisotropic_b, stretchStiffness,
+                                                                                      shearStiffness);
+
+                          MatrixXd pepf = vec_double(PEPF);
+                          MatrixXd f = IPC_dt * IPC_dt *mesh.areas[ii] * PFPX.transpose() * pepf;
+
+                          for (int i = 0; i < 3; i++) {
+                              countMutex[mesh.triangles[ii][i]].lock();
+                              gradient[mesh.triangles[ii][i]] +=
+                                       f.block<3, 1>(3 * i, 0);//f.template segment<3>(i * 3);//f(i, 0);
+                              countMutex[mesh.triangles[ii][i]].unlock();
+
+                          }
+
+                          //std::cout << F << std::endl;
+                          MatrixXd Hq = project_baraffwitkint_H_3D(F, anisotropic_a, anisotropic_b, stretchStiffness,
+                                                                   shearStiffness);
+
+                          MatrixXd HE = mesh.areas[ii] * IPC_dt * IPC_dt * PFPX.transpose() * Hq * PFPX;
+                          BH.H9x9[ii] = (HE);
+
+                      }
+
+    );
+    BH.D3Index = mesh.triangles;
+    //std::cout<<"D3Index: "<<BH.D3Index.size()<<std::endl;
     VectorXd constraintVals;
     int offset = 0;
     Evaluate_GroundConstraintVals(grd, mesh, constraintVals, offset);
@@ -601,23 +645,22 @@ void computeGradientAndHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessia
 
 
     tbb::spin_mutex groundMutex;//, countMutex3;
-    tbb::parallel_for(0, (int)constraintVals.size(), 1, [&](int cI)
-        {
-            double g_b, H_b;
-            compute_g_b(constraintVals[cI], mesh.Hhat, g_b);
-            compute_H_b(constraintVals[cI], mesh.Hhat, H_b);
-            int vI = mesh.Environment_ActiveSet[cI];
-            double dist = grd.normal.dot(mesh.vertexes[vI]) - grd.D;
-            gradient[vI] += mesh.Kappa * g_b * 2.0 * dist * grd.normal;
-            double param = 4.0 * H_b * constraintVals[cI] + 2.0 * g_b;
-            if (param > 0) {
-                Matrix3d Hpg = mesh.Kappa * param * nnT;
-                groundMutex.lock();
-                BH.H3x3.push_back(Hpg);
-                BH.D1Index.push_back(vI);
-                groundMutex.unlock();
-            }
-        }
+    tbb::parallel_for(0, (int) constraintVals.size(), 1, [&](int cI) {
+                          double g_b, H_b;
+                          compute_g_b(constraintVals[cI], mesh.Hhat, g_b);
+                          compute_H_b(constraintVals[cI], mesh.Hhat, H_b);
+                          int vI = mesh.Environment_ActiveSet[cI];
+                          double dist = grd.normal.dot(mesh.vertexes[vI]) - grd.D;
+                          gradient[vI] += mesh.Kappa * g_b * 2.0 * dist * grd.normal;
+                          double param = 4.0 * H_b * constraintVals[cI] + 2.0 * g_b;
+                          if (param > 0) {
+                              Matrix3d Hpg = mesh.Kappa * param * nnT;
+                              groundMutex.lock();
+                              BH.H3x3.push_back(Hpg);
+                              BH.D1Index.push_back(vI);
+                              groundMutex.unlock();
+                          }
+                      }
     );
 
     offset = constraintVals.size();
@@ -625,14 +668,14 @@ void computeGradientAndHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessia
     cout << constraintVals.size() << endl;
     Evaluate_SelfPTConstraintVals(mesh, constraintVals, offset);
 
-    tbb::parallel_for(offset, (int)constraintVals.size(), 1, [&](int cI)
-        //for (int cI = offset; cI < constraintVals.size(); ++cI) 
-        {
-            compute_g_b(constraintVals[cI], mesh.Hhat, constraintVals[cI]);
-        }
+    tbb::parallel_for(offset, (int) constraintVals.size(), 1, [&](int cI)
+                              //for (int cI = offset; cI < constraintVals.size(); ++cI)
+                      {
+                          compute_g_b(constraintVals[cI], mesh.Hhat, constraintVals[cI]);
+                      }
     );
 #ifndef NEWB
-    compute_g_dpt(mesh, mesh.Self_ActiveSet, constraintVals, gradient, offset, mesh.Kappa);
+    collisionNum+=compute_g_dpt(mesh, mesh.Self_ActiveSet, constraintVals, gradient, offset, mesh.Kappa);
 #else
     compute_g_dpt_new(mesh, mesh.Self_ActiveSet, constraintVals, gradient, offset, mesh.Kappa, mesh.Hhat);
 #endif
@@ -669,192 +712,169 @@ void computeGradientAndHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessia
     compute_H_dee(mesh, BH, mesh.Hhat, mesh.Kappa);
 
 #ifdef USE_FRICTION
-    compute_fiction_gradient(mesh, grd, gradient, mesh.Hhat * IPC_dt * IPC_dt, FEM::friction);
-    compute_fiction_hessian(mesh, grd, BH, mesh.Hhat * IPC_dt * IPC_dt, FEM::friction);
+    compute_fiction_gradient(mesh, grd, gradient, mesh.Fhat * IPC_dt * IPC_dt, FEM::friction);
+    compute_fiction_hessian(mesh, grd, BH, mesh.Fhat * IPC_dt * IPC_dt, FEM::friction);
 #endif
+    return collisionNum;
 }
 
 
-void __Inverse2(const Eigen::Matrix3d& input, Eigen::Matrix3d& result) {
+void __Inverse2(const Eigen::Matrix3d &input, Eigen::Matrix3d &result) {
     double eps = 1e-15;
     const int dim = 3;
     double mat[dim * 2][dim * 2];
-    for (int i = 0;i < dim; i++)
-    {
-        for (int j = 0;j < 2 * dim; j++)
-        {
-            if (j < dim)
-            {
+    for (int i = 0; i < dim; i++) {
+        for (int j = 0; j < 2 * dim; j++) {
+            if (j < dim) {
                 mat[i][j] = input(i, j);
-            }
-            else
-            {
+            } else {
                 mat[i][j] = j - dim == i ? 1 : 0;
             }
         }
     }
 
-    for (int i = 0;i < dim; i++)
-    {
-        if (abs(mat[i][i]) < eps)
-        {
+    for (int i = 0; i < dim; i++) {
+        if (abs(mat[i][i]) < eps) {
             int j;
-            for (j = i + 1; j < dim; j++)
-            {
+            for (j = i + 1; j < dim; j++) {
                 if (abs(mat[j][i]) > eps) break;
             }
             if (j == dim) return;
-            for (int r = i; r < 2 * dim; r++)
-            {
+            for (int r = i; r < 2 * dim; r++) {
                 mat[i][r] += mat[j][r];
             }
         }
         double ep = mat[i][i];
-        for (int r = i; r < 2 * dim; r++)
-        {
+        for (int r = i; r < 2 * dim; r++) {
             mat[i][r] /= ep;
         }
 
-        for (int j = i + 1; j < dim; j++)
-        {
+        for (int j = i + 1; j < dim; j++) {
             double e = -1 * (mat[j][i] / mat[i][i]);
-            for (int r = i; r < 2 * dim; r++)
-            {
+            for (int r = i; r < 2 * dim; r++) {
                 mat[j][r] += e * mat[i][r];
             }
         }
     }
 
-    for (int i = dim - 1; i >= 0; i--)
-    {
-        for (int j = i - 1; j >= 0; j--)
-        {
+    for (int i = dim - 1; i >= 0; i--) {
+        for (int j = i - 1; j >= 0; j--) {
             double e = -1 * (mat[j][i] / mat[i][i]);
-            for (int r = i; r < 2 * dim; r++)
-            {
+            for (int r = i; r < 2 * dim; r++) {
                 mat[j][r] += e * mat[i][r];
             }
         }
     }
 
 
-    for (int i = 0;i < dim; i++)
-    {
-        for (int r = dim; r < 2 * dim; r++)
-        {
+    for (int i = 0; i < dim; i++) {
+        for (int r = dim; r < 2 * dim; r++) {
             result(i, r - dim) = mat[i][r];
         }
     }
 }
 
-void PCG_Precondition(const mesh3D& mesh, const BHessian& BH, const vector<Vector3d>& gradient, vector<Matrix3d>& P) {
+void PCG_Precondition(const mesh3D &mesh, const BHessian &BH, const vector<Vector3d> &gradient, vector<Matrix3d> &P) {
 
 
     vector<tbb::spin_mutex> countMutexVerts(mesh.vertexNum);//, countMutex9, countMutex6;//, countMutex3;
-    tbb::parallel_for(0, (int)mesh.vertexNum, 1, [&](int i)
-        {
-            P[i].setZero();
-            P[i](0, 0) = mesh.masses[i];
-            P[i](1, 1) = mesh.masses[i];
-            P[i](2, 2) = mesh.masses[i];
-        });
+    tbb::parallel_for(0, (int) mesh.vertexNum, 1, [&](int i) {
+        P[i].setZero();
+        P[i](0, 0) = mesh.masses[i];
+        P[i](1, 1) = mesh.masses[i];
+        P[i](2, 2) = mesh.masses[i];
+    });
 
 
     //for (int i = 0;i < BH.D4Index.size();i++) 
-    tbb::parallel_for(0, (int)BH.D4Index.size(), 1, [&](int i)
-        {
-            for (int j = 0;j < 12;j++) {
-                //P[BH.D4Index[i][j / 3]][j % 3] += BH.H12x12[i](j, j);
-                countMutexVerts[BH.D4Index[i][j / 3]].lock();
-                P[BH.D4Index[i][j / 3]](0, j % 3) += BH.H12x12[i]((j / 3) * 3, j);
-                P[BH.D4Index[i][j / 3]](1, j % 3) += BH.H12x12[i]((j / 3) * 3 + 1, j);
-                P[BH.D4Index[i][j / 3]](2, j % 3) += BH.H12x12[i]((j / 3) * 3 + 2, j);
-                countMutexVerts[BH.D4Index[i][j / 3]].unlock();
-            }
-        });
+    tbb::parallel_for(0, (int) BH.D4Index.size(), 1, [&](int i) {
+        for (int j = 0; j < 12; j++) {
+            //P[BH.D4Index[i][j / 3]][j % 3] += BH.H12x12[i](j, j);
+            countMutexVerts[BH.D4Index[i][j / 3]].lock();
+            P[BH.D4Index[i][j / 3]](0, j % 3) += BH.H12x12[i]((j / 3) * 3, j);
+            P[BH.D4Index[i][j / 3]](1, j % 3) += BH.H12x12[i]((j / 3) * 3 + 1, j);
+            P[BH.D4Index[i][j / 3]](2, j % 3) += BH.H12x12[i]((j / 3) * 3 + 2, j);
+            countMutexVerts[BH.D4Index[i][j / 3]].unlock();
+        }
+    });
     //for (int i = 0;i < BH.D3Index.size();i++) 
-    tbb::parallel_for(0, (int)BH.D3Index.size(), 1, [&](int i)
-        {
-            for (int j = 0;j < 9;j++) {
-                //P[BH.D3Index[i][j / 3]][j % 3] += BH.H9x9[i](j, j);
-                countMutexVerts[BH.D3Index[i][j / 3]].lock();
-                P[BH.D3Index[i][j / 3]](0, j % 3) += BH.H9x9[i]((j / 3) * 3, j);
-                P[BH.D3Index[i][j / 3]](1, j % 3) += BH.H9x9[i]((j / 3) * 3 + 1, j);
-                P[BH.D3Index[i][j / 3]](2, j % 3) += BH.H9x9[i]((j / 3) * 3 + 2, j);
-                countMutexVerts[BH.D3Index[i][j / 3]].unlock();
-            }
-        });
+    tbb::parallel_for(0, (int) BH.D3Index.size(), 1, [&](int i) {
+        for (int j = 0; j < 9; j++) {
+            //P[BH.D3Index[i][j / 3]][j % 3] += BH.H9x9[i](j, j);
+            countMutexVerts[BH.D3Index[i][j / 3]].lock();
+            P[BH.D3Index[i][j / 3]](0, j % 3) += BH.H9x9[i]((j / 3) * 3, j);
+            P[BH.D3Index[i][j / 3]](1, j % 3) += BH.H9x9[i]((j / 3) * 3 + 1, j);
+            P[BH.D3Index[i][j / 3]](2, j % 3) += BH.H9x9[i]((j / 3) * 3 + 2, j);
+            countMutexVerts[BH.D3Index[i][j / 3]].unlock();
+        }
+    });
     //for (int i = 0;i < BH.D2Index.size();i++) 
-    tbb::parallel_for(0, (int)BH.D2Index.size(), 1, [&](int i)
-        {
-            for (int j = 0;j < 6;j++) {
-                //P[BH.D2Index[i][j / 3]][j % 3] += BH.H6x6[i](j, j);
-                countMutexVerts[BH.D2Index[i][j / 3]].lock();
-                P[BH.D2Index[i][j / 3]](0, j % 3) += BH.H6x6[i]((j / 3) * 3, j);
-                P[BH.D2Index[i][j / 3]](1, j % 3) += BH.H6x6[i]((j / 3) * 3 + 1, j);
-                P[BH.D2Index[i][j / 3]](2, j % 3) += BH.H6x6[i]((j / 3) * 3 + 2, j);
-                countMutexVerts[BH.D2Index[i][j / 3]].unlock();
-            }
-        });
+    tbb::parallel_for(0, (int) BH.D2Index.size(), 1, [&](int i) {
+        for (int j = 0; j < 6; j++) {
+            //P[BH.D2Index[i][j / 3]][j % 3] += BH.H6x6[i](j, j);
+            countMutexVerts[BH.D2Index[i][j / 3]].lock();
+            P[BH.D2Index[i][j / 3]](0, j % 3) += BH.H6x6[i]((j / 3) * 3, j);
+            P[BH.D2Index[i][j / 3]](1, j % 3) += BH.H6x6[i]((j / 3) * 3 + 1, j);
+            P[BH.D2Index[i][j / 3]](2, j % 3) += BH.H6x6[i]((j / 3) * 3 + 2, j);
+            countMutexVerts[BH.D2Index[i][j / 3]].unlock();
+        }
+    });
     //for (int i = 0;i < BH.D1Index.size();i++) 
-    tbb::parallel_for(0, (int)BH.D1Index.size(), 1, [&](int i)
-        {
-            for (int j = 0;j < 3;j++) {
-                //P[BH.D1Index[i]][j] += BH.H3x3[i](j, j);
-                countMutexVerts[BH.D1Index[i]].lock();
-                P[BH.D1Index[i]](0, j) += BH.H3x3[i](0, j);
-                P[BH.D1Index[i]](1, j) += BH.H3x3[i](1, j);
-                P[BH.D1Index[i]](2, j) += BH.H3x3[i](2, j);
-                countMutexVerts[BH.D1Index[i]].unlock();
-            }
-        });
+    tbb::parallel_for(0, (int) BH.D1Index.size(), 1, [&](int i) {
+        for (int j = 0; j < 3; j++) {
+            //P[BH.D1Index[i]][j] += BH.H3x3[i](j, j);
+            countMutexVerts[BH.D1Index[i]].lock();
+            P[BH.D1Index[i]](0, j) += BH.H3x3[i](0, j);
+            P[BH.D1Index[i]](1, j) += BH.H3x3[i](1, j);
+            P[BH.D1Index[i]](2, j) += BH.H3x3[i](2, j);
+            countMutexVerts[BH.D1Index[i]].unlock();
+        }
+    });
     //for (int i = 0;i < mesh.vertexNum;i++) 
-    tbb::parallel_for(0, (int)mesh.vertexNum, 1, [&](int i)
-        {
-            Eigen::Matrix3d DMInverse;
-            __Inverse2(P[i], DMInverse);
+    tbb::parallel_for(0, (int) mesh.vertexNum, 1, [&](int i) {
+        Eigen::Matrix3d DMInverse;
+        __Inverse2(P[i], DMInverse);
 
-            P[i] = DMInverse;
-        });
+        P[i] = DMInverse;
+    });
 }
 
 
-vector<Vector3d> cholmod_solver(BHessian& BH, std::vector<Eigen::Vector3d> gradient, const mesh3D& mesh) {
+vector<Vector3d> cholmod_solver(BHessian &BH, std::vector<Eigen::Vector3d> gradient, const mesh3D &mesh) {
 
     vector<Vector3d> direction(mesh.vertexNum, Vector3d(0, 0, 0));
 #ifdef NDEBUG
     CholmodSolver solver;
+    //printf("start triplets\n");
     std::vector<Triplet<double>> triplets = BH.toTriplets(mesh.boundaryTypes);
+    //printf("finish triplets\n");
     int offset = triplets.size();
     //std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     triplets.resize(offset + 3 * mesh.vertexNum);
 
-    tbb::parallel_for(0, 3 * mesh.vertexNum, 1, [&](int i)
-        {
-            triplets[offset + i] = Triplet<double>(i, i, mesh.masses[i / 3]);
-        }
+    tbb::parallel_for(0, 3 * mesh.vertexNum, 1, [&](int i) {
+                          triplets[offset + i] = Triplet<double>(i, i, mesh.masses[i / 3]);
+                      }
     );
 
     Eigen::SparseMatrix<double> sparseFEM(3 * mesh.vertexNum, 3 * mesh.vertexNum);
     sparseFEM.setFromTriplets(triplets.begin(), triplets.end());
     auto vec_gradient = Eigen::VectorXd(gradient.size() * 3);
 
-    tbb::parallel_for(0, (int)(gradient.size()), 1, [&](int i)
-        {
-            if (mesh.boundaryTypes[i] == 0)
-                vec_gradient.block<3, 1>(3 * i, 0) = gradient[i];
-            else
-                vec_gradient.block<3, 1>(3 * i, 0) = Vector3d(0, 0, 0);
-        }
+    tbb::parallel_for(0, (int) (gradient.size()), 1, [&](int i) {
+                          if (mesh.boundaryTypes[i] == 0)
+                              vec_gradient.block<3, 1>(3 * i, 0) = gradient[i];
+                          else
+                              vec_gradient.block<3, 1>(3 * i, 0) = Vector3d(0, 0, 0);
+                      }
     );
     auto result = Eigen::VectorXd(gradient.size() * 3);
-    
+
     solver.set_pattern(sparseFEM);
     solver.solve(vec_gradient, result);
-    tbb::parallel_for(0, (int)(gradient.size()), 1, [&](int i)
-        {
-            direction[i] = result.block<3, 1>(3 * i, 0);
-        }
+    tbb::parallel_for(0, (int) (gradient.size()), 1, [&](int i) {
+                          direction[i] = result.block<3, 1>(3 * i, 0);
+                      }
     );
 
     //std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
@@ -864,7 +884,7 @@ vector<Vector3d> cholmod_solver(BHessian& BH, std::vector<Eigen::Vector3d> gradi
     return direction;
 }
 
-vector<Vector3d> PCG_Solver(const mesh3D& mesh, const BHessian& BH, const vector<Vector3d>& gradient) {
+vector<Vector3d> PCG_Solver(const mesh3D &mesh, const BHessian &BH, const vector<Vector3d> &gradient) {
     //std::vector<Vector3d> P(mesh.vertexNum, Vector3d(0, 0, 0));
     std::vector<Matrix3d> P(mesh.vertexNum);
     PCG_Precondition(mesh, BH, gradient, P);
@@ -872,7 +892,7 @@ vector<Vector3d> PCG_Solver(const mesh3D& mesh, const BHessian& BH, const vector
     vector<Vector3d> tempDeltaX(mesh.vertexNum, Vector3d(0, 0, 0));
 
     double deltaN = 0;
-    double localOptimal = DBL_MAX;
+    double localOptimal = 1e32;//std::numeric_limits<double>::max();
     bool getLocalOpt = false;
     vector<Vector3d> dX(mesh.vertexNum, Vector3d(0, 0, 0));
 
@@ -884,142 +904,139 @@ vector<Vector3d> PCG_Solver(const mesh3D& mesh, const BHessian& BH, const vector
 
     vector<tbb::spin_mutex> countMutex(mesh.vertexNum);
     delta0 = parallel_reduce(
-        tbb::blocked_range<int>(0, mesh.vertexNum), 0.0, [&](const tbb::blocked_range<int>& r, double temp_delta) {
-            for (int i = r.begin(); i != r.end(); i++) {
+            tbb::blocked_range<int>(0, mesh.vertexNum), 0.0, [&](const tbb::blocked_range<int> &r, double temp_delta) {
+                for (int i = r.begin(); i != r.end(); i++) {
 
-                Vector3d filter_b = mesh.Constraints[i] * gradient[i];
-                temp_delta += filter_b.dot((P[i] * filter_b));
+                    Vector3d filter_b = mesh.Constraints[i] * gradient[i];
+                    temp_delta += filter_b.dot((P[i] * filter_b));
+                }
+                return temp_delta;
+            },
+            [&](double left, double right) {
+                return left + right;
             }
-            return temp_delta;
-        },
-        [&](double left, double right) {
-            return left + right;
-        }
-        );
+    );
 
     deltaN = parallel_reduce(
-        tbb::blocked_range<int>(0, mesh.vertexNum), 0.0, [&](const tbb::blocked_range<int>& rg, double temp_deltaN) {
-            for (int i = rg.begin(); i != rg.end(); i++) {
-                r[i] = gradient[i];
-                r[i] = mesh.Constraints[i] * r[i];
-                c[i] = P[i] * r[i];
-                c[i] = mesh.Constraints[i] * c[i];
+            tbb::blocked_range<int>(0, mesh.vertexNum), 0.0,
+            [&](const tbb::blocked_range<int> &rg, double temp_deltaN) {
+                for (int i = rg.begin(); i != rg.end(); i++) {
+                    r[i] = gradient[i];
+                    r[i] = mesh.Constraints[i] * r[i];
+                    c[i] = P[i] * r[i];
+                    c[i] = mesh.Constraints[i] * c[i];
 
-                temp_deltaN += c[i].dot(r[i]);
+                    temp_deltaN += c[i].dot(r[i]);
 
+                }
+                return temp_deltaN;
+            },
+            [&](double left, double right) {
+                return left + right;
             }
-            return temp_deltaN;
-        },
-        [&](double left, double right) {
-            return left + right;
-        }
-        );
+    );
 
-    double errorRate = 1e-6;
+    double errorRate = 1e-4;
     //std::cout << "cpu  delta0:   " << delta0 << "      deltaN:   " << deltaN << endl;
     //system("pause");
     //PCG main loop
     int cgCounts = 0;
-    while (cgCounts<30000 && deltaN > errorRate * delta0) {
+    while (cgCounts < 30000 && deltaN > errorRate * delta0) {
         cgCounts++;
         //std::cout << "delta0:   " << delta0 << "      deltaN:   " << deltaN  << endl;
         vector<Vector3d> q(mesh.vertexNum, Vector3d(0, 0, 0));
 
-        tbb::parallel_for(0, (int)BH.D4Index.size(), 1, [&](int ii)
-            {
-                MatrixXd H = BH.H12x12[ii];
-                VectorXd tempC(12);
-                for (int i = 0; i < 12; i++) {
-                    tempC(i) = c[BH.D4Index[ii][i / 3]][i % 3];
-                }
-                VectorXd tempQ = H * tempC;
-                for (int i = 0; i < 12; i++) {
-                    countMutex[BH.D4Index[ii][i / 3]].lock();
-                    q[BH.D4Index[ii][i / 3]][i % 3] += tempQ(i);
-                    countMutex[BH.D4Index[ii][i / 3]].unlock();
-                }
-            }
+        tbb::parallel_for(0, (int) BH.D4Index.size(), 1, [&](int ii) {
+                              MatrixXd H = BH.H12x12[ii];
+                              VectorXd tempC(12);
+                              for (int i = 0; i < 12; i++) {
+                                  tempC(i) = c[BH.D4Index[ii][i / 3]][i % 3];
+                              }
+                              VectorXd tempQ = H * tempC;
+                              for (int i = 0; i < 12; i++) {
+                                  countMutex[BH.D4Index[ii][i / 3]].lock();
+                                  q[BH.D4Index[ii][i / 3]][i % 3] += tempQ(i);
+                                  countMutex[BH.D4Index[ii][i / 3]].unlock();
+                              }
+                          }
         );
 
-        tbb::parallel_for(0, (int)BH.D3Index.size(), 1, [&](int ii)
-            {
-                MatrixXd H = BH.H9x9[ii];
+        tbb::parallel_for(0, (int) BH.D3Index.size(), 1, [&](int ii) {
+                              MatrixXd H = BH.H9x9[ii];
 
-                VectorXd tempC(9);
+                              VectorXd tempC(9);
 
-                for (int i = 0; i < 9; i++) {
-                    tempC(i) = c[BH.D3Index[ii][i / 3]][i % 3];
-                }
-                VectorXd tempQ = H * tempC;
+                              for (int i = 0; i < 9; i++) {
+                                  tempC(i) = c[BH.D3Index[ii][i / 3]][i % 3];
+                              }
+                              VectorXd tempQ = H * tempC;
 
-                for (int i = 0; i < 9; i++) {
-                    countMutex[BH.D3Index[ii][i / 3]].lock();
-                    q[BH.D3Index[ii][i / 3]][i % 3] += tempQ(i);
-                    countMutex[BH.D3Index[ii][i / 3]].unlock();
-                }
-            }
-        );
-
-
-        tbb::parallel_for(0, (int)BH.D2Index.size(), 1, [&](int ii)
-            {
-                MatrixXd H = BH.H6x6[ii];
-
-                VectorXd tempC(6);
-
-                for (int i = 0; i < 6; i++) {
-                    tempC(i) = c[BH.D2Index[ii][i / 3]][i % 3];
-                }
-                VectorXd tempQ = H * tempC;
-
-                for (int i = 0; i < 6; i++) {
-                    countMutex[BH.D2Index[ii][i / 3]].lock();
-                    q[BH.D2Index[ii][i / 3]][i % 3] += tempQ(i);
-                    countMutex[BH.D2Index[ii][i / 3]].unlock();
-                }
-            }
-        );
-
-        tbb::parallel_for(0, mesh.vertexNum, 1, [&](int ii)
-            {
-                q[ii] += mesh.masses[ii] * c[ii];
-            }
+                              for (int i = 0; i < 9; i++) {
+                                  countMutex[BH.D3Index[ii][i / 3]].lock();
+                                  q[BH.D3Index[ii][i / 3]][i % 3] += tempQ(i);
+                                  countMutex[BH.D3Index[ii][i / 3]].unlock();
+                              }
+                          }
         );
 
 
-        tbb::parallel_for(0, (int)BH.D1Index.size(), 1, [&](int ii)
-            {
-                Matrix3d H = BH.H3x3[ii];
+        tbb::parallel_for(0, (int) BH.D2Index.size(), 1, [&](int ii) {
+                              MatrixXd H = BH.H6x6[ii];
 
-                Vector3d tempC;
+                              VectorXd tempC(6);
 
-                //for (int i = 0; i < 3; i++) {
-                tempC = c[BH.D1Index[ii]];
-                //}
-                Vector3d tempQ = H * tempC;
+                              for (int i = 0; i < 6; i++) {
+                                  tempC(i) = c[BH.D2Index[ii][i / 3]][i % 3];
+                              }
+                              VectorXd tempQ = H * tempC;
+
+                              for (int i = 0; i < 6; i++) {
+                                  countMutex[BH.D2Index[ii][i / 3]].lock();
+                                  q[BH.D2Index[ii][i / 3]][i % 3] += tempQ(i);
+                                  countMutex[BH.D2Index[ii][i / 3]].unlock();
+                              }
+                          }
+        );
+
+        tbb::parallel_for(0, mesh.vertexNum, 1, [&](int ii) {
+                              q[ii] += mesh.masses[ii] * c[ii];
+                          }
+        );
 
 
-                countMutex[BH.D1Index[ii]].lock();
-                q[BH.D1Index[ii]] += tempQ;
-                countMutex[BH.D1Index[ii]].unlock();
+        tbb::parallel_for(0, (int) BH.D1Index.size(), 1, [&](int ii) {
+                              Matrix3d H = BH.H3x3[ii];
 
-            }
+                              Vector3d tempC;
+
+                              //for (int i = 0; i < 3; i++) {
+                              tempC = c[BH.D1Index[ii]];
+                              //}
+                              Vector3d tempQ = H * tempC;
+
+
+                              countMutex[BH.D1Index[ii]].lock();
+                              q[BH.D1Index[ii]] += tempQ;
+                              countMutex[BH.D1Index[ii]].unlock();
+
+                          }
         );
 
         double tempSum = 0;
 
         tempSum = parallel_reduce(
-            tbb::blocked_range<int>(0, mesh.vertexNum), 0.0, [&](const tbb::blocked_range<int>& rg, double temp_sum) {
-                for (int i = rg.begin(); i != rg.end(); i++) {
-                    q[i] = mesh.Constraints[i] * q[i];
-                    temp_sum += (c[i].dot(q[i]));
+                tbb::blocked_range<int>(0, mesh.vertexNum), 0.0,
+                [&](const tbb::blocked_range<int> &rg, double temp_sum) {
+                    for (int i = rg.begin(); i != rg.end(); i++) {
+                        q[i] = mesh.Constraints[i] * q[i];
+                        temp_sum += (c[i].dot(q[i]));
+                    }
+                    return temp_sum;
+                },
+                [&](double left, double right) {
+                    return left + right;
                 }
-                return temp_sum;
-            },
-            [&](double left, double right) {
-                return left + right;
-            }
-            );
+        );
 
         double alpha = deltaN / tempSum;
         //cout << "tempSum:------------------"<<tempSum << endl;
@@ -1030,31 +1047,30 @@ vector<Vector3d> PCG_Solver(const mesh3D& mesh, const BHessian& BH, const vector
 
 
         deltaN = parallel_reduce(
-            tbb::blocked_range<int>(0, mesh.vertexNum), 0.0, [&](const tbb::blocked_range<int>& rg, double temp_deltaN) {
-                for (int i = rg.begin(); i != rg.end(); i++) {
-                    dX[i] = dX[i] + alpha * c[i];
+                tbb::blocked_range<int>(0, mesh.vertexNum), 0.0,
+                [&](const tbb::blocked_range<int> &rg, double temp_deltaN) {
+                    for (int i = rg.begin(); i != rg.end(); i++) {
+                        dX[i] = dX[i] + alpha * c[i];
 
 
-                    r[i] = r[i] - alpha * q[i];
+                        r[i] = r[i] - alpha * q[i];
 
 
+                        s[i] = P[i] * r[i];
 
-                    s[i] = P[i] * r[i];
-
-                    temp_deltaN += (r[i].dot(s[i]));
+                        temp_deltaN += (r[i].dot(s[i]));
+                    }
+                    return temp_deltaN;
+                },
+                [&](double left, double right) {
+                    return left + right;
                 }
-                return temp_deltaN;
-            },
-            [&](double left, double right) {
-                return left + right;
-            }
-            );
+        );
 
-        tbb::parallel_for(0, mesh.vertexNum, 1, [&](int i)
-            {
-                c[i] = s[i] + (deltaN / deltaO) * c[i];
-                c[i] = mesh.Constraints[i] * c[i];
-            }
+        tbb::parallel_for(0, mesh.vertexNum, 1, [&](int i) {
+                              c[i] = s[i] + (deltaN / deltaO) * c[i];
+                              c[i] = mesh.Constraints[i] * c[i];
+                          }
         );
 
     }
@@ -1067,48 +1083,51 @@ vector<Vector3d> PCG_Solver(const mesh3D& mesh, const BHessian& BH, const vector
     //    return tempDeltaX;
     return dX;
 }
-void calculateMovingDirection(const mesh3D& mesh, BHessian& BH, vector<Vector3d> gradient, vector<Vector3d>& direction) {
-#ifdef NDEBUG
+
+void
+calculateMovingDirection(const mesh3D &mesh, BHessian &BH, vector<Vector3d> gradient, vector<Vector3d> &direction) {
+//#ifdef NDEBUG
     direction = cholmod_solver(BH, gradient, mesh);
-    //direction = PCG_Solver(mesh, BH, gradient);
-#else
-    direction = PCG_Solver(mesh, BH, gradient);
-#endif
+//    //direction = PCG_Solver(mesh, BH, gradient);
+//#else
+//    direction = PCG_Solver(mesh, BH, gradient);
+//#endif
 }
 
-void computeEnergyVal(const mesh3D& mesh, double& energyVal, const Ground& gd, double Kappa)
-{
+void computeEnergyVal(const mesh3D &mesh, double &energyVal, const Ground &gd, double Kappa) {
     energyVal = 0;
-    energyVal = getObjEnergy_StableNHK2_3D(mesh.vertexes, mesh, lengthRate, volumeRate);
+    energyVal += getObjEnergy_StableNHK2_3D(mesh.vertexes, mesh, lengthRate, volumeRate);
+    Vector2d anisotropic_a = Vector2d(1, 0), anisotropic_b = Vector2d(0, 1);
+    energyVal += getObjEnergy_baraffwitkin_3D(mesh, anisotropic_a, anisotropic_b, stretchStiffness, shearStiffness);
     //energyVal += getObjEnergy_AniostroI5_3D(mesh.vertexes, mesh, lengthRate, contract_ratio);
     energyVal *= IPC_dt * IPC_dt;
     double deltaE = 0;
 
     deltaE = parallel_reduce(
-        tbb::blocked_range<int>(0, mesh.vertexNum), 0.0, [&](const tbb::blocked_range<int>& rg, double temp_deltaE) {
-            for (int i = rg.begin(); i != rg.end(); i++) {
-                temp_deltaE += ((mesh.vertexes[i] - mesh.xTilta[i]).squaredNorm() * mesh.masses[i] / 2.0);
+            tbb::blocked_range<int>(0, mesh.vertexNum), 0.0,
+            [&](const tbb::blocked_range<int> &rg, double temp_deltaE) {
+                for (int i = rg.begin(); i != rg.end(); i++) {
+                    temp_deltaE += ((mesh.vertexes[i] - mesh.xTilta[i]).squaredNorm() * mesh.masses[i] / 2.0);
+                }
+                return temp_deltaE;
+            },
+            [&](double left, double right) {
+                return left + right;
             }
-            return temp_deltaE;
-        },
-        [&](double left, double right) {
-            return left + right;
-        }
-        );
+    );
 
     energyVal += deltaE;
     Eigen::VectorXd constraintVals, bVals;
     int startCI = constraintVals.size();
     Evaluate_GroundConstraintVals(gd, mesh, constraintVals, startCI);
     bVals.conservativeResize(constraintVals.size());
-    
 
-    tbb::parallel_for(startCI, (int)constraintVals.size(), 1, [&](int cI)
-        {
 
-            compute_b(constraintVals[cI], mesh.Hhat, bVals[cI]);
+    tbb::parallel_for(startCI, (int) constraintVals.size(), 1, [&](int cI) {
 
-        }
+                          compute_b(constraintVals[cI], mesh.Hhat, bVals[cI]);
+
+                      }
     );
 
 
@@ -1116,17 +1135,17 @@ void computeEnergyVal(const mesh3D& mesh, double& energyVal, const Ground& gd, d
     Evaluate_SelfPTConstraintVals(mesh, constraintVals, startCI);
     bVals.conservativeResize(constraintVals.size());
     //TODO: parallelize
-    tbb::parallel_for(startCI, (int)constraintVals.size(), 1, [&](int cI)
-        //for (int cI = startCI; cI < constraintVals.size(); ++cI) 
-        {
+    tbb::parallel_for(startCI, (int) constraintVals.size(), 1, [&](int cI)
+                              //for (int cI = startCI; cI < constraintVals.size(); ++cI)
+                      {
 
-            compute_b(constraintVals[cI], mesh.Hhat, bVals[cI]);
-            int duplication = mesh.Self_ActiveSet[cI - startCI][3];
-            if (duplication < -1) {
-                // PP or PE, handle duplication
-                bVals[cI] *= -duplication;
-            }
-        }
+                          compute_b(constraintVals[cI], mesh.Hhat, bVals[cI]);
+                          int duplication = mesh.Self_ActiveSet[cI - startCI][3];
+                          if (duplication < -1) {
+                              // PP or PE, handle duplication
+                              bVals[cI] *= -duplication;
+                          }
+                      }
 
     );
 
@@ -1135,35 +1154,36 @@ void computeEnergyVal(const mesh3D& mesh, double& energyVal, const Ground& gd, d
     //SelfCollisionHandler<dim>::evaluateConstraints(data, paraEEMMCVIDSet.back(), constraintVals);
     bVals.conservativeResize(constraintVals.size());
 
-    tbb::parallel_for(startCI, (int)constraintVals.size(), 1, [&](int cI)
-        //for (int cI = startCI; cI < constraintVals.size(); ++cI) 
-        {
+    tbb::parallel_for(startCI, (int) constraintVals.size(), 1, [&](int cI)
+                              //for (int cI = startCI; cI < constraintVals.size(); ++cI)
+                      {
 
-            const MMCVID& MMCVIDI = mesh.Self_EE_ActiveSet[cI - startCI];
-            double eps_x, e;
-            if (MMCVIDI[3] >= 0) {
-                // EE
-                compute_eps_x(mesh, MMCVIDI[0], MMCVIDI[1], MMCVIDI[2], MMCVIDI[3], eps_x);
-                compute_e(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], eps_x, e);
-            }
-            else {
-                // PP or PE
-                const std::pair<int, int>& eIeJ = mesh.Self_EEeIe_ActiveSet[cI - startCI];
-                const std::pair<int, int>& eI = mesh.surfEdges[eIeJ.first];
-                const std::pair<int, int>& eJ = mesh.surfEdges[eIeJ.second];
-                compute_eps_x(mesh, eI.first, eI.second, eJ.first, eJ.second, eps_x);
-                compute_e(mesh.vertexes[eI.first], mesh.vertexes[eI.second], mesh.vertexes[eJ.first], mesh.vertexes[eJ.second], eps_x, e);
-            }
-            compute_b(constraintVals[cI], mesh.Hhat, bVals[cI]);
-            bVals[cI] *= e;
-        }
+                          const MMCVID &MMCVIDI = mesh.Self_EE_ActiveSet[cI - startCI];
+                          double eps_x, e;
+                          if (MMCVIDI[3] >= 0) {
+                              // EE
+                              compute_eps_x(mesh, MMCVIDI[0], MMCVIDI[1], MMCVIDI[2], MMCVIDI[3], eps_x);
+                              compute_e(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]],
+                                        mesh.vertexes[MMCVIDI[3]], eps_x, e);
+                          } else {
+                              // PP or PE
+                              const std::pair<int, int> &eIeJ = mesh.Self_EEeIe_ActiveSet[cI - startCI];
+                              const std::pair<int, int> &eI = mesh.surfEdges[eIeJ.first];
+                              const std::pair<int, int> &eJ = mesh.surfEdges[eIeJ.second];
+                              compute_eps_x(mesh, eI.first, eI.second, eJ.first, eJ.second, eps_x);
+                              compute_e(mesh.vertexes[eI.first], mesh.vertexes[eI.second], mesh.vertexes[eJ.first],
+                                        mesh.vertexes[eJ.second], eps_x, e);
+                          }
+                          compute_b(constraintVals[cI], mesh.Hhat, bVals[cI]);
+                          bVals[cI] *= e;
+                      }
 
     );
     //double bE
     energyVal += Kappa * bVals.sum();
 #ifdef USE_FRICTION
     // self friction
-    double fricDHat = mesh.Hhat * IPC_dt * IPC_dt;
+    double fricDHat = mesh.Fhat * IPC_dt * IPC_dt;
     double eps = std::sqrt(fricDHat);
 
     Eigen::VectorXd EI(mesh.Self_activeSet_lastH.size());
@@ -1239,59 +1259,56 @@ void computeEnergyVal(const mesh3D& mesh, double& energyVal, const Ground& gd, d
 #endif
 }
 
-void stepForward(const vector<Vector3d>& dataV0,
-    const vector<Vector3d>& searchDir,
-    mesh3D& mesh,
-    double stepSize, bool boundary_update = false)
-{
+void stepForward(const vector<Vector3d> &dataV0,
+                 const vector<Vector3d> &searchDir,
+                 mesh3D &mesh,
+                 double stepSize, bool boundary_update = false) {
     //assert(dataV0.rows() == data.V.rows());
     //assert(data.V.rows() * dim == searchDir.size());
     //assert(data.V.rows() == result.V.rows());
 
 
-    tbb::parallel_for(0, mesh.vertexNum, 1, [&](int vI)
-
-        {
-            if (mesh.boundaryTypes[vI] == 0 || boundary_update)
-                mesh.vertexes[vI] = dataV0[vI] - stepSize * searchDir[vI];
-        }
+    tbb::parallel_for(0, mesh.vertexNum, 1, [&](int vI) {
+                          if (mesh.boundaryTypes[vI] == 0 || boundary_update)
+                              mesh.vertexes[vI] = dataV0[vI] - stepSize * searchDir[vI];
+                      }
 
     );
 }
 
 
-
-
-
-bool checkEdgeTriIntersectionIfAny(const mesh3D& mesh,
-    SpatialHash& sh)
-{
+bool checkEdgeTriIntersectionIfAny(const mesh3D &mesh,
+                                   SpatialHash &sh) {
     Eigen::ArrayXi intersected(mesh.surface.size());
     intersected.setZero();
-    tbb::parallel_for(0, (int)mesh.surface.size(), 1, [&](int sfI)
+    tbb::parallel_for(0, (int) mesh.surface.size(), 1, [&](int sfI) {
+                          const Eigen::RowVector4i &sfVInd = mesh.surface[sfI].transpose();
+                          int coDim_sfI = 3;
+                          std::unordered_set<int> sEdgeInds;
+                          sh.queryTriangleForEdges(mesh.vertexes[sfVInd[0]], mesh.vertexes[sfVInd[1]], mesh.vertexes[sfVInd[2]], 0.0,
+                                                   sEdgeInds);
+                          for (const auto &eI: sEdgeInds) {
+                              const auto &meshEI = mesh.surfEdges[eI];
+                              if (meshEI.first == sfVInd[0] || meshEI.first == sfVInd[1] || meshEI.first == sfVInd[2] ||
+                                  meshEI.second == sfVInd[0] || meshEI.second == sfVInd[1] || meshEI.second == sfVInd[2]) {
+                                  continue;
+                              }
 
-        {
-            const Eigen::RowVector4i& sfVInd = mesh.surface[sfI].transpose();
-            int coDim_sfI = 3;
-            std::unordered_set<int> sEdgeInds;
-            sh.queryTriangleForEdges(mesh.vertexes[sfVInd[0]], mesh.vertexes[sfVInd[1]], mesh.vertexes[sfVInd[2]], 0.0, sEdgeInds);
-            for (const auto& eI : sEdgeInds)
-            {
-                const auto& meshEI = mesh.surfEdges[eI];
-                if (meshEI.first == sfVInd[0] || meshEI.first == sfVInd[1] || meshEI.first == sfVInd[2] || meshEI.second == sfVInd[0] || meshEI.second == sfVInd[1] || meshEI.second == sfVInd[2]) {
-                    continue;
-                }
+                              if (mesh.boundaryTypes[meshEI.first]>=2&&mesh.boundaryTypes[meshEI.second]>=2&&mesh.boundaryTypes[sfVInd[0]]>=2&&mesh.boundaryTypes[sfVInd[1]]>=2&&mesh.boundaryTypes[sfVInd[2]]>=2) {
+                                  continue;
+                              }
 
-                int coDim_eI = 3;//mesh.vICoDim(meshEI.first);
+                              int coDim_eI = 3;//mesh.vICoDim(meshEI.first);
 
 
-                if (IglUtils::segTriIntersect(mesh.vertexes[meshEI.first], mesh.vertexes[meshEI.second],
-                    mesh.vertexes[sfVInd[0]], mesh.vertexes[sfVInd[1]], mesh.vertexes[sfVInd[2]])) {
-                    intersected[sfI] = 1;
-                    break;
-                }
-            }
-        }
+                              if (IglUtils::segTriIntersect(mesh.vertexes[meshEI.first], mesh.vertexes[meshEI.second],
+                                                            mesh.vertexes[sfVInd[0]], mesh.vertexes[sfVInd[1]],
+                                                            mesh.vertexes[sfVInd[2]])) {
+                                  intersected[sfI] = 1;
+                                  break;
+                              }
+                          }
+                      }
 
     );
 
@@ -1303,11 +1320,10 @@ bool checkEdgeTriIntersectionIfAny(const mesh3D& mesh,
 }
 
 
-bool isIntersected(const Ground& grd,
-    SpatialHash& sh,
-    const mesh3D& mesh,
-    const vector<Vector3d>& V0)
-{
+bool isIntersected(const Ground &grd,
+                   SpatialHash &sh,
+                   const mesh3D &mesh,
+                   const vector<Vector3d> &V0) {
     Eigen::VectorXd constraint_vals;
     Evaluate_GroundConstraintVals(grd, mesh, constraint_vals, 0);
     for (int vI = 0; vI < constraint_vals.size(); ++vI) {
@@ -1325,10 +1341,10 @@ bool isIntersected(const Ground& grd,
     return false;
 }
 
-void buildCollisionSets(mesh3D& mesh,
-    SpatialHash& sh,
-    const Ground& gd,
-    bool rehash = true) {
+void buildCollisionSets(mesh3D &mesh,
+                        SpatialHash &sh,
+                        const Ground &gd,
+                        bool rehash = true) {
     if (rehash) {
         sh.build(mesh, mesh.averageEdgeLenth);
     }
@@ -1336,16 +1352,15 @@ void buildCollisionSets(mesh3D& mesh,
     sh.calculateActivateSet(mesh);
 }
 
-bool lineSearch(mesh3D& mesh,
-    SpatialHash& sh,
-    const Ground& gd,
-    const vector<Vector3d>& searchDir,
-    const vector<Vector3d>& gradient,
-    double& stepSize,
-    double armijoParam,
-    double lowerBound,
-    double Kappa)
-{
+bool lineSearch(mesh3D &mesh,
+                SpatialHash &sh,
+                const Ground &gd,
+                const vector<Vector3d> &searchDir,
+                const vector<Vector3d> &gradient,
+                double &stepSize,
+                double armijoParam,
+                double lowerBound,
+                double Kappa) {
     //std::stringstream msg;
 
 
@@ -1363,16 +1378,17 @@ bool lineSearch(mesh3D& mesh,
     armijoParam = 0;
     if (armijoParam > 0.0) {
         c1m = parallel_reduce(
-            tbb::blocked_range<int>(0, mesh.vertexNum), 0.0, [&](const tbb::blocked_range<int>& rg, double temp_deltaE) {
-                for (int i = rg.begin(); i != rg.end(); i++) {
-                    temp_deltaE += gradient[i].dot(searchDir[i]);
+                tbb::blocked_range<int>(0, mesh.vertexNum), 0.0,
+                [&](const tbb::blocked_range<int> &rg, double temp_deltaE) {
+                    for (int i = rg.begin(); i != rg.end(); i++) {
+                        temp_deltaE += gradient[i].dot(searchDir[i]);
+                    }
+                    return temp_deltaE;
+                },
+                [&](double left, double right) {
+                    return left + right;
                 }
-                return temp_deltaE;
-            },
-            [&](double left, double right) {
-                return left + right;
-            }
-            );
+        );
     }
     c1m *= armijoParam;
     vector<Vector3d> resultV0 = mesh.vertexes;
@@ -1402,7 +1418,8 @@ bool lineSearch(mesh3D& mesh,
 
     int numOfLineSearch = 0;
     double LFStepSize = stepSize;
-    while ((testingE > lastEnergyVal + stepSize * c1m) && (stepSize > 1e-3 * LFStepSize) /*&& abs(testingE - lastEnergyVal) / abs(lastEnergyVal - mesh.restSNKE) > 1e-8 / IPC_dt / (1 << (numOfLineSearch + 1))*/) {
+    while ((testingE > lastEnergyVal + stepSize * c1m) && (stepSize > 1e-9 *
+                                                                      LFStepSize) /*&& abs(testingE - lastEnergyVal) / abs(lastEnergyVal - mesh.restSNKE) > 1e-8 / IPC_dt / (1 << (numOfLineSearch + 1))*/) {
         // fprintf(out, "%.9le %.9le\n", stepSize, testingE);
         //if (stepSize == 1.0) {
         //    stepSize /= 2.0;
@@ -1450,40 +1467,41 @@ bool lineSearch(mesh3D& mesh,
     return stopped;
 }
 
-void suggestKappa(double& kappa, const double& Hhat, const double& bboxDiagSize2, const double& meanMass)
-{
+void suggestKappa(double &kappa, const double &Hhat, const double &bboxDiagSize2, const double &meanMass) {
     double H_b;
     //double bboxDiagSize2 = (maxConer - minConer).squaredNorm();
     compute_H_b(1.0e-16 * bboxDiagSize2, Hhat, H_b);
-    kappa = 1e11 * meanMass / (4.0e-16 * bboxDiagSize2 * H_b);
+    kappa = 1e13 * meanMass / (4.0e-16 * bboxDiagSize2 * H_b);
+    //printf("bboxDiagSize2: %f\n", bboxDiagSize2);
+    //printf("H_b: %f\n", H_b);
+    //printf("sug Kappa: %f\n", kappa);
 }
 
-void upperBoundKappa(double& kappa, const double& Hhat, const double& bboxDiagSize2, const double& meanMass)
-{
+void upperBoundKappa(double &kappa, const double &Hhat, const double &bboxDiagSize2, const double &meanMass) {
     double H_b;
     //double bboxDiagSize2 = (maxConer - minConer).squaredNorm();
     compute_H_b(1.0e-16 * bboxDiagSize2, Hhat, H_b);
-    double kappaMax = 100 * 1e11 * meanMass / (4.0e-16 * bboxDiagSize2 * H_b);
+    double kappaMax = 100 * 1e13 * meanMass / (4.0e-16 * bboxDiagSize2 * H_b);
     if (kappa > kappaMax) {
         kappa = kappaMax;
     }
+    //printf("max Kappa: %f\n", kappaMax);
 }
 
-void initKappa(mesh3D& mesh, const Ground& grd, double& kappa)
-{
+void initKappa(mesh3D &mesh, const Ground &grd, double &kappa) {
     std::vector<int> constraintStartInds;
     buildConstraintStartIndsWithMM(mesh.Environment_ActiveSet, mesh.Self_ActiveSet, constraintStartInds);
 
     if (constraintStartInds.back()) {
-        vector<Vector3d> g_E(mesh.vertexNum, Vector3d(0,0,0)), g_c(mesh.vertexNum, Vector3d(0, 0, 0));
-        
+        vector<Vector3d> g_E(mesh.vertexNum, Vector3d(0, 0, 0)), g_c(mesh.vertexNum, Vector3d(0, 0, 0));
+
         computeEGradient(mesh, g_E);
         //compute_fiction_gradient(mesh, grd, g_E, mesh.Hhat * IPC_dt * IPC_dt, FEM::friction);
         VectorXd constraintVal;
         int startCI = constraintStartInds[0];
         Evaluate_GroundConstraintVals(grd, mesh, constraintVal, startCI);
         //animConfig.collisionObjects[coI]->evaluateConstraints(result, activeSet[coI], constraintVal);
-        
+
 
 
         for (int cI = startCI; cI < constraintStartInds[1]; ++cI) {
@@ -1505,7 +1523,7 @@ void initKappa(mesh3D& mesh, const Ground& grd, double& kappa)
         compute_g_dpt_new(mesh, mesh.Self_ActiveSet, constraintVal, g_c, startCI, 1, mesh.Hhat);
 #endif
         double gsum = 0, gsnorm = 0;
-        for (int i = 0;i < mesh.vertexNum;i++) {
+        for (int i = 0; i < mesh.vertexNum; i++) {
             gsum += g_c[i].dot(g_E[i]);
             gsnorm += g_c[i].squaredNorm();
         }
@@ -1524,12 +1542,10 @@ void initKappa(mesh3D& mesh, const Ground& grd, double& kappa)
 }
 
 
-void postLineSearch(mesh3D& mesh, const Ground& grd, double alpha, double& kappa)
-{
+void postLineSearch(mesh3D &mesh, const Ground &grd, double alpha, double &kappa) {
     if (kappa == 0.0) {
         initKappa(mesh, grd, kappa);
-    }
-    else {
+    } else {
         //TODO: avoid recomputation of constraint functions
         bool updateKappa = false;
         for (int i = 0; i < mesh.closeConstraintID.size(); ++i) {
@@ -1590,55 +1606,58 @@ void postLineSearch(mesh3D& mesh, const Ground& grd, double alpha, double& kappa
     }
 
 
-
 }
 
-void updateBoundaryMoveDir(mesh3D& mesh, vector<Vector3d>& moveDir, double ipc_dt, double alpha) {
+void updateBoundaryMoveDir(mesh3D &mesh, vector<Vector3d> &moveDir, double ipc_dt, double alpha) {
     double angleX = PI / 2.5 * ipc_dt * alpha;
     Matrix3d rotationL, rotationR;
     rotationL << 1, 0, 0, 0, cos(angleX), sin(angleX), 0, -sin(angleX), cos(angleX);
     rotationR << 1, 0, 0, 0, cos(angleX), -sin(angleX), 0, sin(angleX), cos(angleX);
 
-    tbb::parallel_for(0, (int)(moveDir.size()), 1, [&](int i)
-        //for (int i = 0; i < moveDir.size();i++) 
-        {
-            if (mesh.boundaryTypes[i] == 1) {
-                moveDir[i] = rotationL * mesh.vertexes[i] - mesh.vertexes[i];
-            }
-            if (mesh.boundaryTypes[i] == -1) {
-                moveDir[i] = rotationR * mesh.vertexes[i] - mesh.vertexes[i];
-            }
-        }
+    double mvl = -1*ipc_dt*alpha;
+    tbb::parallel_for(0, (int) (moveDir.size()), 1, [&](int i)
+                              //for (int i = 0; i < moveDir.size();i++)
+                      {
+                          if (mesh.boundaryTypes[i] == 1) {
+                              //moveDir[i] = rotationL * mesh.vertexes[i] - mesh.vertexes[i];
+                              moveDir[i] = Vector3d(mvl, 0, 0);
+
+                          }
+//                          if (mesh.boundaryTypes[i] == -1) {
+//                              moveDir[i] = rotationR * mesh.vertexes[i] - mesh.vertexes[i];
+//                          }
+                      }
     );
 }
 
 
-double calculate_distToOpt_PN(const vector<Vector3d>& moveDir) {
+double calculate_distToOpt_PN(const vector<Vector3d> &moveDir) {
     double distToOpt_PN = 0;
     distToOpt_PN = parallel_reduce(
-        tbb::blocked_range<int>(0, (int)moveDir.size()), 0.0, [&](const tbb::blocked_range<int>& rg, double temp_max) {
-            for (int i = rg.begin(); i != rg.end(); i++) {
-                for (int jj = 0; jj < 3; jj++) {
-                    if (temp_max < abs(moveDir[i][jj])) {
-                        temp_max = abs(moveDir[i][jj]);
+            tbb::blocked_range<int>(0, (int) moveDir.size()), 0.0,
+            [&](const tbb::blocked_range<int> &rg, double temp_max) {
+                for (int i = rg.begin(); i != rg.end(); i++) {
+                    for (int jj = 0; jj < 3; jj++) {
+                        if (temp_max < abs(moveDir[i][jj])) {
+                            temp_max = abs(moveDir[i][jj]);
+                        }
                     }
                 }
+                return temp_max;
+            },
+            [&](double left, double right) {
+                return left > right ? left : right;
             }
-            return temp_max;
-        },
-        [&](double left, double right) {
-            return left > right ? left : right;
-        }
-        );
+    );
 
     return distToOpt_PN;
 }
 
-int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa) {
+int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa, float &time0, float& time1, float& time2, float& time3, float& time4, double& collisionNum) {
     int iterCap = 10000, k = 0;
 
     vector<Vector3d> moveDir(mesh.vertexNum, Vector3d(0, 0, 0));
-   
+
     double totalTimeStep = 0;
     for (; k < iterCap; ++k) {
 
@@ -1647,10 +1666,12 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa) {
         vector<Vector3d> gradient(mesh.vertexNum, Vector3d(0, 0, 0));
         BHessian BH;
         timer0.set_start();
-        computeGradientAndHessian(mesh, gradient, BH, gd);
+        collisionNum+=computeGradientAndHessian(mesh, gradient, BH, gd);
+        //printf("finish gradient and hessian\n");
+        //computeGradientAndHessian(mesh, gradient, BH, gd);
         timer0.set_end();
         timer1.set_start();
-        double gradSqNorm = vector_squareNorm(gradient);
+        //double gradSqNorm = vector_squareNorm(gradient);
         //vector<Vector3d> moveDir;
         double distToOpt_PN = 0;
 
@@ -1658,13 +1679,13 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa) {
         cout << "distToOpt_PN" << endl;
         cout << distToOpt_PN << endl;
 
-        bool gradVanish = (distToOpt_PN < sqrt(1e-4 * mesh.bboxDiagSize2 * IPC_dt * IPC_dt));
+        bool gradVanish = (distToOpt_PN < sqrt(16e-4 * mesh.bboxDiagSize2 * IPC_dt * IPC_dt));
         if (k && gradVanish/* && totalTimeStep > 1 - 1e-3*/) {
             break;
         }
 
         calculateMovingDirection(mesh, BH, gradient, moveDir);
-
+        //cout << "finish mvDir" << endl;
         timer1.set_end();
         timer2.set_start();
 
@@ -1703,7 +1724,7 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa) {
             alpha = max(alpha, alpha_CFL);
         }
 
-        cout << "CCD alpha:  " << fullCCD_alpha*1.0 << endl;
+        cout << "CCD alpha:  " << fullCCD_alpha * 1.0 << endl;
         timer2.set_end();
         timer3.set_start();
 
@@ -1717,39 +1738,48 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa) {
         postLineSearch(mesh, gd, alpha, Kappa);
         timer4.set_end();
 
-        float time0, time1, time2, time3, time4;
-        time0 = timer0.get_millisecond();
-        time1 = timer1.get_millisecond();
-        time2 = timer2.get_millisecond();
-        time3 = timer3.get_millisecond();
-        time4 = timer4.get_millisecond();
+        float time00, time11, time22, time33, time44;
+        time00 = timer0.get_millisecond();
+        time11 = timer1.get_millisecond();
+        time22 = timer2.get_millisecond();
+        time33 = timer3.get_millisecond();
+        time44 = timer4.get_millisecond();
+
+        time0 += time00;
+        time1 += time11;
+        time2 += time22;
+        time3 += time33;
+        time4 += time44;
         totalTimeStep += alpha;
 
-        printf("time0 = %f,  time1 = %f,  time2 = %f,  time3 = %f,  time4 = %f\n", time0, time1, time2, time3, time4);
+        printf("time0 = %f,  time1 = %f,  time2 = %f,  time3 = %f,  time4 = %f\n", time00, time11, time22, time33, time44);
     }
     printf("newton iteration:  %d    and    Kappa:  %f\n", k, mesh.Kappa);
     total_iter += k;
     return k;
 }
-void export_obj(const mesh3D& mesh, int index) {
+
+void export_obj(const mesh3D &mesh, int index) {
     std::ofstream cloth_stream("output/surface_obj_" + std::to_string(index) + ".obj");
     cloth_stream << "# Generated by hc"
-        << "\n";
+                 << "\n";
     cloth_stream << std::fixed << std::setprecision(6) << "cloth\n";
     auto cloth_vertices = mesh.vertexes;
     auto cloth_triangles = mesh.surface;
 
-    for (auto vec : cloth_vertices) {
+    for (auto vec: cloth_vertices) {
         cloth_stream << "v " << vec(0) << " " << vec(1) << " "
-            << vec(2) << "\n";
+                     << vec(2) << "\n";
     }
     cloth_stream << "s 1\n";
-    for (auto tri : cloth_triangles) {
+    for (auto tri: cloth_triangles) {
         cloth_stream << "f " << tri(0) + 1 << " " << tri(1) + 1
-            << " " << tri(2) + 1 << "\n";
+                     << " " << tri(2) + 1 << "\n";
     }
     cloth_stream.close();
 }
+
+bool isRotate = false;
 bool loadTempTimeInfo = true;
 int IPC_Solver(int& stepId, model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
     mesh3D& mesh = meshTetes->mesh3Ds[0];
@@ -1758,7 +1788,8 @@ int IPC_Solver(int& stepId, model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
         std::string fileVertex = "tempData/timeCost.txt";
         ifstream ifs(fileVertex);
         if (ifs) {
-            ifs >> time_total >> total_iter >> step_index >> mesh.Kappa;
+            ifs >> ttime0 >> ttime1 >> ttime2 >> ttime3 >> ttime4 >> time_total >> total_iter >> step_index
+                >> mesh.Kappa;
             loadTempTimeInfo = false;
         }
         ifs.close();
@@ -1767,27 +1798,43 @@ int IPC_Solver(int& stepId, model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
     stepId = step_index;
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
-    
+    //printf("hello 0 p\n");
     upperBoundKappa(mesh.Kappa, mesh.Hhat, mesh.bboxDiagSize2, mesh.meanMass);
     if (mesh.Kappa < 1e-16) {
         suggestKappa(mesh.Kappa, mesh.Hhat, mesh.bboxDiagSize2, mesh.meanMass);
     }
     initKappa(mesh, gd, mesh.Kappa);
-    
+    //printf("hello 1 p\n");
 #ifdef USE_FRICTION
     buildFriction(mesh, gd);
 #endif
-    if (false)
+
+    if(step_index*IPC_dt>=2.2){
+        isRotate = false;
+        tbb::parallel_for(0, (int) (mesh.vertexNum), 1, [&](int i)
+                                  //for (int i = 0; i < moveDir.size();i++)
+                          {
+                              if (mesh.boundaryTypes[i] == 1) {
+                                  mesh.boundaryTypes[i] = 0;
+
+                              }
+
+                          }
+        );
+    }
+
+    //printf("rotate\n");
+    if (isRotate)
     {
         vector<Vector3d> moveDir(mesh.vertexNum, Vector3d(0, 0, 0));
         double new_alpha = 1;
         updateBoundaryMoveDir(mesh, moveDir, IPC_dt, new_alpha);
         sh.build(mesh, moveDir, new_alpha, mesh.averageEdgeLenth);
         Self_largestFeasibleStepSize_CCD(mesh, sh, moveDir, 0.8, new_alpha);
-        new_alpha *= 0.5;
+        //new_alpha *= 0.5;
         updateBoundaryMoveDir(mesh, moveDir, IPC_dt, new_alpha);
         vector<Vector3d> resultV0 = mesh.vertexes;
-        stepForward(resultV0, moveDir, mesh, new_alpha, true);
+        stepForward(resultV0, moveDir, mesh, 1, true);
 
         sh.build(mesh, mesh.averageEdgeLenth);
         int numOfIntersect = 0;
@@ -1795,21 +1842,27 @@ int IPC_Solver(int& stepId, model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
         while (isIntersected(gd, sh, mesh, mesh.vertexes)) {
             new_alpha /= 2.0;
             updateBoundaryMoveDir(mesh, moveDir, IPC_dt, new_alpha);
-            stepForward(resultV0, moveDir, mesh, new_alpha, true);
+            stepForward(resultV0, moveDir, mesh, 1, true);
             sh.build(mesh, mesh.averageEdgeLenth);
         }
         cout << "new_alpha:";
         cout << new_alpha << endl;
         buildCollisionSets(mesh, sh, gd, false);
     }
-
+    //printf("rotate\n");
     int k = 0;
+    float time0 = 0;
+    float time1 = 0;
+    float time2 = 0;
+    float time3 = 0;
+    float time4 = 0;
+    double collisonNum = 0;
     while (true) {
         mesh.closeConstraintID.resize(0);
         mesh.closeMConstraintID.resize(0);
         mesh.closeConstraintVal.resize(0);
         mesh.closeMConstraintVal.resize(0);
-        k = solve_subIP(mesh, sh, gd, mesh.Kappa);
+        k = solve_subIP(mesh, sh, gd, mesh.Kappa, time0, time1, time2, time3, time4, collisonNum);
 
         VectorXd constraintVals;
         int offset = 0;
@@ -1836,39 +1889,69 @@ int IPC_Solver(int& stepId, model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
 
     tbb::parallel_for(0, mesh.vertexNum, 1, [&](int i)
 
-        {
-            mesh.velocities[i] = (mesh.vertexes[i] - mesh.V_prev[i]) / IPC_dt;
-        }
+                      {
+                          mesh.velocities[i] = (mesh.vertexes[i] - mesh.V_prev[i]) / IPC_dt;
+                      }
     );
 
 
     mesh.V_prev = mesh.vertexes;
     computeXTilta(mesh);
 
-    
+    ttime0 += time0;
+    ttime1 += time1;
+    ttime2 += time2;
+    ttime3 += time3;
+    ttime4 += time4;
 
     std::cout << "                                                finished a step" << endl;
 
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
     std::cout << "Time for a step = "
-        << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "[us]" << std::endl;
+              << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "[us]" << std::endl;
     time_total += std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
+
+    totalCollision+=collisonNum;
+
+    std::cout << "totalCollision  = "
+              << totalCollision << std::endl;
+
+
+    std::cout << "averageCollision  = "
+              << totalCollision/total_iter << std::endl;
+
+
     std::cout << "total  = "
-        << time_total << "[ms]" << std::endl;
+              << time_total << "[ms]" << std::endl;
     std::cout << "total newton step:"<<total_iter << std::endl;
 
     std::cout << "frame number  = "
-        << step_index++ << std::endl;
+              << step_index++ << std::endl;
 
     ofstream outTime("timeCost.txt");
-    outTime << "time: " << time_total / 1000.0 << endl;
+
+    outTime << "time0: " << ttime0 / 1000.0 << endl;
+    outTime << "time1: " << ttime1 / 1000.0 << endl;
+    outTime << "time2: " << ttime2 / 1000.0 << endl;
+    outTime << "time3: " << ttime3 / 1000.0 << endl;
+    outTime << "time4: " << ttime4 / 1000.0 << endl;
+
+    outTime << "timeAll: " << time_total / 1000.0 << endl;
     outTime << "total iter: " << total_iter << endl;
     outTime << "frames: " << step_index << endl;
+    outTime << "totalCollisionNum: " << totalCollision << endl;
+
+    outTime << "averageCollision: " << totalCollision/total_iter << endl;
     outTime.close();
-    
+
     if (step_index % 10 == 0)
     {
         ofstream outTime2("tempData/timeCost.txt");
+        outTime2 << ttime0 << endl;
+        outTime2 << ttime1 << endl;
+        outTime2 << ttime2 << endl;
+        outTime2 << ttime3 << endl;
+        outTime2 << ttime4 << endl;
         outTime2 << time_total << endl;
         outTime2 << total_iter << endl;
         outTime2 << step_index << endl;

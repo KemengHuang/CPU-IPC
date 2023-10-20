@@ -15,7 +15,7 @@ public:
     vector<Matrix<double, 3, 3>> H3x3;//, HDpm, HDpm, HDpm;
     vector<Matrix<double, 6, 6>> H6x6;//, HDeme;
     vector<Matrix<double, 9, 9>> H9x9;
-    std::vector<Eigen::Triplet<double>> BHessian::toTriplets(const vector<int>& Btype);
+    std::vector<Eigen::Triplet<double>> toTriplets(const vector<int>& Btype);
 };
 
 class IglUtils {
@@ -118,7 +118,7 @@ void compute_b(double d, double dHat, double& b);
 void compute_g_b(double d, double dHat, double& g);
 void compute_H_b(double d, double dHat, double& H);
 
-void compute_g_dpt(const mesh3D& mesh,
+int compute_g_dpt(const mesh3D& mesh,
     const std::vector<MMCVID>& activeSet,
     const Eigen::VectorXd& input,
     vector<Vector3d>& output_incremental,

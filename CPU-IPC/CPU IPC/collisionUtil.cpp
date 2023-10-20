@@ -34,7 +34,7 @@ void SpatialHash::build(const  mesh3D& mesh, double voxelSize)
     //double xmax = DBL_MIN, ymax = DBL_MIN, zmax = DBL_MIN;
 
     leftBottomCorner = tbb::parallel_reduce(
-        tbb::blocked_range<int>(0, (int)mesh.surfVerts.size()), Vector3d(DBL_MAX, DBL_MAX, DBL_MAX), [&](const tbb::blocked_range<int>& rg, Vector3d sceneSize) {
+        tbb::blocked_range<int>(0, (int)mesh.surfVerts.size()), Vector3d(1e32, 1e32, 1e32), [&](const tbb::blocked_range<int>& rg, Vector3d sceneSize) {
             for (int i = rg.begin(); i != rg.end(); i++) {
                 Vector3d pos = mesh.vertexes[mesh.surfVerts[i]];
                 sceneSize[0] = min(pos[0], sceneSize[0]);
@@ -53,7 +53,7 @@ void SpatialHash::build(const  mesh3D& mesh, double voxelSize)
         );
 
     rightTopCorner = tbb::parallel_reduce(
-        tbb::blocked_range<int>(0, (int)mesh.surfVerts.size()), Vector3d(-DBL_MAX, -DBL_MAX, -DBL_MAX), [&](const tbb::blocked_range<int>& rg, Vector3d sceneSize) {
+        tbb::blocked_range<int>(0, (int)mesh.surfVerts.size()), Vector3d(-1e32, -1e32, -1e32), [&](const tbb::blocked_range<int>& rg, Vector3d sceneSize) {
             for (int i = rg.begin(); i != rg.end(); i++) {
                 Vector3d pos = mesh.vertexes[mesh.surfVerts[i]];
                 sceneSize[0] = max(pos[0], sceneSize[0]);
@@ -211,7 +211,7 @@ void SpatialHash::build(const  mesh3D& mesh, const vector<Vector3d>& searchDir, 
 
 
     leftBottomCorner = tbb::parallel_reduce(
-        tbb::blocked_range<int>(0, (int)mesh.surfVerts.size()), Vector3d(DBL_MAX, DBL_MAX, DBL_MAX), [&](const tbb::blocked_range<int>& rg, Vector3d sceneSize) {
+        tbb::blocked_range<int>(0, (int)mesh.surfVerts.size()), Vector3d(1e32, 1e32, 1e32), [&](const tbb::blocked_range<int>& rg, Vector3d sceneSize) {
             for (int i = rg.begin(); i != rg.end(); i++) {
                 Vector3d pos = V[mesh.surfVerts[i]];
                 sceneSize[0] = min(pos[0], sceneSize[0]);
@@ -236,7 +236,7 @@ void SpatialHash::build(const  mesh3D& mesh, const vector<Vector3d>& searchDir, 
         );
 
     rightTopCorner = tbb::parallel_reduce(
-        tbb::blocked_range<int>(0, (int)mesh.surfVerts.size()), Vector3d(-DBL_MAX, -DBL_MAX, -DBL_MAX), [&](const tbb::blocked_range<int>& rg, Vector3d sceneSize) {
+        tbb::blocked_range<int>(0, (int)mesh.surfVerts.size()), Vector3d(-1e32, -1e32, -1e32), [&](const tbb::blocked_range<int>& rg, Vector3d sceneSize) {
             for (int i = rg.begin(); i != rg.end(); i++) {
                 Vector3d pos = V[mesh.surfVerts[i]];
                 sceneSize[0] = max(pos[0], sceneSize[0]);
@@ -259,7 +259,7 @@ void SpatialHash::build(const  mesh3D& mesh, const vector<Vector3d>& searchDir, 
         }
         );
 
-    //double xmin = DBL_MAX, ymin = DBL_MAX, zmin = DBL_MAX;
+    //double xmin = std::numeric_limits<double>::max(), ymin = std::numeric_limits<double>::max(), zmin = std::numeric_limits<double>::max();
     //double xmax = DBL_MIN, ymax = DBL_MIN, zmax = DBL_MIN;
     //for (int i = 0;i < mesh.surface.size();i++) {
     //    for (int j = 0;j < 3;j++) {
@@ -674,6 +674,7 @@ void SpatialHash::calculateActivateSet(mesh3D& mesh) {
             for (const auto& sfI : triInds)
             {
                 const RowVector4i& sfVInd = mesh.surface[sfI].transpose();
+                if(!(mesh.boundaryTypes[vI]>=2&&mesh.boundaryTypes[sfVInd[0]]>=2&&mesh.boundaryTypes[sfVInd[1]]>=2&&mesh.boundaryTypes[sfVInd[2]]>=2))
                 if (!(vI == sfVInd[0] || vI == sfVInd[1] || vI == sfVInd[2])) {
                     int dtype = dType_PT(mesh.vertexes[vI], mesh.vertexes[sfVInd[0]], mesh.vertexes[sfVInd[1]], mesh.vertexes[sfVInd[2]]);
                     double d;
@@ -758,7 +759,7 @@ void SpatialHash::calculateActivateSet(mesh3D& mesh) {
         queryEdgeForEdgesWithBBoxCheck(mesh, mesh.vertexes[meshEI.first].transpose(), mesh.vertexes[meshEI.second].transpose(), sqrtDHat, edgeInds, eI);
         for (const auto& eJ : edgeInds) {
             const auto& meshEJ = mesh.surfEdges[eJ];
-
+            if(!(mesh.boundaryTypes[meshEI.first]>=2&&mesh.boundaryTypes[meshEI.second]>=2&&mesh.boundaryTypes[meshEJ.first]>=2&&mesh.boundaryTypes[meshEJ.second]>=2))
             if (!(meshEI.first == meshEJ.first || meshEI.first == meshEJ.second || meshEI.second == meshEJ.first || meshEI.second == meshEJ.second || eI > eJ)) {
 
                 int dtype = dType_EE(mesh.vertexes[meshEI.first], mesh.vertexes[meshEI.second], mesh.vertexes[meshEJ.first], mesh.vertexes[meshEJ.second]);

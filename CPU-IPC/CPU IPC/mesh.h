@@ -28,7 +28,7 @@ struct mesh_circle {
 	{6, 7, 0},
 	{7, 8, 0},
 	{8, 1, 0} };
-	//Matrix2d DM_triangle_inverse[8];
+	//Matrix2d DM_tetrahedra_inverse[8];
 	int vertexNum = 9;
 	int triangleNum = 8;
 };
@@ -69,7 +69,7 @@ struct mesh_rectangle {
 		{12, 13, 10},
 		{9, 12, 10},
 		{6, 9, 10} };
-	//Matrix2d DM_triangle_inverse[16];
+	//Matrix2d DM_tetrahedra_inverse[16];
 	int vertexNum = 15;
 	int triangleNum = 16;
 };
@@ -121,19 +121,23 @@ public:
 	//vector<int> idmap;
 	//vector<int> idinverseMap;
 	vector<double> volum;
+	vector<double> areas;
 	vector<double> masses;
 	double meanMass;
 	double restSNKE;
 	double averageEdgeLenth;
 	double Hhat;
+    double Fhat;
 	double Kappa;
 	double bboxDiagSize2;
 	double dTol;
 	vector<Vector3d> vertexes;
 	vector<Vector3d> v_rest;
 	vector<Vector4i> tetrahedras;
+	vector<Vector3i> triangles;
 	vector<Vector3d> velocities;
-	vector<Matrix3d> DM_triangle_inverse;
+	vector<Matrix3d> DM_tetrahedra_inverse;
+	vector<Matrix2d> DM_triangle_inverse;
 	vector<Vector4i> surface;
 	vector<uint64_t> surfVerts;
 	vector<pair<uint64_t, uint64_t>> surfEdges;
@@ -153,6 +157,7 @@ public:
 	Vector3d minConer, maxConer;
 	Vector3d objMinConer, objMaxConer;
 	vector<int> boundaryTypes;
+    vector<int> spectialPontsArray;
 	//IPC
 	vector<Vector3d> xTilta, dx_Elastic, acceleration;
 	vector<Vector3d> V_prev;
@@ -162,8 +167,10 @@ public:
 	int D3x3Num;
 	int vertexNum;
 	int tetrahedraNum;
+	int triangleNum;
 	void InitMesh(int type, double scale);
 	bool load_tetrahedraMesh(const std::string& filename, double scale, Vector3d offset);
+	bool load_triangleMesh(const std::string& filename, double scale, Vector3d position_offset, int type=0);
 	bool load_tetrahedraMesh_IPC_TetMesh(const std::string& filename, double scale, Vector3d position_offset);
 	void load_test(double scale, int num = 1);
 	void getSurface();

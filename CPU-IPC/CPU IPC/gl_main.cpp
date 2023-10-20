@@ -1,5 +1,5 @@
-#include "GL\glew.h"
-#include "GL\freeglut.h"
+#include "GL/glew.h"
+#include "GL/freeglut.h"
 #include <fstream>
 #include <iostream>
 #include "fem3D.h"
@@ -29,6 +29,7 @@ bool screenshot = true;
 bool saveSurface = false;
 bool mouthOnly = false;
 bool isSetShader = false;
+bool isStop = false;
 //mesh2D mesh2d;
 //mesh3D mesh3d;
 //model_obj triangle_meshes;
@@ -64,6 +65,7 @@ GLuint shaderProgram;
 
 bool WriteBitmapFile(int width, int height, const std::string& file_name, unsigned char* bitmapData)
 {
+#ifdef _WIN32
     BITMAPFILEHEADER bitmapFileHeader;
     memset(&bitmapFileHeader, 0, sizeof(BITMAPFILEHEADER));
     bitmapFileHeader.bfSize = sizeof(BITMAPFILEHEADER);
@@ -105,6 +107,7 @@ bool WriteBitmapFile(int width, int height, const std::string& file_name, unsign
     fwrite(bitmapData, bitmapInfoHeader.biSizeImage, 1, filePtr);
 
     fclose(filePtr);
+#endif
     return true;
 }
 
@@ -387,7 +390,7 @@ void saveScreenPic(const string& path, int step_index) {
     if (step_index % 10 != 0) return;
     std::string file_path = ss.str();
     //if (step / 10 != start) {
-        //start = step / 10;
+    //start = step / 10;
     SaveScreenShot(window_width, window_height, file_path);
     //}
 }
@@ -397,7 +400,10 @@ void saveSurfaceMesh(const string& path) {
     ss << path;
     ss.fill('0');
     ss.width(5);
-    ss << surfNumId++;// / 10;
+    //if(surfNumId%10!=0) return;
+    ss << surfNumId;
+    surfNumId++;
+    //if(surfNumId%3!=0) return;
     ss << ".obj";
     std::string file_path = ss.str();
     ofstream outSurf(file_path);
@@ -418,15 +424,11 @@ void saveSurfaceMesh(const string& path) {
 }
 vector<int> newtonIt;
 
-void display(void)
-{
+vector<Vector3d> tpv[5];
+
+void display(void) {
 
     draw_Scene3D();
-
-    if (saveSurface)
-    {
-        saveSurfaceMesh("OBJ/saveSurface/surf_");
-    }
 
 
     if (stop) return;
@@ -434,19 +436,95 @@ void display(void)
     int step = 0;
     int k = simulator.simulateStick(step);
 
-    if (false)
-    {
+    if (false) {
         saveScreenPic("saveScreen/step_", step);
     }
 
+    if (true) {
+        saveSurfaceMesh("saveSurface/surf_");
+    }
 
-    //newtonIt.push_back(k);
 
-    //ofstream outIte("newTonIter.txt");
-    //for (auto value : newtonIt) {
-    //    outIte << value << endl;
-    //}
-    //outIte.close();
+    printf("current step:  %d\n", step);
+    newtonIt.push_back(k);
+
+//    const model_tet& tetrahedra_meshes = simulator.getTetrahedraMeshes();
+//    const mesh3D& tetMesh = tetrahedra_meshes.mesh3Ds[0];
+
+//    for(int i=0;i<5;i++){
+//        tpv[i].push_back(tetMesh.vertexes[tetMesh.spectialPontsArray[i]]);
+//    }
+
+
+//    ofstream outIte0("tp0.txt");
+//    for (auto value : tpv[0]) {
+//        outIte0 << value << endl;
+//    }
+//    outIte0.close();
+//    //exit(0);
+//
+//    ofstream outIte1("tp1.txt");
+//    for (auto value : tpv[1]) {
+//        outIte1 << value << endl;
+//    }
+//    outIte1.close();
+//    //exit(0);
+//
+//    ofstream outIte2("tp2.txt");
+//    for (auto value : tpv[2]) {
+//        outIte2 << value << endl;
+//    }
+//    outIte2.close();
+//
+//    ofstream outIte3("tp3.txt");
+//    for (auto value : tpv[3]) {
+//        outIte3 << value << endl;
+//    }
+//    outIte3.close();
+//
+//    ofstream outIte4("tp4.txt");
+//    for (auto value : tpv[4]) {
+//        outIte4 << value << endl;
+//    }
+//    outIte4.close();
+
+    if (step>=119) {
+
+//        ofstream outIte0("tp0.txt");
+//        for (auto value : tpv[0]) {
+//            outIte0 << value[0]<<" "<<value[1]<<" "<<value[2] << endl;
+//        }
+//        outIte0.close();
+//        //exit(0);
+//
+//        ofstream outIte1("tp1.txt");
+//        for (auto value : tpv[1]) {
+//            outIte0 << value[0]<<" "<<value[1]<<" "<<value[2] << endl;
+//        }
+//        outIte1.close();
+//        //exit(0);
+//
+//        ofstream outIte2("tp2.txt");
+//        for (auto value : tpv[2]) {
+//            outIte0 << value[0]<<" "<<value[1]<<" "<<value[2] << endl;
+//        }
+//        outIte2.close();
+//
+//        ofstream outIte3("tp3.txt");
+//        for (auto value : tpv[3]) {
+//            outIte0 << value[0]<<" "<<value[1]<<" "<<value[2] << endl;
+//        }
+//        outIte3.close();
+//
+//        ofstream outIte4("tp4.txt");
+//        for (auto value : tpv[4]) {
+//            outIte0 << value[0]<<" "<<value[1]<<" "<<value[2] << endl;
+//        }
+//        outIte4.close();
+        //exit(0);
+
+
+    }
 }
 
 void initScene0() {
@@ -596,6 +674,10 @@ void keyboard_func(unsigned char key, int x, int y)
         mouthOnly = !mouthOnly;
     }
 
+    if (key == '0')
+    {
+        isStop = !isStop;
+    }
     glutPostRedisplay();
 }
 

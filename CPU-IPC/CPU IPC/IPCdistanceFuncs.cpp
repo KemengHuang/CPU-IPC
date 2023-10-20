@@ -4,15 +4,16 @@
 #include <tbb/parallel_for.h>
 #include <tbb/spin_mutex.h>
 #include "ACCD.h"
-
+#include<iostream>
 
 std::vector<Eigen::Triplet<double>> BHessian::toTriplets(const vector<int>& Btype) {
+    std::cout<<"hello 00\n";
     Eigen::Matrix3d identity3 = Eigen::Matrix3d::Identity();
     std::vector<Triplet<double>> coefficients;
     coefficients.resize(9 * (D1Index.size() + D2Index.size() * 4 + D3Index.size() * 9 + D4Index.size() * 16),
         Triplet<double>(0, 0, 0));
     int offset = 0;
-
+    //std::cout<<"hello 01\n";
     tbb::parallel_for(0, (int)D1Index.size(), 1, [&](int i)
         {
             if (D1Index[i] >= 0) {
@@ -27,7 +28,7 @@ std::vector<Eigen::Triplet<double>> BHessian::toTriplets(const vector<int>& Btyp
             }
         }
     );
-
+    //std::cout<<"hello 02\n";
     offset = D1Index.size() * 9;
 
     tbb::parallel_for(0, (int)D2Index.size(), 1, [&](int i)
@@ -55,7 +56,7 @@ std::vector<Eigen::Triplet<double>> BHessian::toTriplets(const vector<int>& Btyp
         }
 
     );
-
+    //std::cout<<"hello 03  "<<D3Index.size()<<std::endl;
     offset += D2Index.size() * 36;
 
 
@@ -108,7 +109,7 @@ std::vector<Eigen::Triplet<double>> BHessian::toTriplets(const vector<int>& Btyp
         }
 
     );
-
+    //std::cout<<"hello 04\n";
     offset += D3Index.size() * 81;
 
     tbb::parallel_for(0, (int)D4Index.size(), 1, [&](int i)
@@ -184,6 +185,7 @@ std::vector<Eigen::Triplet<double>> BHessian::toTriplets(const vector<int>& Btyp
         }
 
     );
+    //std::cout<<"hello 05\n";
     return coefficients;
 }
 
@@ -843,7 +845,7 @@ void compute_H_b(double d, double dHat, double& H)
     H = (std::log(d / dHat) * -2.0 - t * 4.0 / d) + 1.0 / (d * d) * (t * t);
 }
 
-inline void g_PP(const Eigen::Vector3d& v0,
+void g_PP(const Eigen::Vector3d& v0,
     const Eigen::Vector3d& v1,
     Eigen::Matrix<double, 6, 1>& g)
 {
@@ -851,14 +853,14 @@ inline void g_PP(const Eigen::Vector3d& v0,
     g.template segment<3>(3) = -g.template segment<3>(0);
 }
 
-inline void H_PP(Eigen::Matrix<double, 6, 6>& H)
+void H_PP(Eigen::Matrix<double, 6, 6>& H)
 {
     H.setZero();
     H(0, 0) = H(1, 1) = H(2, 2) = H(3, 3) = H(4, 4) = H(5, 5) = 2.0;
     H(0, 3) = H(1, 4) = H(2, 5) = H(3, 0) = H(4, 1) = H(5, 2) = -2.0;
 }
 
-inline void d_PE(const Eigen::Vector3d& v0,
+void d_PE(const Eigen::Vector3d& v0,
     const Eigen::Vector3d& v1,
     const Eigen::Vector3d& v2,
     double& d)
@@ -866,7 +868,7 @@ inline void d_PE(const Eigen::Vector3d& v0,
     d = (v1 - v0).cross(v2 - v0).squaredNorm() / (v2 - v1).squaredNorm();
 }
 
-inline void g_PE(double v01, double v02, double v03, double v11, double v12, double v13,
+void g_PE(double v01, double v02, double v03, double v11, double v12, double v13,
     double v21, double v22, double v23, double g[9])
 {
     double t17;
@@ -921,7 +923,7 @@ inline void g_PE(double v01, double v02, double v03, double v11, double v12, dou
 }
 
 
-inline void g_PT(double v01, double v02, double v03, double v11, double v12, double v13,
+void g_PT(double v01, double v02, double v03, double v11, double v12, double v13,
     double v21, double v22, double v23, double v31, double v32, double v33,
     double g[12])
 {
@@ -984,7 +986,7 @@ inline void g_PT(double v01, double v02, double v03, double v11, double v12, dou
     g[11] = t45 * (t11 * t15 - t12 * t14) * -2.0 + t43 * (t14 * t33 * 2.0 + t15 * t34 * 2.0);
 }
 
-inline void g_PT(const Eigen::RowVector3d& v0,
+void g_PT(const Eigen::RowVector3d& v0,
     const Eigen::RowVector3d& v1,
     const Eigen::RowVector3d& v2,
     const Eigen::RowVector3d& v3,
@@ -997,7 +999,7 @@ inline void g_PT(const Eigen::RowVector3d& v0,
         g.data());
 }
 
-inline void H_PE(double v01, double v02, double v03, double v11, double v12, double v13,
+void H_PE(double v01, double v02, double v03, double v11, double v12, double v13,
     double v21, double v22, double v23, double H[81])
 {
     double t17;
@@ -1319,7 +1321,7 @@ inline void H_PE(double v01, double v02, double v03, double v11, double v12, dou
     H[80] = ((t234 * -2.0 + -t279) + t283) + t102 * (t38 + t39);
 }
 
-inline void H_PE(const Eigen::RowVector3d& v0,
+void H_PE(const Eigen::RowVector3d& v0,
     const Eigen::RowVector3d& v1,
     const Eigen::RowVector3d& v2,
     Eigen::Matrix<double, 9, 9>& H)
@@ -1330,7 +1332,7 @@ inline void H_PE(const Eigen::RowVector3d& v0,
         H.data());
 }
 
-inline void H_PT(double v01, double v02, double v03, double v11, double v12, double v13,
+void H_PT(double v01, double v02, double v03, double v11, double v12, double v13,
     double v21, double v22, double v23, double v31, double v32, double v33,
     double H[144])
 {
@@ -1777,7 +1779,7 @@ inline void H_PT(double v01, double v02, double v03, double v11, double v12, dou
     H[143] = ((t125 * t125 * t202 * 2.0 + t193 * t193 * t204 * t206 * 2.0) - t646_tmp * (t38 + t39)) - t125 * t193 * t203 * t205 * 4.0;
 }
 
-inline void H_PT(const Eigen::RowVector3d& v0,
+void H_PT(const Eigen::RowVector3d& v0,
     const Eigen::RowVector3d& v1,
     const Eigen::RowVector3d& v2,
     const Eigen::RowVector3d& v3,
@@ -1790,7 +1792,7 @@ inline void H_PT(const Eigen::RowVector3d& v0,
         H.data());
 }
 
-inline void g_PE(const Eigen::RowVector3d& v0,
+void g_PE(const Eigen::RowVector3d& v0,
     const Eigen::RowVector3d& v1,
     const Eigen::RowVector3d& v2,
     Eigen::Matrix<double, 9, 1>& g)
@@ -1882,7 +1884,7 @@ void g_EE(double v01, double v02, double v03, double v11, double v12, double v13
     g[11] = t80 + t76 * t19 * 2.0;
 }
 
-inline void g_EE(const Eigen::RowVector3d& v0,
+void g_EE(const Eigen::RowVector3d& v0,
     const Eigen::RowVector3d& v1,
     const Eigen::RowVector3d& v2,
     const Eigen::RowVector3d& v3,
@@ -1895,7 +1897,7 @@ inline void g_EE(const Eigen::RowVector3d& v0,
         g.data());
 }
 
-inline void H_EE(double v01, double v02, double v03, double v11, double v12, double v13,
+void H_EE(double v01, double v02, double v03, double v11, double v12, double v13,
     double v21, double v22, double v23, double v31, double v32, double v33,
     double H[144])
 {
@@ -2507,7 +2509,7 @@ inline void H_EE(double v01, double v02, double v03, double v11, double v12, dou
     H[143] = (t53 + t98 * t98 * t156 * 2.0) + b_t522_tmp * 4.0;
 }
 
-inline void H_EE(const Eigen::RowVector3d& v0,
+void H_EE(const Eigen::RowVector3d& v0,
     const Eigen::RowVector3d& v1,
     const Eigen::RowVector3d& v2,
     const Eigen::RowVector3d& v3,
@@ -3035,14 +3037,15 @@ void compute_g_dpt_new(const mesh3D& mesh,
     }
 }
 
-void compute_g_dpt(const mesh3D& mesh,
-    const std::vector<MMCVID>& activeSet,
-    const Eigen::VectorXd& input,
-    vector<Vector3d>& output_incremental,
-    int offset,
-    double coef)
+int compute_g_dpt(const mesh3D& mesh,
+                  const std::vector<MMCVID>& activeSet,
+                  const Eigen::VectorXd& input,
+                  vector<Vector3d>& output_incremental,
+                  int offset,
+                  double coef)
 {
     int constraintI = offset;
+    int collisonNum = 0;
     for (const auto& MMCVIDI : activeSet) {
         if (MMCVIDI[0] >= 0) {
             // edge-edge
@@ -3054,6 +3057,7 @@ void compute_g_dpt(const mesh3D& mesh,
             output_incremental[MMCVIDI[1]] += g.template segment<3>(3);
             output_incremental[MMCVIDI[2]] += g.template segment<3>(6);
             output_incremental[MMCVIDI[3]] += g.template segment<3>(9);
+            collisonNum++;
         }
         else {
             // point-triangle and degenerate edge-edge
@@ -3065,7 +3069,7 @@ void compute_g_dpt(const mesh3D& mesh,
                 Eigen::Matrix<double, 6, 1> g;
                 g_PP(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], g);
                 g *= coef * -MMCVIDI[3] * input[constraintI];
-
+                collisonNum+=-MMCVIDI[3];
                 output_incremental[v0I] += g.template segment<3>(0);
                 output_incremental[MMCVIDI[1]] += g.template segment<3>(3);
             }
@@ -3074,7 +3078,7 @@ void compute_g_dpt(const mesh3D& mesh,
                 Eigen::Matrix<double, 9, 1> g;
                 g_PE(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], g);
                 g *= coef * -MMCVIDI[3] * input[constraintI];
-
+                collisonNum+=-MMCVIDI[3];
                 output_incremental[v0I] += g.template segment<3>(0);
                 output_incremental[MMCVIDI[1]] += g.template segment<3>(3);
                 output_incremental[MMCVIDI[2]] += g.template segment<3>(6);
@@ -3091,7 +3095,7 @@ void compute_g_dpt(const mesh3D& mesh,
                 //Vector3d gv0 = g.template segment<3>(0);
                 //gv0.normalize();
 
-
+                collisonNum++;
                 //double theta = gv0.dot(Normal);
 
                 //printf("------------------------------------------%f\n", theta);
@@ -3105,6 +3109,7 @@ void compute_g_dpt(const mesh3D& mesh,
 
         ++constraintI;
     }
+    return collisonNum;
 }
 
 void compute_g_dee(const mesh3D& mesh,
@@ -3999,6 +4004,7 @@ void Self_largestFeasibleStepSize_CCD(const mesh3D& mesh,
             {
                 const Vector3i& sfVInd = mesh.surface[sfI].block<3, 1>(0, 0);
 
+                if (mesh.boundaryTypes[vI]>=2&&mesh.boundaryTypes[sfVInd[0]]>=2&&mesh.boundaryTypes[sfVInd[1]]>=2&&mesh.boundaryTypes[sfVInd[2]]>=2)continue;
                 if (vI == sfVInd[0] || vI == sfVInd[1] || vI == sfVInd[2])continue;
 
                 double largestAlpha = point_triangle_ccd(mesh.vertexes[vI],
@@ -4032,6 +4038,7 @@ void Self_largestFeasibleStepSize_CCD(const mesh3D& mesh,
             // edge-edge
             for (const auto& eI : edgeInds) {
                 const auto& meshEI = mesh.surfEdges[eI];
+                if (mesh.boundaryTypes[meshEI.first]>=2&&mesh.boundaryTypes[meshEI.second]>=2&&mesh.boundaryTypes[meshEJ.first]>=2&&mesh.boundaryTypes[meshEJ.second]>=2)continue;
                 if (meshEI.first == meshEJ.first || meshEI.first == meshEJ.second || meshEI.second == meshEJ.first || meshEI.second == meshEJ.second || eI < eJ)continue;
 
                 double largestAlphas = edge_edge_ccd(mesh.vertexes[meshEI.first],

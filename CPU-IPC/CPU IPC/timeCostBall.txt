@@ -1,3 +1,0 @@
-time: 489478
-total iter: 23571
-frames: 254

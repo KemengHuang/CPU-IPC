@@ -538,33 +538,33 @@ void computeEGradient(const mesh3D &mesh, vector<Vector3d> &gradient) {
                       }
 
     );
-    printf("triangle num: %d\n", mesh.triangleNum);
-    tbb::parallel_for(0, mesh.triangleNum, 1, [&](int ii) {
-                          MatrixXd PFPX = computePFPX32D_double(mesh.DM_triangle_inverse[ii]);
-                          Matrix<double, 3, 2> F =
-                                  calculateDs32D_double(mesh.vertexes, mesh.triangles[ii]) * mesh.DM_triangle_inverse[ii];
-                          Vector2d anisotropic_a = Vector2d(1, 0), anisotropic_b = Vector2d(0, 1);
-                          Matrix<double, 3, 2> PEPF = computePEPF_baraffwitkin_double(F, anisotropic_a, anisotropic_b, stretchStiffness,
-                                                                                      shearStiffness);
+    //printf("triangle num: %d\n", mesh.triangleNum);
+    //tbb::parallel_for(0, mesh.triangleNum, 1, [&](int ii) {
+    //                      MatrixXd PFPX = computePFPX32D_double(mesh.DM_triangle_inverse[ii]);
+    //                      Matrix<double, 3, 2> F =
+    //                              calculateDs32D_double(mesh.vertexes, mesh.triangles[ii]) * mesh.DM_triangle_inverse[ii];
+    //                      Vector2d anisotropic_a = Vector2d(1, 0), anisotropic_b = Vector2d(0, 1);
+    //                      Matrix<double, 3, 2> PEPF = computePEPF_baraffwitkin_double(F, anisotropic_a, anisotropic_b, stretchStiffness,
+    //                                                                                  shearStiffness);
 
-                          MatrixXd pepf = vec_double(PEPF);
-                          MatrixXd f = IPC_dt * IPC_dt * mesh.areas[ii] * PFPX.transpose() * pepf;
+    //                      MatrixXd pepf = vec_double(PEPF);
+    //                      MatrixXd f = IPC_dt * IPC_dt * mesh.areas[ii] * PFPX.transpose() * pepf;
 
-                          for (int i = 0; i < 3; i++) {
-                              countMutex[mesh.triangles[ii][i]].lock();
-                              gradient[mesh.triangles[ii][i]] +=
-                                      f.block<3, 1>(3 * i, 0);//f.template segment<3>(i * 3);//f(i, 0);
-                              countMutex[mesh.triangles[ii][i]].unlock();
+    //                      for (int i = 0; i < 3; i++) {
+    //                          countMutex[mesh.triangles[ii][i]].lock();
+    //                          gradient[mesh.triangles[ii][i]] +=
+    //                                  f.block<3, 1>(3 * i, 0);//f.template segment<3>(i * 3);//f(i, 0);
+    //                          countMutex[mesh.triangles[ii][i]].unlock();
 
-                          }
+    //                      }
 
-                      }
+    //                  }
 
-    );
+    //);
 }
 
 int computeGradientAndHessian(mesh3D &mesh, vector<Vector3d> &gradient, BHessian &BH, const Ground &grd) {
-    //Mass part
+    //calculate inertial gradient
     Matrix3d massM;
     massM.setIdentity();
     int collisionNum=0;
@@ -576,7 +576,7 @@ int computeGradientAndHessian(mesh3D &mesh, vector<Vector3d> &gradient, BHessian
 
 
     BH.H12x12.resize(mesh.tetrahedraNum);
-
+    //calculate FEM gradient and hessian for tetrahedra mesh
     vector<tbb::spin_mutex> countMutex(mesh.vertexNum);
     tbb::parallel_for(0, mesh.tetrahedraNum, 1, [&](int ii) {
                           MatrixXd PFPX = computePFPX3D_double(mesh.DM_tetrahedra_inverse[ii]);
@@ -585,12 +585,11 @@ int computeGradientAndHessian(mesh3D &mesh, vector<Vector3d> &gradient, BHessian
                           Matrix3d PEPF = computePEPF_StableNHK3D_2_double(F, lengthRate, volumeRate);
 
                           MatrixXd pepf = vec_double(PEPF);
-                          MatrixXd f = mesh.volum[ii] * PFPX.transpose() * pepf;
+                          VectorXd f = mesh.volum[ii] * PFPX.transpose() * pepf;
 
                           for (int i = 0; i < 4; i++) {
                               countMutex[mesh.tetrahedras[ii][i]].lock();
-                              gradient[mesh.tetrahedras[ii][i]] +=
-                                      IPC_dt * IPC_dt * f.block<3, 1>(3 * i, 0);//f.template segment<3>(i * 3);//f(i, 0);
+                              gradient[mesh.tetrahedras[ii][i]] += IPC_dt * IPC_dt * f.template segment<3>(i * 3);//f(i, 0);
                               countMutex[mesh.tetrahedras[ii][i]].unlock();
 
                           }
@@ -605,7 +604,7 @@ int computeGradientAndHessian(mesh3D &mesh, vector<Vector3d> &gradient, BHessian
 
     );
     BH.D4Index = mesh.tetrahedras;
-
+    //calculate FEM gradient and hessian for triangle mesh
     BH.H9x9.resize(mesh.triangleNum);
     tbb::parallel_for(0, mesh.triangleNum, 1, [&](int ii) {
                           MatrixXd PFPX = computePFPX32D_double(mesh.DM_triangle_inverse[ii]);
@@ -616,14 +615,12 @@ int computeGradientAndHessian(mesh3D &mesh, vector<Vector3d> &gradient, BHessian
                                                                                       shearStiffness);
 
                           MatrixXd pepf = vec_double(PEPF);
-                          MatrixXd f = IPC_dt * IPC_dt *mesh.areas[ii] * PFPX.transpose() * pepf;
+                          VectorXd f = IPC_dt * IPC_dt *mesh.areas[ii] * PFPX.transpose() * pepf;
 
                           for (int i = 0; i < 3; i++) {
                               countMutex[mesh.triangles[ii][i]].lock();
-                              gradient[mesh.triangles[ii][i]] +=
-                                       f.block<3, 1>(3 * i, 0);//f.template segment<3>(i * 3);//f(i, 0);
+                              gradient[mesh.triangles[ii][i]] += f.template segment<3>(i * 3);//f(i, 0);
                               countMutex[mesh.triangles[ii][i]].unlock();
-
                           }
 
                           //std::cout << F << std::endl;
@@ -637,12 +634,13 @@ int computeGradientAndHessian(mesh3D &mesh, vector<Vector3d> &gradient, BHessian
 
     );
     BH.D3Index = mesh.triangles;
-    //std::cout<<"D3Index: "<<BH.D3Index.size()<<std::endl;
+
+
+    //calculate barrier gradient and hessian for the ground plane collision
     VectorXd constraintVals;
     int offset = 0;
     Evaluate_GroundConstraintVals(grd, mesh, constraintVals, offset);
     Matrix3d nnT = grd.normal * grd.normal.transpose();
-
 
     tbb::spin_mutex groundMutex;//, countMutex3;
     tbb::parallel_for(0, (int) constraintVals.size(), 1, [&](int cI) {
@@ -665,7 +663,7 @@ int computeGradientAndHessian(mesh3D &mesh, vector<Vector3d> &gradient, BHessian
 
     offset = constraintVals.size();
     //cout << "self c num:";
-    cout << constraintVals.size() << endl;
+    //cout << constraintVals.size() << endl;
     Evaluate_SelfPTConstraintVals(mesh, constraintVals, offset);
 
     tbb::parallel_for(offset, (int) constraintVals.size(), 1, [&](int cI)
@@ -681,28 +679,6 @@ int computeGradientAndHessian(mesh3D &mesh, vector<Vector3d> &gradient, BHessian
 #endif
 
     compute_g_dee(mesh, gradient, mesh.Hhat, mesh.Kappa);
-
-    //double totalTime = 0;
-    //if (mesh.Self_ActiveSet.size() > 0) {
-    //    vector<MMCVID> test_ActiveSet;
-    //    for (int i = 0; i < 1000000; i++) {
-    //        test_ActiveSet.emplace_back(-6, 7, 8, -1);
-    //    }
-    //    mesh.Self_ActiveSet = test_ActiveSet;
-
-    //    for (int i = 0; i < 1; i++) {
-
-    //        HighResolutionTimerForWin timer;
-    //        timer.set_start();
-    //        compute_H_dpt(mesh, BH, mesh.Hhat, mesh.Kappa);
-    //        timer.set_end();
-    //        float time0 = timer.get_millisecond();
-    //        totalTime += time0;
-    //    }
-    //    cout << "projection time consuming:  " << totalTime / 1 << endl;
-    //    system("pause");
-    //}
-    //
 
 #ifndef NEWB
     compute_H_dpt(mesh, BH, mesh.Hhat, mesh.Kappa);
@@ -1074,7 +1050,7 @@ vector<Vector3d> PCG_Solver(const mesh3D &mesh, const BHessian &BH, const vector
         );
 
     }
-    printf("cg counts: %d\n", cgCounts);
+    //printf("cg counts: %d\n", cgCounts);
     if (cgCounts == 0) {
         printf("indefinite exit\n");
         exit(0);
@@ -1088,7 +1064,7 @@ void
 calculateMovingDirection(const mesh3D &mesh, BHessian &BH, vector<Vector3d> gradient, vector<Vector3d> &direction) {
 //#ifdef NDEBUG
     direction = cholmod_solver(BH, gradient, mesh);
-//    //direction = PCG_Solver(mesh, BH, gradient);
+    //direction = PCG_Solver(mesh, BH, gradient);
 //#else
 //    direction = PCG_Solver(mesh, BH, gradient);
 //#endif
@@ -1233,9 +1209,7 @@ void computeEnergyVal(const mesh3D &mesh, double &energyVal, const Ground &gd, d
             EI[cI] += mesh.Self_lambda_lastH[cI] * f0;
         }
     }
-//#ifdef DEBUG
     );
-//#endif
 
     energyVal += EI.sum() * FEM::friction;
 
@@ -1254,7 +1228,7 @@ void computeEnergyVal(const mesh3D &mesh, double &energyVal, const Ground &gd, d
         }
         ++contactPairI;
     }
-    Ef *= 1.0;
+    //Ef *= 1.0;
     energyVal += Ef;
 #endif
 }
@@ -1425,7 +1399,7 @@ bool lineSearch(mesh3D &mesh,
         //    stepSize /= 2.0;
         //}
         //else {
-        printf("testingE:  %f       lastEnergyVal:   %f\n", testingE, lastEnergyVal);
+        printf("ls iteration id:  %d,  testingE:  %f       lastEnergyVal:   %f\n", numOfLineSearch, testingE, lastEnergyVal);
         stepSize /= 2.0;
         //}
 
@@ -1459,7 +1433,7 @@ bool lineSearch(mesh3D &mesh,
     }
 
     //msg << stepSize << "(armijo) ";
-    printf("lineSearch step: %f\n", stepSize);
+    //printf("lineSearch step: %f\n", stepSize);
     lastEnergyVal = testingE;
     //if (stepSize >= 1.0 / (1 << (1 + numOfLineSearch)) && !numOfIntersect /*&& !numOfLineSearch*/ && abs(testingE - lastEnergyVal) / abs(lastEnergyVal - mesh.restSNKE) < 1e-8 / IPC_dt / (1 << (numOfLineSearch + 1))/* / vertexNum*/ /*&& (testingE > lastEnergyVal + c1m * alpha)*/) {
     //    stopped = true;
@@ -1676,10 +1650,10 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa, float &
         double distToOpt_PN = 0;
 
         distToOpt_PN = calculate_distToOpt_PN(moveDir);
-        cout << "distToOpt_PN" << endl;
-        cout << distToOpt_PN << endl;
+        //cout << "distToOpt_PN" << endl;
+        //cout << distToOpt_PN << endl;
 
-        bool gradVanish = (distToOpt_PN < sqrt(16e-4 * mesh.bboxDiagSize2 * IPC_dt * IPC_dt));
+        bool gradVanish = (distToOpt_PN < sqrt(1e-4 * mesh.bboxDiagSize2 * IPC_dt * IPC_dt));
         if (k && gradVanish/* && totalTimeStep > 1 - 1e-3*/) {
             break;
         }
@@ -1695,14 +1669,14 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa, float &
 
         Environment_largestFeasibleStepSize(mesh, gd, moveDir, slackness_a, alpha);
 
-        printf("env alpha:  %f\n", alpha);
+        //printf("env alpha:  %f\n", alpha);
         if (alpha <= 0) {
             alpha = 1;
         }
         std::vector<std::pair<int, int>> newCandidates;
 
         Self_largestFeasibleStepSize(mesh, sh, moveDir, slackness_m, newCandidates, alpha);
-        printf("partial self alpha:  %f\n", alpha);
+        //printf("partial self alpha:  %f\n", alpha);
         double partialCCD_alpha = alpha;
 
         Eigen::VectorXd pMag(mesh.surfVerts.size());
@@ -1711,7 +1685,7 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa, float &
             pMag[i] = moveDir[surfId].norm();
         }
         double alpha_CFL = std::sqrt(mesh.Hhat) / (pMag.maxCoeff() * 2.0);
-        printf("alpha_CFL:  %f\n", alpha_CFL);
+        //printf("alpha_CFL:  %f\n", alpha_CFL);
 
         double fullCCD_alpha = alpha;
         sh.build(mesh, moveDir, fullCCD_alpha, mesh.averageEdgeLenth);
@@ -1724,11 +1698,11 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa, float &
             alpha = max(alpha, alpha_CFL);
         }
 
-        cout << "CCD alpha:  " << fullCCD_alpha * 1.0 << endl;
+        //cout << "CCD alpha:  " << fullCCD_alpha * 1.0 << endl;
         timer2.set_end();
         timer3.set_start();
 
-        printf("alpha:  %f\n", alpha);
+        //printf("alpha:  %f\n", alpha);
 
         double alpha_feasible = alpha;
 
@@ -1752,7 +1726,7 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa, float &
         time4 += time44;
         totalTimeStep += alpha;
 
-        printf("time0 = %f,  time1 = %f,  time2 = %f,  time3 = %f,  time4 = %f\n", time00, time11, time22, time33, time44);
+        //printf("time0 = %f,  time1 = %f,  time2 = %f,  time3 = %f,  time4 = %f\n", time00, time11, time22, time33, time44);
     }
     printf("newton iteration:  %d    and    Kappa:  %f\n", k, mesh.Kappa);
     total_iter += k;
@@ -1781,6 +1755,17 @@ void export_obj(const mesh3D &mesh, int index) {
 
 bool isRotate = false;
 bool loadTempTimeInfo = true;
+
+void updateVelocity(const vector<Vector3d>& currentPos, const vector<Vector3d> originalPos, vector<Vector3d>& velocity, const double& delta_t, const int& number) {
+    tbb::parallel_for(0, number, 1, [&](int i)
+
+        {
+            velocity[i] = (currentPos[i] - originalPos[i]) / delta_t;
+        }
+    );
+}
+
+
 int IPC_Solver(int& stepId, model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
     mesh3D& mesh = meshTetes->mesh3Ds[0];
 
@@ -1803,25 +1788,25 @@ int IPC_Solver(int& stepId, model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
     if (mesh.Kappa < 1e-16) {
         suggestKappa(mesh.Kappa, mesh.Hhat, mesh.bboxDiagSize2, mesh.meanMass);
     }
-    initKappa(mesh, gd, mesh.Kappa);
+    initKappa (mesh, gd, mesh.Kappa);
     //printf("hello 1 p\n");
 #ifdef USE_FRICTION
     buildFriction(mesh, gd);
 #endif
 
-    if(step_index*IPC_dt>=2.2){
-        isRotate = false;
-        tbb::parallel_for(0, (int) (mesh.vertexNum), 1, [&](int i)
-                                  //for (int i = 0; i < moveDir.size();i++)
-                          {
-                              if (mesh.boundaryTypes[i] == 1) {
-                                  mesh.boundaryTypes[i] = 0;
+    //if(step_index*IPC_dt>=2.2){
+    //    isRotate = false;
+    //    tbb::parallel_for(0, (int) (mesh.vertexNum), 1, [&](int i)
+    //                              //for (int i = 0; i < moveDir.size();i++)
+    //                      {
+    //                          if (mesh.boundaryTypes[i] == 1) {
+    //                              mesh.boundaryTypes[i] = 0;
 
-                              }
+    //                          }
 
-                          }
-        );
-    }
+    //                      }
+    //    );
+    //}
 
     //printf("rotate\n");
     if (isRotate)
@@ -1873,7 +1858,7 @@ int IPC_Solver(int& stepId, model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
         if (constraintVals.size()) {
             double minm = constraintVals.minCoeff();
             double maxm = constraintVals.maxCoeff();
-            std::cout << minm << "    " << maxm << endl;
+            //std::cout << minm << "    " << maxm << endl;
             if (constraintVals.minCoeff() < mesh.dTol) {
                 break;
             }
@@ -1887,12 +1872,7 @@ int IPC_Solver(int& stepId, model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
     }
 
 
-    tbb::parallel_for(0, mesh.vertexNum, 1, [&](int i)
-
-                      {
-                          mesh.velocities[i] = (mesh.vertexes[i] - mesh.V_prev[i]) / IPC_dt;
-                      }
-    );
+    updateVelocity(mesh.vertexes, mesh.V_prev, mesh.velocities, IPC_dt, mesh.vertexNum);
 
 
     mesh.V_prev = mesh.vertexes;
@@ -1908,7 +1888,7 @@ int IPC_Solver(int& stepId, model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
 
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
     std::cout << "Time for a step = "
-              << std::chrono::duration_cast<std::chrono::microseconds>(end - begin).count() << "[us]" << std::endl;
+              << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "[ms]" << std::endl;
     time_total += std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
 
     totalCollision+=collisonNum;

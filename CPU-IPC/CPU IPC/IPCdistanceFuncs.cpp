@@ -7,7 +7,7 @@
 #include<iostream>
 
 std::vector<Eigen::Triplet<double>> BHessian::toTriplets(const vector<int>& Btype) {
-    std::cout<<"hello 00\n";
+    //std::cout<<"hello 00\n";
     Eigen::Matrix3d identity3 = Eigen::Matrix3d::Identity();
     std::vector<Triplet<double>> coefficients;
     coefficients.resize(9 * (D1Index.size() + D2Index.size() * 4 + D3Index.size() * 9 + D4Index.size() * 16),
@@ -2536,37 +2536,23 @@ double SelfConstraintVal(const mesh3D& mesh, const MMCVID& active) {
     if (active[0] >= 0) {
         // edge-edge
         d_EE(mesh.vertexes[active[0]], mesh.vertexes[active[1]], mesh.vertexes[active[2]], mesh.vertexes[active[3]], val);
-        //if (val < 0) {
-        //    printf("EE\n");
-        //    system("pause");
-        //}
     }
     else {
-        // point-triangle and degenerate edge-edge
-        //assert(active[1] >= 0);
+
         if (active[2] < 0) {
             // PP
             d_PP(mesh.vertexes[-active[0] - 1], mesh.vertexes[active[1]], val);
-            //if (val < 0) {
-            //    printf("pp\n");
-            //    system("pause");
-            //}
+
         }
         else if (active[3] < 0) {
             // PE
             d_PE(mesh.vertexes[-active[0] - 1], mesh.vertexes[active[1]], mesh.vertexes[active[2]], val);
-            //if (val < 0) {
-            //    printf("pe\n");
-            //    system("pause");
-            //}
+
         }
         else {
             // PT
             d_PT(mesh.vertexes[-active[0] - 1], mesh.vertexes[active[1]], mesh.vertexes[active[2]], mesh.vertexes[active[3]], val);
-            //if (val < 0) {
-            //    printf("pt\n");
-            //    system("pause");
-            //}
+
         }
     }
     return val;
@@ -3060,8 +3046,6 @@ int compute_g_dpt(const mesh3D& mesh,
             collisonNum++;
         }
         else {
-            // point-triangle and degenerate edge-edge
-            assert(MMCVIDI[1] >= 0);
 
             int v0I = -MMCVIDI[0] - 1;
             if (MMCVIDI[2] < 0) {
@@ -3088,17 +3072,8 @@ int compute_g_dpt(const mesh3D& mesh,
                 Eigen::Matrix<double, 12, 1> g;
                 g_PT(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], g);
                 g *= coef * input[constraintI];
-                //Vector3d vec1 = mesh.vertexes[MMCVIDI[2]] - mesh.vertexes[MMCVIDI[1]];
-                //Vector3d vec2 = mesh.vertexes[MMCVIDI[3]] - mesh.vertexes[MMCVIDI[1]];
-
-                //Vector3d Normal = vec1.cross(vec2).normalized();
-                //Vector3d gv0 = g.template segment<3>(0);
-                //gv0.normalize();
 
                 collisonNum++;
-                //double theta = gv0.dot(Normal);
-
-                //printf("------------------------------------------%f\n", theta);
 
                 output_incremental[v0I] += g.template segment<3>(0);
                 output_incremental[MMCVIDI[1]] += g.template segment<3>(3);
@@ -3113,8 +3088,6 @@ int compute_g_dpt(const mesh3D& mesh,
 }
 
 void compute_g_dee(const mesh3D& mesh,
-    //const std::vector<MMCVID>& paraEEMMCVIDSet,
-    //const std::vector<std::pair<int, int>>& paraEEeIeJSet,
     vector<Vector3d>& grad_inc, double dHat, double coef)
 {
     Eigen::VectorXd e_db_div_dd;
@@ -3550,7 +3523,6 @@ void compute_H_dpt(const mesh3D& mesh,
     BHessian& BH,
     double dHat, double coef)
 {
-    //std::vector<Eigen::Matrix<int, 4, 1>> rowIStart(mesh.Self_ActiveSet.size());
 
     tbb::spin_mutex countMutex12, countMutex9, countMutex6;//, countMutex3;
     tbb::parallel_for(0, (int)mesh.Self_ActiveSet.size(), 1, [&](int cI)
@@ -3580,8 +3552,6 @@ void compute_H_dpt(const mesh3D& mesh,
 
             }
             else {
-                // point-triangle and degenerate edge-edge
-                //assert(MMCVIDI[1] >= 0);
 
                 int v0I = -MMCVIDI[0] - 1;
                 if (MMCVIDI[2] < 0) {
@@ -3600,13 +3570,11 @@ void compute_H_dpt(const mesh3D& mesh,
                     double coef_dup = coef * -MMCVIDI[3];
                     Eigen::Matrix<double, 6, 6> HessianBlock = ((coef_dup * H_b) * g) * g.transpose() + (coef_dup * g_b) * H;
                     IglUtils::makePD<double, 6>(HessianBlock);
-                    //IPHessian[cI].template block<6, 6>(0, 0) = HessianBlock;
 
                     countMutex6.lock();
                     BH.H6x6.push_back(HessianBlock);
                     BH.D2Index.push_back(Vector2i(v0I, MMCVIDI[1]));
                     countMutex6.unlock();
-
 
                 }
                 else if (MMCVIDI[3] < 0) {
@@ -3625,7 +3593,6 @@ void compute_H_dpt(const mesh3D& mesh,
                     double coef_dup = coef * -MMCVIDI[3];
                     Eigen::Matrix<double, 9, 9> HessianBlock = ((coef_dup * H_b) * g) * g.transpose() + (coef_dup * g_b) * H;
                     IglUtils::makePD<double, 9>(HessianBlock);
-                    //IPHessian[cI].block(0, 0, 9, 9) = HessianBlock;
 
                     countMutex9.lock();
                     BH.H9x9.push_back(HessianBlock);
@@ -3668,7 +3635,7 @@ void compute_H_dee(const mesh3D& mesh,
 
     vector<Matrix<double, 12, 12>> PEEHessian(mesh.Self_EE_ActiveSet.size());
     vector<Vector4i> tempD4(mesh.Self_EE_ActiveSet.size());
-    std::vector<Eigen::Matrix<int, 4, 1>> rowIStart(mesh.Self_EE_ActiveSet.size());
+
     tbb::parallel_for(0, (int)mesh.Self_EE_ActiveSet.size(), 1, [&](int cI)
         {
             double b, g_b, H_b;
@@ -3788,135 +3755,7 @@ void compute_H_dee(const mesh3D& mesh,
     BH.H12x12.insert(BH.H12x12.end(), PEEHessian.begin(), PEEHessian.end());
 }
 
-inline void computeEdgeEdgeD(const Eigen::RowVector3d& v0,
-    const Eigen::RowVector3d& v1,
-    const Eigen::RowVector3d& v2,
-    const Eigen::RowVector3d& v3,
-    double& d)
-{
-    switch (dType_EE(v0, v1, v2, v3)) {
-    case 0: {
-        d_PP(v0, v2, d);
-        break;
-    }
 
-    case 1: {
-        d_PP(v0, v3, d);
-        break;
-    }
-
-    case 2: {
-        d_PE(v0, v2, v3, d);
-        break;
-    }
-
-    case 3: {
-        d_PP(v1, v2, d);
-        break;
-    }
-
-    case 4: {
-        d_PP(v1, v3, d);
-        break;
-    }
-
-    case 5: {
-        d_PE(v1, v2, v3, d);
-        break;
-    }
-
-    case 6: {
-        d_PE(v2, v0, v1, d);
-        break;
-    }
-
-    case 7: {
-        d_PE(v3, v0, v1, d);
-        break;
-    }
-
-    case 8: {
-        d_EE(v0, v1, v2, v3, d);
-        break;
-    }
-
-    default:
-        d = -1.0;
-        break;
-    }
-}
-
-inline void computePointTriD(const Eigen::RowVector3d& v0,
-    const Eigen::RowVector3d& v1,
-    const Eigen::RowVector3d& v2,
-    const Eigen::RowVector3d& v3,
-    double& d)
-{
-    switch (dType_PT(v0, v1, v2, v3)) {
-    case 0: {
-        d_PP(v0, v1, d);
-        break;
-    }
-
-    case 1: {
-        d_PP(v0, v2, d);
-        break;
-    }
-
-    case 2: {
-        d_PP(v0, v3, d);
-        break;
-    }
-
-    case 3: {
-        d_PE(v0, v1, v2, d);
-        break;
-    }
-
-    case 4: {
-        d_PE(v0, v2, v3, d);
-        break;
-    }
-
-    case 5: {
-        d_PE(v0, v3, v1, d);
-        break;
-    }
-
-    case 6: {
-        d_PT(v0, v1, v2, v3, d);
-        break;
-    }
-
-    default:
-        d = -1.0;
-        break;
-    }
-}
-
-inline void computePointEdgeD(const Eigen::RowVector3d& v0,
-    const Eigen::RowVector3d& v1,
-    const Eigen::RowVector3d& v2,
-    double& d)
-{
-    Eigen::RowVector3d v = v2 - v1;
-    Eigen::RowVector3d w = v0 - v1;
-
-    double c1 = w.dot(v);
-    if (c1 <= 0.0) {
-        d_PP(v0, v1, d);
-    }
-    else {
-        double c2 = v.squaredNorm();
-        if (c2 <= c1) {
-            d_PP(v0, v2, d);
-        }
-        else {
-            double b = c1 / c2;
-            d_PP(v0, v1 + b * v, d);
-        }
-    }
-}
 
 void Self_largestFeasibleStepSize(const mesh3D& mesh,
     const SpatialHash& sh,
@@ -4023,7 +3862,7 @@ void Self_largestFeasibleStepSize_CCD(const mesh3D& mesh,
 
     stepSize = std::min(stepSize, largestAlphaTP.minCoeff());
 
-    printf("2stepsize:%lf\n", stepSize);
+    //printf("2stepsize:%lf\n", stepSize);
     // edge-edge, point-edge
     Eigen::VectorXd largestAlphaEE(mesh.surfEdges.size());
 
@@ -4057,5 +3896,5 @@ void Self_largestFeasibleStepSize_CCD(const mesh3D& mesh,
     );
 
     stepSize = std::min(stepSize, largestAlphaEE.minCoeff());
-    printf("3stepsize:%lf\n", stepSize);
+    //printf("3stepsize:%lf\n", stepSize);
 }

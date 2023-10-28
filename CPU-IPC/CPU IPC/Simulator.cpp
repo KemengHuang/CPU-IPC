@@ -127,7 +127,7 @@ bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
     if(true)
     {
         //mesh3d.load_triangleMesh("../CPU IPC/triangleMesh/tricloth.obj", 0.3, Vector3d(0, 0, 0));
-        mesh3d.load_triangleMesh("../CPU IPC/triangleMesh/CMU/plane9.obj", 0.3, Vector3d(0, 0, 0));
+        mesh3d.load_triangleMesh("../CPU IPC/triangleMesh/CMU/plane1024.obj", 0.3, Vector3d(0, 0, 0));
 
         Matrix3d rotate,rotatey;
         float angleX = FEM::PI / 2, angleY = FEM::PI / 4, angleZ = FEM::PI / 2;

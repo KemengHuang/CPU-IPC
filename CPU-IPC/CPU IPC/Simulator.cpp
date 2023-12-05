@@ -124,7 +124,7 @@ bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
         mesh3d.minConer = Vector3d(xmin, ymin, zmin);
     }
 
-    if(true)
+    if(false)
     {
         //mesh3d.load_triangleMesh("../CPU IPC/triangleMesh/tricloth.obj", 0.3, Vector3d(0, 0, 0));
         mesh3d.load_triangleMesh("../CPU IPC/triangleMesh/CMU/plane1024.obj", 0.3, Vector3d(0, 0, 0));
@@ -209,8 +209,8 @@ bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
        mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(-0.6, -0.65, -0.4));
     }
     //mesh3d.load_tetrahedraMesh("tetrahedraMesh/twoBunny.msh", 2, Vector3d(-0, -0, -0));
-    //mesh3d.load_tetrahedraMesh("tetrahedraMesh/bunny.msh", 0.5, Vector3d(-0, 0.4, -0));
-    //mesh3d.load_tetrahedraMesh("tetrahedraMesh/bunny.msh", 0.5, Vector3d(-0, -0.4, -0));
+    mesh3d.load_tetrahedraMesh("tetrahedraMesh/bunny.msh", 0.5, Vector3d(-0, 0.4, -0));
+    mesh3d.load_tetrahedraMesh("tetrahedraMesh/bunny.msh", 0.5, Vector3d(-0, -0.4, -0));
     //{
     //    //mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/rod300x33.msh", 1, Vector3d(0, 0.1, 0));
     //    //mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/rod300x33.msh", 1, Vector3d(0, -0.1, 0));

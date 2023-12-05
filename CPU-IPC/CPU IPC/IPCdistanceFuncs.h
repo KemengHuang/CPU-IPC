@@ -115,31 +115,41 @@ void d_EE(const Eigen::Vector3d& v0,
     const Eigen::Vector3d& v3,
     double& d);
 void compute_b(double d, double dHat, double& b);
+void compute_bd(double d, double dHat, double& b, double kp);
 void compute_g_b(double d, double dHat, double& g);
 void compute_H_b(double d, double dHat, double& H);
 
-int compute_g_dpt(const mesh3D& mesh,
+int compute_g_dpt(mesh3D& mesh,
     const std::vector<MMCVID>& activeSet,
     const Eigen::VectorXd& input,
     vector<Vector3d>& output_incremental,
     int offset,
     double coef);
+int compute_g_dpt_local_Kappa(const mesh3D& mesh,
+    const std::vector<MMCVID>& activeSet,
+    const Eigen::VectorXd& input,
+    vector<Vector3d>& output_incremental,
+    int offset,
+    map<MMCVID, double>& local_kappas, map<int, double>& local_vert_kappas, const vector<Vector3d>& node_forces, double default_Kappa);
 void compute_g_dpt_new(const mesh3D& mesh,
     const std::vector<MMCVID>& activeSet,
     const Eigen::VectorXd& input,
     vector<Vector3d>& output_incremental,
     int offset,
     double coef, double d_hat);
-void compute_g_dee(const mesh3D& mesh,
+void compute_g_dee(mesh3D& mesh,
     //const std::vector<MMCVID>& paraEEMMCVIDSet,
     //const std::vector<std::pair<int, int>>& paraEEeIeJSet,
     vector<Vector3d>& grad_inc, double dHat, double coef);
 
 void Evaluate_SelfPTConstraintVals(const mesh3D& mesh, Eigen::VectorXd& vals, const int& offset);
+
+void Evaluate_SelfPTConstraintVals_k(mesh3D& mesh, Eigen::VectorXd& vals, const int& offset, Eigen::VectorXd& kappas, double defaultK);
+
 void Evaluate_SelfEEConstraintVals(const mesh3D& mesh, Eigen::VectorXd& vals, const int& offset);
 void Evaluate_GroundConstraintVals(const Ground& gd, const mesh3D& mesh, Eigen::VectorXd& vals, const int& offset);
 
-void compute_H_dpt(const mesh3D& mesh,
+void compute_H_dpt(mesh3D& mesh,
     BHessian& BH,
     double dHat, double coef);
 void compute_H_dpt_new(const mesh3D& mesh,
@@ -162,3 +172,5 @@ void Self_largestFeasibleStepSize_CCD(const mesh3D& mesh,
     double& stepSize);
 
 double SelfConstraintVal(const mesh3D& mesh, const MMCVID& active);
+
+double SelfConstraintVal_k(mesh3D& mesh, const MMCVID& active, double& kappa);

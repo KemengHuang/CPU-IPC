@@ -1070,7 +1070,7 @@ calculateMovingDirection(const mesh3D &mesh, BHessian &BH, vector<Vector3d> grad
 //#endif
 }
 
-void computeEnergyVal(const mesh3D &mesh, double &energyVal, const Ground &gd, double Kappa) {
+void computeEnergyVal(mesh3D &mesh, double &energyVal, const Ground &gd, double Kappa) {
     energyVal = 0;
     energyVal += getObjEnergy_StableNHK2_3D(mesh.vertexes, mesh, lengthRate, volumeRate);
     Vector2d anisotropic_a = Vector2d(1, 0), anisotropic_b = Vector2d(0, 1);
@@ -1093,22 +1093,24 @@ void computeEnergyVal(const mesh3D &mesh, double &energyVal, const Ground &gd, d
     );
 
     energyVal += deltaE;
-    Eigen::VectorXd constraintVals, bVals;
+    Eigen::VectorXd constraintVals, bVals, tempKappa;
     int startCI = constraintVals.size();
     Evaluate_GroundConstraintVals(gd, mesh, constraintVals, startCI);
     bVals.conservativeResize(constraintVals.size());
 
 
-    tbb::parallel_for(startCI, (int) constraintVals.size(), 1, [&](int cI) {
+    tbb::parallel_for(startCI, (int)constraintVals.size(), 1, [&](int cI) {
 
-                          compute_b(constraintVals[cI], mesh.Hhat, bVals[cI]);
+        compute_bd(constraintVals[cI], mesh.Hhat, bVals[cI], Kappa);
 
-                      }
+        }
     );
 
 
     startCI = constraintVals.size();
-    Evaluate_SelfPTConstraintVals(mesh, constraintVals, startCI);
+    //tempKappa.conservativeResize(startCI+ mesh.Self_ActiveSet.size());
+    //double Kp = Kappa;
+    Evaluate_SelfPTConstraintVals_k(mesh, constraintVals, startCI, tempKappa, Kappa);
     bVals.conservativeResize(constraintVals.size());
     //TODO: parallelize
     tbb::parallel_for(startCI, (int) constraintVals.size(), 1, [&](int cI)
@@ -1121,6 +1123,7 @@ void computeEnergyVal(const mesh3D &mesh, double &energyVal, const Ground &gd, d
                               // PP or PE, handle duplication
                               bVals[cI] *= -duplication;
                           }
+                          bVals[cI] *= tempKappa(cI - startCI);
                       }
 
     );
@@ -1156,7 +1159,7 @@ void computeEnergyVal(const mesh3D &mesh, double &energyVal, const Ground &gd, d
 
     );
     //double bE
-    energyVal += Kappa * bVals.sum();
+    energyVal += bVals.sum();
 #ifdef USE_FRICTION
     // self friction
     double fricDHat = mesh.Fhat * IPC_dt * IPC_dt;
@@ -1445,7 +1448,7 @@ void suggestKappa(double &kappa, const double &Hhat, const double &bboxDiagSize2
     double H_b;
     //double bboxDiagSize2 = (maxConer - minConer).squaredNorm();
     compute_H_b(1.0e-16 * bboxDiagSize2, Hhat, H_b);
-    kappa = 1e13 * meanMass / (4.0e-16 * bboxDiagSize2 * H_b);
+    kappa = 1e11 * meanMass / (4.0e-16 * bboxDiagSize2 * H_b);
     //printf("bboxDiagSize2: %f\n", bboxDiagSize2);
     //printf("H_b: %f\n", H_b);
     //printf("sug Kappa: %f\n", kappa);
@@ -1455,7 +1458,7 @@ void upperBoundKappa(double &kappa, const double &Hhat, const double &bboxDiagSi
     double H_b;
     //double bboxDiagSize2 = (maxConer - minConer).squaredNorm();
     compute_H_b(1.0e-16 * bboxDiagSize2, Hhat, H_b);
-    double kappaMax = 100 * 1e13 * meanMass / (4.0e-16 * bboxDiagSize2 * H_b);
+    double kappaMax = 100 * 1e11 * meanMass / (4.0e-16 * bboxDiagSize2 * H_b);
     if (kappa > kappaMax) {
         kappa = kappaMax;
     }
@@ -1511,6 +1514,58 @@ void initKappa(mesh3D &mesh, const Ground &grd, double &kappa) {
             kappa = minKappa;
         }
         upperBoundKappa(mesh.Kappa, mesh.Hhat, mesh.bboxDiagSize2, mesh.meanMass);
+    }
+
+}
+
+void initKappa2(mesh3D& mesh, const Ground& grd, const double& kappa) {
+    std::vector<int> constraintStartInds;
+    buildConstraintStartIndsWithMM(mesh.Environment_ActiveSet, mesh.Self_ActiveSet, constraintStartInds);
+
+
+    if (constraintStartInds.back()) {
+        vector<Vector3d> g_E(mesh.vertexNum, Vector3d(0, 0, 0)), g_c(mesh.vertexNum, Vector3d(0, 0, 0));
+        vector<double> g_gc(mesh.vertexNum, -1);
+        computeEGradient(mesh, g_E);
+        //compute_fiction_gradient(mesh, grd, g_E, mesh.Hhat * IPC_dt * IPC_dt, FEM::friction);
+        VectorXd constraintVal;
+        int startCI = constraintStartInds[0];
+        Evaluate_GroundConstraintVals(grd, mesh, constraintVal, startCI);
+        //animConfig.collisionObjects[coI]->evaluateConstraints(result, activeSet[coI], constraintVal);
+
+
+
+        for (int cI = startCI; cI < constraintStartInds[1]; ++cI) {
+            compute_g_b(constraintVal[cI], mesh.Hhat, constraintVal[cI]);
+            int vI = mesh.Environment_ActiveSet[cI];
+            double dist = grd.normal.dot(mesh.vertexes[vI]) - grd.D;
+            Vector3d bforce = constraintVal[cI] * 2.0 * dist * grd.normal;
+
+           double K = -bforce.dot(g_E[vI]) / bforce.squaredNorm();
+
+
+            //if (K > 0 && K > kappa) {
+            //    //local_kappas[local_CVID] = K;
+            //    mesh.surf_verts_kappas[vI] = K;
+            //}
+            //else {
+            //    //local_kappas[local_CVID] = default_Kappa;
+            //    mesh.surf_verts_kappas[vI] = kappa;
+            //}
+
+
+        }
+
+
+        startCI = constraintStartInds[1];
+        Evaluate_SelfPTConstraintVals(mesh, constraintVal, startCI);
+
+        for (int cI = startCI; cI < constraintVal.size(); ++cI) {
+            compute_g_b(constraintVal[cI], mesh.Hhat, constraintVal[cI]);
+        }
+
+        compute_g_dpt_local_Kappa(mesh, mesh.Self_ActiveSet, constraintVal, g_c, startCI, mesh.Self_ActiveSet_kappas, mesh.surf_verts_kappas, g_E, kappa);
+
     }
 
 }
@@ -1789,6 +1844,10 @@ int IPC_Solver(int& stepId, model_tet* meshTetes, SpatialHash& sh, Ground& gd) {
         suggestKappa(mesh.Kappa, mesh.Hhat, mesh.bboxDiagSize2, mesh.meanMass);
     }
     initKappa (mesh, gd, mesh.Kappa);
+
+    printf("kappa:  %f\n", mesh.Kappa);
+
+    //initKappa2(mesh, gd, mesh.Kappa);
     //printf("hello 1 p\n");
 #ifdef USE_FRICTION
     buildFriction(mesh, gd);

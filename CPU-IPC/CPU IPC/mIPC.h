@@ -4,6 +4,9 @@
 #include <array>
 
 
+
+
+
 class MMCVID {
 public:
     std::array<int, 4> data;
@@ -69,8 +72,44 @@ public:
     }
 };
 
+struct Class1Compare
+{
+    bool operator() (const MMCVID& lhs, const MMCVID& rhs)
+    {
+        if (lhs[0] < rhs[0]) {
+            return true;
+        }
+        else if (lhs[0] == rhs[0]) {
+            if (lhs[1] < rhs[1]) {
+                return true;
+            }
+            else if (lhs[1] == rhs[1]) {
+                if (lhs[2] < rhs[2]) {
+                    return true;
+                }
+                else if (lhs[2] == rhs[2]) {
+                    if (lhs[3] < rhs[3]) {
+                        return true;
+                    }
+                    else {
+                        return false;
+                    }
+                }
+                else {
+                    return false;
+                }
+            }
+            else {
+                return false;
+            }
+        }
+        else {
+            return false;
+        }
+    }
+};
 
-
+// c2int
 
 #endif // !_M_IPC_H_
 

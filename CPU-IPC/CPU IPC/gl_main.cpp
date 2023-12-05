@@ -488,7 +488,7 @@ void display(void) {
 //    }
 //    outIte4.close();
 
-    if (step>=119) {
+    if (step>=81) {
 
 //        ofstream outIte0("tp0.txt");
 //        for (auto value : tpv[0]) {
@@ -521,7 +521,7 @@ void display(void) {
 //            outIte0 << value[0]<<" "<<value[1]<<" "<<value[2] << endl;
 //        }
 //        outIte4.close();
-        //exit(0);
+        m exit(0);
 
 
     }

@@ -901,7 +901,9 @@ void SpatialHash::calculateActivateSet(mesh3D& mesh) {
             }
             else if (cI.data[3] == -1) {
                 // regular PP or PE
-                ++constraintCounter[cI];
+                MMCVID cvid = cI;
+                cvid.data[3] == -2;
+                ++constraintCounter[cvid];
             }
             else if (cI.data[3] >= -mesh.surfEdges.size() - 1) {
                 // nearly parallel PP or PE

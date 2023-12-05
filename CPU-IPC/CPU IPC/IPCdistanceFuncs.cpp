@@ -814,7 +814,7 @@ inline void compute_e_H(
 void compute_eps_x(const mesh3D& mesh,
     int eI0, int eI1, int eJ0, int eJ1, double& eps_x)
 {
-    eps_x = 1e-3 * (mesh.v_rest[eI0] - mesh.v_rest[eI1]).squaredNorm() * (mesh.v_rest[eJ0] - mesh.v_rest[eJ1]).squaredNorm();
+    eps_x = 0e-3 * (mesh.v_rest[eI0] - mesh.v_rest[eI1]).squaredNorm() * (mesh.v_rest[eJ0] - mesh.v_rest[eJ1]).squaredNorm();
 }
 
 void d_EE(const Eigen::Vector3d& v0,
@@ -832,6 +832,12 @@ void compute_b(double d, double dHat, double& b)
 {
     b = -(d - dHat) * (d - dHat) * log(d / dHat);
 }
+
+void compute_bd(double d, double dHat, double& b, double kp)
+{
+    b = -kp * (d - dHat) * (d - dHat) * log(d / dHat);
+}
+
 
 void compute_g_b(double d, double dHat, double& g)
 {
@@ -2558,6 +2564,64 @@ double SelfConstraintVal(const mesh3D& mesh, const MMCVID& active) {
     return val;
 }
 
+double SelfConstraintVal_k(mesh3D& mesh, const MMCVID& active, double& kappa) {
+    double val;
+    if (active[0] >= 0) {
+        // edge-edge
+        d_EE(mesh.vertexes[active[0]], mesh.vertexes[active[1]], mesh.vertexes[active[2]], mesh.vertexes[active[3]], val);
+
+        MMCVID cvid = active;
+        if (mesh.Self_ActiveSet_kappas.find(cvid) != mesh.Self_ActiveSet_kappas.end()) {
+            kappa = mesh.Self_ActiveSet_kappas[cvid];
+        }
+
+
+    }
+    else {
+
+        if (active[2] < 0) {
+            // PP
+            d_PP(mesh.vertexes[-active[0] - 1], mesh.vertexes[active[1]], val);
+            MMCVID cvid = MMCVID(-active[0] - 1, active[1], -1, -1);
+            //if (mesh.Self_ActiveSet_kappas.find(cvid) != mesh.Self_ActiveSet_kappas.end()) {
+            //    kappa = mesh.Self_ActiveSet_kappas[cvid];
+            //}
+            if (active[3] == -1) {
+                if (mesh.surf_verts_kappas.find(-active[0] - 1) != mesh.surf_verts_kappas.end()) {
+                    kappa = mesh.surf_verts_kappas[-active[0] - 1];
+                }
+            }
+        }
+        else if (active[3] < 0) {
+            // PE
+            d_PE(mesh.vertexes[-active[0] - 1], mesh.vertexes[active[1]], mesh.vertexes[active[2]], val);
+            MMCVID cvid = MMCVID(-active[0] - 1, active[1], active[2], -1);
+            //if (mesh.Self_ActiveSet_kappas.find(cvid) != mesh.Self_ActiveSet_kappas.end()) {
+            //    kappa = mesh.Self_ActiveSet_kappas[cvid];
+            //}
+            if (active[3] == -1) {
+                if (mesh.surf_verts_kappas.find(-active[0] - 1) != mesh.surf_verts_kappas.end()) {
+                    kappa = mesh.surf_verts_kappas[-active[0] - 1];
+                }
+            }
+        }
+        else {
+            // PT
+            d_PT(mesh.vertexes[-active[0] - 1], mesh.vertexes[active[1]], mesh.vertexes[active[2]], mesh.vertexes[active[3]], val);
+
+            MMCVID cvid = MMCVID(-active[0] - 1, active[1], active[2], active[3]);
+            //if (mesh.Self_ActiveSet_kappas.find(cvid) != mesh.Self_ActiveSet_kappas.end()) {
+            //    kappa = mesh.Self_ActiveSet_kappas[cvid];
+            //}
+            if (mesh.surf_verts_kappas.find(-active[0] - 1) != mesh.surf_verts_kappas.end()) {
+                kappa = mesh.surf_verts_kappas[-active[0] - 1];
+            }
+
+        }
+    }
+    return val;
+}
+
 void Evaluate_SelfPTConstraintVals(const mesh3D& mesh, Eigen::VectorXd& vals, const int& offset) {
     int number = mesh.Self_ActiveSet.size();
     vals.conservativeResize(number + offset);
@@ -2565,6 +2629,21 @@ void Evaluate_SelfPTConstraintVals(const mesh3D& mesh, Eigen::VectorXd& vals, co
     tbb::parallel_for(0, number, 1, [&](int i)
         {
             vals[i + offset] = SelfConstraintVal(mesh, mesh.Self_ActiveSet[i]);
+        }
+
+    );
+}
+
+void Evaluate_SelfPTConstraintVals_k(mesh3D& mesh, Eigen::VectorXd& vals, const int& offset, Eigen::VectorXd& kappas, double defaultK) {
+    int number = mesh.Self_ActiveSet.size();
+    vals.conservativeResize(number + offset);
+    kappas.conservativeResize(number);
+    tbb::parallel_for(0, number, 1, [&](int i)
+        {
+            kappas(i) = defaultK;
+            vals[i + offset] = SelfConstraintVal_k(mesh, mesh.Self_ActiveSet[i], kappas(i));
+            //vals[i + offset] *= kappa;
+
         }
 
     );
@@ -2593,6 +2672,7 @@ void Evaluate_GroundConstraintVals(const Ground& grd, const mesh3D& mesh, Eigen:
 
         {
             vals[i + offset] = grd.calculateGapFromObj(mesh, mesh.Environment_ActiveSet[i]);
+
         }
 
     );
@@ -3023,7 +3103,7 @@ void compute_g_dpt_new(const mesh3D& mesh,
     }
 }
 
-int compute_g_dpt(const mesh3D& mesh,
+int compute_g_dpt(mesh3D& mesh,
                   const std::vector<MMCVID>& activeSet,
                   const Eigen::VectorXd& input,
                   vector<Vector3d>& output_incremental,
@@ -3037,6 +3117,14 @@ int compute_g_dpt(const mesh3D& mesh,
             // edge-edge
             Eigen::Matrix<double, 12, 1> g;
             g_EE(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], g);
+
+            if (mesh.Self_ActiveSet_kappas.find(MMCVIDI) != mesh.Self_ActiveSet_kappas.end()) {
+
+                coef = mesh.Self_ActiveSet_kappas[MMCVIDI];
+
+                //printf("kappa: coef = %f\n", coef);
+            }
+
             g *= coef * input[constraintI];
 
             output_incremental[MMCVIDI[0]] += g.template segment<3>(0);
@@ -3052,6 +3140,20 @@ int compute_g_dpt(const mesh3D& mesh,
                 // PP
                 Eigen::Matrix<double, 6, 1> g;
                 g_PP(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], g);
+
+                MMCVID cvid = MMCVID(v0I, MMCVIDI[1], -1, -1);
+                //if (mesh.Self_ActiveSet_kappas.find(cvid) != mesh.Self_ActiveSet_kappas.end()) {
+                //    coef = mesh.Self_ActiveSet_kappas[cvid];
+                //    //printf("kappa: coef = %f\n", coef);
+                //}
+                if (MMCVIDI[3] == -1) {
+                    if (mesh.surf_verts_kappas.find(v0I) != mesh.surf_verts_kappas.end()) {
+                        coef = mesh.surf_verts_kappas[v0I];
+                        //printf("kappa: coef = %f\n", coef);
+                    }
+                }
+
+
                 g *= coef * -MMCVIDI[3] * input[constraintI];
                 collisonNum+=-MMCVIDI[3];
                 output_incremental[v0I] += g.template segment<3>(0);
@@ -3061,6 +3163,19 @@ int compute_g_dpt(const mesh3D& mesh,
                 // PE
                 Eigen::Matrix<double, 9, 1> g;
                 g_PE(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], g);
+
+                MMCVID cvid = MMCVID(v0I, MMCVIDI[1], MMCVIDI[2], -1);
+                //if (mesh.Self_ActiveSet_kappas.find(cvid) != mesh.Self_ActiveSet_kappas.end()) {
+                //    coef = mesh.Self_ActiveSet_kappas[cvid];
+                //    //printf("kappa: coef = %f\n", coef);
+                //}
+                if (MMCVIDI[3] == -1) {
+                    if (mesh.surf_verts_kappas.find(v0I) != mesh.surf_verts_kappas.end()) {
+                        coef = mesh.surf_verts_kappas[v0I];
+                        //printf("kappa: coef = %f\n", coef);
+                    }
+                }
+
                 g *= coef * -MMCVIDI[3] * input[constraintI];
                 collisonNum+=-MMCVIDI[3];
                 output_incremental[v0I] += g.template segment<3>(0);
@@ -3071,6 +3186,19 @@ int compute_g_dpt(const mesh3D& mesh,
                 // PT
                 Eigen::Matrix<double, 12, 1> g;
                 g_PT(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], g);
+
+
+                MMCVID cvid = MMCVID(v0I, MMCVIDI[1], MMCVIDI[2], MMCVIDI[3]);
+                //if (mesh.Self_ActiveSet_kappas.find(cvid) != mesh.Self_ActiveSet_kappas.end()) {
+                //    coef = mesh.Self_ActiveSet_kappas[cvid];
+                //    printf("kappa: coef = %f\n", coef);
+                //}
+
+                if (mesh.surf_verts_kappas.find(v0I) != mesh.surf_verts_kappas.end()) {
+                    coef = mesh.surf_verts_kappas[v0I];
+                    //printf("kappa: coef = %f\n", coef);
+                }
+
                 g *= coef * input[constraintI];
 
                 collisonNum++;
@@ -3087,7 +3215,174 @@ int compute_g_dpt(const mesh3D& mesh,
     return collisonNum;
 }
 
-void compute_g_dee(const mesh3D& mesh,
+
+int compute_g_dpt_local_Kappa(const mesh3D& mesh,
+    const std::vector<MMCVID>& activeSet,
+    const Eigen::VectorXd& input,
+    vector<Vector3d>& output_incremental,
+    int offset,
+    map<MMCVID, double>& local_kappas, map<int, double>& local_vert_kappas, const vector<Vector3d>& node_forces, double default_Kappa)
+{
+    int constraintI = offset;
+    int collisonNum = 0;
+    for (const auto& MMCVIDI : activeSet) {
+        if (MMCVIDI[0] >= 0) {
+            // edge-edge
+            Eigen::Matrix<double, 12, 1> g_b, local_node_force;
+            g_EE(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], g_b);
+            g_b *= input[constraintI];
+
+            local_node_force.template segment<3>(0) = node_forces[MMCVIDI[0]];
+            local_node_force.template segment<3>(3) = node_forces[MMCVIDI[1]];
+            local_node_force.template segment<3>(6) = node_forces[MMCVIDI[2]];
+            local_node_force.template segment<3>(9) = node_forces[MMCVIDI[3]];
+
+            double K = -g_b.dot(local_node_force) / g_b.squaredNorm();
+            if (K > 0 && K > default_Kappa) {
+                local_kappas[MMCVIDI] = K;
+            }
+            else {
+                local_kappas[MMCVIDI] = default_Kappa;
+            }
+            local_kappas[MMCVIDI] = default_Kappa;
+            collisonNum++;
+        }
+        else {
+
+            int v0I = -MMCVIDI[0] - 1;
+            if (MMCVIDI[2] < 0) {
+                // PP
+                Eigen::Matrix<double, 6, 1> g_b, local_node_force;
+                g_PP(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], g_b);
+                g_b *= -MMCVIDI[3] * input[constraintI];
+                collisonNum += -MMCVIDI[3];
+
+                local_node_force.template segment<3>(0) = node_forces[v0I];
+                local_node_force.template segment<3>(3) = node_forces[MMCVIDI[1]];
+
+
+                MMCVID local_CVID = MMCVID(v0I, MMCVIDI[1], -1, -1);
+
+                double K = -g_b.dot(local_node_force) / g_b.squaredNorm();
+
+                if (MMCVIDI[3] == -1) {
+                    if (local_vert_kappas.find(v0I) == local_vert_kappas.end()) {
+                        if (K > 0 && K > default_Kappa) {
+                            local_vert_kappas[v0I] = min(K, default_Kappa * 3);
+                        }
+                        else {
+                            local_vert_kappas[v0I] = default_Kappa;
+                        }
+                    }
+                    else {
+                        if (K > local_vert_kappas[v0I]) {
+                            local_vert_kappas[v0I] = min(K, default_Kappa * 3);
+                        }
+                    }
+                }
+
+                if (K > 0 && K > default_Kappa) {
+                    local_kappas[local_CVID] = K;
+                }
+                else {
+                    local_kappas[local_CVID] = default_Kappa;
+                }
+                local_kappas[local_CVID] = default_Kappa;
+            }
+            else if (MMCVIDI[3] < 0) {
+                // PE
+                Eigen::Matrix<double, 9, 1> g_b, local_node_force;
+                g_PE(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], g_b);
+                g_b *= -MMCVIDI[3] * input[constraintI];
+                collisonNum += -MMCVIDI[3];
+
+                local_node_force.template segment<3>(0) = node_forces[v0I];
+                local_node_force.template segment<3>(3) = node_forces[MMCVIDI[1]];
+                local_node_force.template segment<3>(6) = node_forces[MMCVIDI[2]];
+
+
+                MMCVID local_CVID = MMCVID(v0I, MMCVIDI[1], MMCVIDI[2], -1);
+
+                double K = -g_b.dot(local_node_force) / g_b.squaredNorm();
+
+                if (MMCVIDI[3] == -1) {
+                    if (local_vert_kappas.find(v0I) == local_vert_kappas.end()) {
+                        if (K > 0 && K > default_Kappa) {
+                            local_vert_kappas[v0I] = min(K, default_Kappa * 2);
+                        }
+                        else {
+                            local_vert_kappas[v0I] = default_Kappa;
+                        }
+                    }
+                    else {
+                        if (K > local_vert_kappas[v0I]) {
+                            local_vert_kappas[v0I] = min(K, default_Kappa * 2);
+                        }
+                    }
+                }
+
+                if (K > 0 && K > default_Kappa) {
+                    local_kappas[local_CVID] = K;
+                }
+                else {
+                    local_kappas[local_CVID] = default_Kappa;
+                }
+                local_kappas[local_CVID] = default_Kappa;
+            }
+            else {
+                // PT
+                Eigen::Matrix<double, 12, 1> g_b, local_node_force;
+                g_PT(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], g_b);
+                g_b *= input[constraintI];
+
+                collisonNum++;
+
+                local_node_force.template segment<3>(0) = node_forces[v0I];
+                local_node_force.template segment<3>(3) = node_forces[MMCVIDI[1]];
+                local_node_force.template segment<3>(6) = node_forces[MMCVIDI[2]];
+                local_node_force.template segment<3>(9) = node_forces[MMCVIDI[3]];
+
+                MMCVID local_CVID = MMCVID(v0I, MMCVIDI[1], MMCVIDI[2], MMCVIDI[3]);
+
+                double K = -g_b.dot(local_node_force) / g_b.squaredNorm();
+
+                if (local_vert_kappas.find(v0I) == local_vert_kappas.end()) {
+                    if (K > 0 && K > default_Kappa) {
+                        local_vert_kappas[v0I] = min(K, default_Kappa * 2);
+                    }
+                    else {
+                        local_vert_kappas[v0I] = default_Kappa;
+                    }
+                }
+                else {
+                    if (K > local_vert_kappas[v0I]) {
+                        local_vert_kappas[v0I] = min(K, default_Kappa * 2);
+                    }
+                }
+                //local_vert_kappas[v0I] = default_Kappa;
+                if (K > 0 && K > default_Kappa) {
+                    local_kappas[local_CVID] = K;
+                    //local_vert_kappas[v0I] = K;
+                }
+                else {
+                    local_kappas[local_CVID] = default_Kappa;
+                    //local_vert_kappas[v0I] = default_Kappa;
+                }
+                local_kappas[local_CVID] = default_Kappa;
+
+
+            }
+        }
+
+        ++constraintI;
+    }
+    return collisonNum;
+}
+
+
+
+
+void compute_g_dee(mesh3D& mesh,
     vector<Vector3d>& grad_inc, double dHat, double coef)
 {
     Eigen::VectorXd e_db_div_dd;
@@ -3519,7 +3814,7 @@ void compute_H_dpt_new(const mesh3D& mesh,
         }
     }
 }
-void compute_H_dpt(const mesh3D& mesh,
+void compute_H_dpt(mesh3D& mesh,
     BHessian& BH,
     double dHat, double coef)
 {
@@ -3536,6 +3831,13 @@ void compute_H_dpt(const mesh3D& mesh,
                 g_EE(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], g);
                 Eigen::Matrix<double, 12, 12> H;
                 H_EE(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], H);
+
+
+                MMCVID cvid = MMCVID(MMCVIDI[0], MMCVIDI[1], MMCVIDI[2], MMCVIDI[3]);
+                if (mesh.Self_ActiveSet_kappas.find(cvid) != mesh.Self_ActiveSet_kappas.end()) {
+                    coef = mesh.Self_ActiveSet_kappas[cvid];
+                }
+
 
                 double g_b, H_b;
                 compute_g_b(d, dHat, g_b);
@@ -3567,6 +3869,17 @@ void compute_H_dpt(const mesh3D& mesh,
                     compute_g_b(d, dHat, g_b);
                     compute_H_b(d, dHat, H_b);
 
+                    MMCVID cvid = MMCVID(v0I, MMCVIDI[1], -1, -1);
+                    //if (mesh.Self_ActiveSet_kappas.find(cvid) != mesh.Self_ActiveSet_kappas.end()) {
+                    //    coef = mesh.Self_ActiveSet_kappas[cvid];
+                    //}
+                    if (MMCVIDI[3] == -1) {
+                        if (mesh.surf_verts_kappas.find(v0I) != mesh.surf_verts_kappas.end()) {
+                            coef = mesh.surf_verts_kappas[v0I];
+                            //printf("kappa: coef = %f\n", coef);
+                        }
+                    }
+
                     double coef_dup = coef * -MMCVIDI[3];
                     Eigen::Matrix<double, 6, 6> HessianBlock = ((coef_dup * H_b) * g) * g.transpose() + (coef_dup * g_b) * H;
                     IglUtils::makePD<double, 6>(HessianBlock);
@@ -3585,6 +3898,18 @@ void compute_H_dpt(const mesh3D& mesh,
                     g_PE(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], g);
                     Eigen::Matrix<double, 9, 9> H;
                     H_PE(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], H);
+
+
+                    MMCVID cvid = MMCVID(v0I, MMCVIDI[1], MMCVIDI[2], -1);
+                    //if (mesh.Self_ActiveSet_kappas.find(cvid) != mesh.Self_ActiveSet_kappas.end()) {
+                    //    coef = mesh.Self_ActiveSet_kappas[cvid];
+                    //}
+                    if (MMCVIDI[3] == -1) {
+                        if (mesh.surf_verts_kappas.find(v0I) != mesh.surf_verts_kappas.end()) {
+                            coef = mesh.surf_verts_kappas[v0I];
+                            //printf("kappa: coef = %f\n", coef);
+                        }
+                    }
 
                     double g_b, H_b;
                     compute_g_b(d, dHat, g_b);
@@ -3608,6 +3933,17 @@ void compute_H_dpt(const mesh3D& mesh,
                     g_PT(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], g);
                     Eigen::Matrix<double, 12, 12> H;
                     H_PT(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], H);
+
+                    MMCVID cvid = MMCVID(v0I, MMCVIDI[1], MMCVIDI[2], MMCVIDI[3]);
+                    //if (mesh.Self_ActiveSet_kappas.find(cvid) != mesh.Self_ActiveSet_kappas.end()) {
+                    //    coef = mesh.Self_ActiveSet_kappas[cvid];
+                    //}
+
+                    if (mesh.surf_verts_kappas.find(v0I) != mesh.surf_verts_kappas.end()) {
+                        coef = mesh.surf_verts_kappas[v0I];
+                        //printf("kappa: coef = %f\n", coef);
+                    }
+
 
                     double g_b, H_b;
                     compute_g_b(d, dHat, g_b);

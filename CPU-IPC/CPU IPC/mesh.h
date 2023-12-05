@@ -146,6 +146,11 @@ public:
 	vector<Eigen::Vector2d> MMDistCoord;
 	vector<Eigen::Matrix<double, 3, 2>> MMTanBasis;
 	vector<int> Environment_ActiveSet, Environment_activeSet_lastH;
+	//vector<double> Environment_ActiveSet_kappas, Self_ActiveSet_kappas;
+
+	std::map<MMCVID, double> Self_ActiveSet_kappas;
+	map<int, double> surf_verts_kappas;
+
 	vector<MMCVID> Self_ActiveSet, Self_activeSet_lastH;
 	vector<MMCVID> Self_EE_ActiveSet;
 	vector<pair<int, int>> Self_EEeIe_ActiveSet;

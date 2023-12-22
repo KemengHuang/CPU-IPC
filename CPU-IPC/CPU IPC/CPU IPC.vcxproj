@@ -20,7 +20,7 @@
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <CharacterSet>MultiByte</CharacterSet>
-    <PlatformToolset>v143</PlatformToolset>
+    <PlatformToolset>v142</PlatformToolset>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
@@ -91,6 +91,7 @@
     <ClCompile Include="IPCdistanceFuncs.cpp" />
     <ClCompile Include="IPCtimeStepFuncs.cpp" />
     <ClCompile Include="IPC_FUNC.cpp" />
+    <ClCompile Include="IPC_SOLVER.cpp" />
     <ClCompile Include="mesh.cpp" />
     <ClCompile Include="mIPC.cpp" />
     <ClCompile Include="Simulator.cpp" />
@@ -108,6 +109,7 @@
     <ClInclude Include="fem_timer.h" />
     <ClInclude Include="IPCtimeStepFuns.h" />
     <ClInclude Include="IPC_FUNC.h" />
+    <ClInclude Include="IPC_SOLVER.h" />
     <ClInclude Include="mesh.h" />
     <ClInclude Include="mIPC.h" />
     <ClInclude Include="Simulator.h" />

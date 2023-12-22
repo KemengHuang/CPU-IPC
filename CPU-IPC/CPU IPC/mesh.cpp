@@ -801,6 +801,64 @@ bool mesh3D::load_triangleMesh(const string &filename, double scale, Vector3d po
     if (minConer[0] > tempMinConer[0]) minConer[0] = tempMinConer[0];
     if (minConer[1] > tempMinConer[1]) minConer[1] = tempMinConer[1];
     if (minConer[2] > tempMinConer[2]) minConer[2] = tempMinConer[2];
+
+
+
+
+
+
+
+
+
+    std::set<std::pair<int, int>> edge_set;
+    std::map<std::pair<int, int>, std::vector<int>> edge_map;
+    std::vector<Eigen::Vector2i> my_edges;
+    for (auto tri : triangles) {
+        auto x = tri[0];
+        auto y = tri[1];
+        auto z = tri[2];
+        if (x < y) {
+            edge_set.insert(make_pair(x, y));
+            edge_map[make_pair(x, y)].emplace_back(z);
+        }
+        else {
+            edge_set.insert(make_pair(y, x));
+            edge_map[make_pair(y, x)].emplace_back(z);
+        }
+
+        if (y < z) {
+            edge_set.insert(make_pair(y, z));
+            edge_map[make_pair(y, z)].emplace_back(x);
+        }
+        else {
+            edge_set.insert(make_pair(z, y));
+            edge_map[make_pair(z, y)].emplace_back(x);
+        }
+
+        if (x < z) {
+            edge_set.insert(make_pair(x, z));
+            edge_map[make_pair(x, z)].emplace_back(y);
+        }
+        else {
+            edge_set.insert(make_pair(z, x));
+            edge_map[make_pair(z, x)].emplace_back(y);
+        }
+    }
+
+    std::vector<std::vector<int>> temp_edges_adj_points;
+    for (auto p : edge_set) {
+        if (edge_map[p].size() != 2)continue;
+        my_edges.emplace_back(p.first, p.second);
+        temp_edges_adj_points.emplace_back(edge_map[make_pair(p.first, p.second)]);
+    }
+    for (int i = 0; i < temp_edges_adj_points.size(); i++) {
+        tri_edges.emplace_back(Vector2i(my_edges[i].x(), my_edges[i].y()));
+        if (temp_edges_adj_points[i].size() == 2)
+            tri_edges_adj_points.emplace_back(Vector2i(temp_edges_adj_points[i][0], temp_edges_adj_points[i][1]));
+        else
+            tri_edges_adj_points.emplace_back(Vector2i(temp_edges_adj_points[i][0], -1));
+    }
+
     return true;
 }
 
@@ -962,4 +1020,28 @@ bool model_tet::load_model(const std::string &filename, int offset) {
 
 
     return true;
+}
+
+
+
+vector<Eigen::VectorXd> mesh3D::get_dXn1_dXn() {
+    return EKF;
+}
+vector<Eigen::VectorXd> mesh3D::get_dXn1_dVn() {
+    vector<Eigen::VectorXd> dXn1_dVn;
+    for (int i = 0; i < vertexNum * 3; i++) {
+        dXn1_dVn.push_back(IPC_dt * EKF[i]);
+    }
+    return dXn1_dVn;
+}
+vector<Eigen::VectorXd> mesh3D::get_dVn1_dXn() {
+    vector<Eigen::VectorXd> dVn1_dXn;
+    double one_div_dt = 1.0 / IPC_dt;
+    for (int i = 0; i < vertexNum * 3; i++) {
+        dVn1_dXn.push_back(one_div_dt * EKF[i]);
+    }
+    return dVn1_dXn;
+}
+vector<Eigen::VectorXd> mesh3D::get_dVn1_dVn() {
+    return EKF;
 }

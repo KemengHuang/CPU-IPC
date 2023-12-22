@@ -16,23 +16,23 @@ using namespace std;
 
 #ifdef NDEBUG
 
-void CholmodSolver::set_pattern(const SparseMatrix<double> &mtr) {
+void CholmodSolver::set_pattern(const SparseMatrix<double>& mtr) {
     numRows = static_cast<int>(mtr.rows());
 
     ja.conservativeResize(mtr.nonZeros());
     memcpy(ja.data(), mtr.innerIndexPtr(),
-           mtr.nonZeros() * sizeof(mtr.innerIndexPtr()[0]));
+        mtr.nonZeros() * sizeof(mtr.innerIndexPtr()[0]));
 
     ia.conservativeResize(numRows + 1);
     memcpy(ia.data(), mtr.outerIndexPtr(),
-           (numRows + 1) * sizeof(mtr.outerIndexPtr()[0]));
+        (numRows + 1) * sizeof(mtr.outerIndexPtr()[0]));
 
     a.conservativeResize(mtr.nonZeros());
     memcpy(a.data(), mtr.valuePtr(),
-           mtr.nonZeros() * sizeof(mtr.valuePtr()[0]));
+        mtr.nonZeros() * sizeof(mtr.valuePtr()[0]));
     if (!A) {
         A = cholmod_allocate_sparse(numRows, numRows, mtr.nonZeros(),
-                                    true, true, -1, CHOLMOD_REAL, &cm);
+            true, true, -1, CHOLMOD_REAL, &cm);
         Ax = A->x;
         Ap = A->p;
         Ai = A->i;
@@ -44,7 +44,7 @@ void CholmodSolver::set_pattern(const SparseMatrix<double> &mtr) {
     }
 }
 
-void CholmodSolver::solve(VectorXd &rhs, VectorXd &result) {
+void CholmodSolver::solve(VectorXd& rhs, VectorXd& result) {
     if (!b) {
         b = cholmod_allocate_dense(numRows, 1, numRows, CHOLMOD_REAL, &cm);
         bx = b->x;
@@ -52,12 +52,59 @@ void CholmodSolver::solve(VectorXd &rhs, VectorXd &result) {
     b->x = rhs.data();
     L = cholmod_analyze(A, &cm);
     cholmod_factorize(A, L, &cm);
-    cholmod_dense *x;
+    cholmod_dense* x;
     x = cholmod_solve(CHOLMOD_A, L, b, &cm);
     result.conservativeResize(rhs.size());
     memcpy(result.data(), x->x, result.size() * sizeof(result[0]));
     cholmod_free_dense(&x, &cm);
 }
+
+
+void CholmodSolver::preFactorize(const SparseMatrix<double>& mtr) {
+    numRows = static_cast<int>(mtr.rows());
+
+    ja.conservativeResize(mtr.nonZeros());
+    memcpy(ja.data(), mtr.innerIndexPtr(),
+        mtr.nonZeros() * sizeof(mtr.innerIndexPtr()[0]));
+
+    ia.conservativeResize(numRows + 1);
+    memcpy(ia.data(), mtr.outerIndexPtr(),
+        (numRows + 1) * sizeof(mtr.outerIndexPtr()[0]));
+
+    a.conservativeResize(mtr.nonZeros());
+    memcpy(a.data(), mtr.valuePtr(),
+        mtr.nonZeros() * sizeof(mtr.valuePtr()[0]));
+    if (!A) {
+        A = cholmod_allocate_sparse(numRows, numRows, mtr.nonZeros(),
+            true, true, -1, CHOLMOD_REAL, &cm);
+        Ax = A->x;
+        Ap = A->p;
+        Ai = A->i;
+        // -1: upper right part will be ignored during computation
+
+        A->i = ja.data();
+        A->p = ia.data();
+        A->x = a.data();
+    }
+
+    L = cholmod_analyze(A, &cm);
+    cholmod_factorize(A, L, &cm);
+}
+
+void CholmodSolver::solve_with_preFactorize(VectorXd& rhs, VectorXd& result) {
+    if (!b) {
+        b = cholmod_allocate_dense(numRows, 1, numRows, CHOLMOD_REAL, &cm);
+        bx = b->x;
+    }
+    b->x = rhs.data();
+
+    cholmod_dense* x;
+    x = cholmod_solve(CHOLMOD_A, L, b, &cm);
+    result.conservativeResize(rhs.size());
+    memcpy(result.data(), x->x, result.size() * sizeof(result[0]));
+    cholmod_free_dense(&x, &cm);
+}
+
 
 CholmodSolver::CholmodSolver() {
     cholmod_start(&cm);

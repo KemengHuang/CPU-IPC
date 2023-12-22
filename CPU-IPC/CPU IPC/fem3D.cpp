@@ -14,6 +14,150 @@
 using namespace std;
 using namespace FEM;
 
+namespace LibShell {
+
+    Eigen::Matrix3d crossMatrix(Eigen::Vector3d v) {
+        Eigen::Matrix3d ret;
+        ret << 0, -v[2], v[1],
+            v[2], 0, -v[0],
+            -v[1], v[0], 0;
+        return ret;
+    }
+
+
+    Eigen::Matrix2d adjugate(Eigen::Matrix2d M) {
+        Eigen::Matrix2d ret;
+        ret << M(1, 1), -M(0, 1), -M(1, 0), M(0, 0);
+        return ret;
+    }
+
+    double angle(const Eigen::Vector3d& v, const Eigen::Vector3d& w, const Eigen::Vector3d& axis,
+        Eigen::Matrix<double, 1, 9>* derivative, // v, w
+        Eigen::Matrix<double, 9, 9>* hessian
+    ) {
+        double theta = 2.0 * atan2((v.cross(w).dot(axis) / axis.norm()), v.dot(w) + v.norm() * w.norm());
+
+        if (derivative) {
+            derivative->segment<3>(0) = -axis.cross(v) / v.squaredNorm() / axis.norm();
+            derivative->segment<3>(3) = axis.cross(w) / w.squaredNorm() / axis.norm();
+            derivative->segment<3>(6).setZero();
+        }
+        if (hessian) {
+            hessian->setZero();
+            hessian->block<3, 3>(0, 0) +=
+                2.0 * (axis.cross(v)) * v.transpose() / v.squaredNorm() / v.squaredNorm() / axis.norm();
+            hessian->block<3, 3>(3, 3) +=
+                -2.0 * (axis.cross(w)) * w.transpose() / w.squaredNorm() / w.squaredNorm() / axis.norm();
+            hessian->block<3, 3>(0, 0) += -crossMatrix(axis) / v.squaredNorm() / axis.norm();
+            hessian->block<3, 3>(3, 3) += crossMatrix(axis) / w.squaredNorm() / axis.norm();
+
+            Eigen::Matrix3d dahat = (Eigen::Matrix3d::Identity() / axis.norm() -
+                axis * axis.transpose() / axis.norm() / axis.norm() / axis.norm());
+
+            hessian->block<3, 3>(0, 6) += crossMatrix(v) * dahat / v.squaredNorm();
+            hessian->block<3, 3>(3, 6) += -crossMatrix(w) * dahat / w.squaredNorm();
+        }
+
+        return theta;
+    }
+};
+
+double edgeTheta(
+    const Eigen::Vector3d& q0,
+    const Eigen::Vector3d& q1,
+    const Eigen::Vector3d& q2,
+    const Eigen::Vector3d& q3,
+    Eigen::Matrix<double, 1, 12>* derivative, // edgeVertex, then edgeOppositeVertex
+    Eigen::Matrix<double, 12, 12>* hessian) {
+    using namespace LibShell;
+    if (derivative)
+        derivative->setZero();
+    if (hessian)
+        hessian->setZero();
+
+    Eigen::Vector3d n0 = (q0 - q2).cross(q1 - q2);
+    Eigen::Vector3d n1 = (q1 - q3).cross(q0 - q3);
+    Eigen::Vector3d axis = q1 - q0;
+    Eigen::Matrix<double, 1, 9> angderiv;
+    Eigen::Matrix<double, 9, 9> anghess;
+
+    double theta = angle(n0, n1, axis, (derivative || hessian) ? &angderiv : NULL, hessian ? &anghess : NULL);
+
+    if (derivative) {
+        derivative->block<1, 3>(0, 0) += angderiv.block<1, 3>(0, 0) * crossMatrix(q2 - q1);
+        derivative->block<1, 3>(0, 3) += angderiv.block<1, 3>(0, 0) * crossMatrix(q0 - q2);
+        derivative->block<1, 3>(0, 6) += angderiv.block<1, 3>(0, 0) * crossMatrix(q1 - q0);
+
+        derivative->block<1, 3>(0, 0) += angderiv.block<1, 3>(0, 3) * crossMatrix(q1 - q3);
+        derivative->block<1, 3>(0, 3) += angderiv.block<1, 3>(0, 3) * crossMatrix(q3 - q0);
+        derivative->block<1, 3>(0, 9) += angderiv.block<1, 3>(0, 3) * crossMatrix(q0 - q1);
+    }
+
+    if (hessian) {
+        Eigen::Matrix3d vqm[3];
+        vqm[0] = crossMatrix(q0 - q2);
+        vqm[1] = crossMatrix(q1 - q0);
+        vqm[2] = crossMatrix(q2 - q1);
+        Eigen::Matrix3d wqm[3];
+        wqm[0] = crossMatrix(q0 - q1);
+        wqm[1] = crossMatrix(q1 - q3);
+        wqm[2] = crossMatrix(q3 - q0);
+
+        int vindices[3] = { 3, 6, 0 };
+        int windices[3] = { 9, 0, 3 };
+
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                hessian->block<3, 3>(vindices[i], vindices[j]) +=
+                    vqm[i].transpose() * anghess.block<3, 3>(0, 0) * vqm[j];
+                hessian->block<3, 3>(vindices[i], windices[j]) +=
+                    vqm[i].transpose() * anghess.block<3, 3>(0, 3) * wqm[j];
+                hessian->block<3, 3>(windices[i], vindices[j]) +=
+                    wqm[i].transpose() * anghess.block<3, 3>(3, 0) * vqm[j];
+                hessian->block<3, 3>(windices[i], windices[j]) +=
+                    wqm[i].transpose() * anghess.block<3, 3>(3, 3) * wqm[j];
+            }
+
+            hessian->block<3, 3>(vindices[i], 3) += vqm[i].transpose() * anghess.block<3, 3>(0, 6);
+            hessian->block<3, 3>(3, vindices[i]) += anghess.block<3, 3>(6, 0) * vqm[i];
+            hessian->block<3, 3>(vindices[i], 0) += -vqm[i].transpose() * anghess.block<3, 3>(0, 6);
+            hessian->block<3, 3>(0, vindices[i]) += -anghess.block<3, 3>(6, 0) * vqm[i];
+
+            hessian->block<3, 3>(windices[i], 3) += wqm[i].transpose() * anghess.block<3, 3>(3, 6);
+            hessian->block<3, 3>(3, windices[i]) += anghess.block<3, 3>(6, 3) * wqm[i];
+            hessian->block<3, 3>(windices[i], 0) += -wqm[i].transpose() * anghess.block<3, 3>(3, 6);
+            hessian->block<3, 3>(0, windices[i]) += -anghess.block<3, 3>(6, 3) * wqm[i];
+
+        }
+
+        Eigen::Vector3d dang1 = angderiv.block<1, 3>(0, 0).transpose();
+        Eigen::Vector3d dang2 = angderiv.block<1, 3>(0, 3).transpose();
+
+        Eigen::Matrix3d dang1mat = crossMatrix(dang1);
+        Eigen::Matrix3d dang2mat = crossMatrix(dang2);
+
+        hessian->block<3, 3>(6, 3) += dang1mat;
+        hessian->block<3, 3>(0, 3) -= dang1mat;
+        hessian->block<3, 3>(0, 6) += dang1mat;
+        hessian->block<3, 3>(3, 0) += dang1mat;
+        hessian->block<3, 3>(3, 6) -= dang1mat;
+        hessian->block<3, 3>(6, 0) -= dang1mat;
+
+        hessian->block<3, 3>(9, 0) += dang2mat;
+        hessian->block<3, 3>(3, 0) -= dang2mat;
+        hessian->block<3, 3>(3, 9) += dang2mat;
+        hessian->block<3, 3>(0, 3) += dang2mat;
+        hessian->block<3, 3>(0, 9) -= dang2mat;
+        hessian->block<3, 3>(9, 3) -= dang2mat;
+    }
+
+    return theta;
+}
+
+
+
+
+
 
 Vector4i calculateIsoDIndex_double(const vector<Vector3d> &vertexes, vector<uint64_t> &index) {
     int i = 0;
@@ -588,30 +732,86 @@ double getObjEnergy_StableNHK2_3D(const vector<Vector3d> &vertexes, const mesh3D
     return energy;
 }
 
-double getObjEnergy_baraffwitkin_3D(const mesh3D &mesh,
-                                    const Vector2d &anisotropic_a,
-                                    const Vector2d &anisotropic_b,
-                                    double stretchS, double shearS) {
+double getObjBending_Energy(const mesh3D& mesh) {
     double energy = parallel_reduce(
-            tbb::blocked_range<int>(0, mesh.triangleNum), 0.0,
-            [&](const tbb::blocked_range<int> &rg, double temp_sum) {
-                for (int i = rg.begin(); i != rg.end(); i++) {
-                    Matrix<double, 3, 2> F =
-                            calculateDs32D_double(mesh.vertexes, mesh.triangles[i]) * mesh.DM_triangle_inverse[i];
-                    double I6 = anisotropic_a.transpose() * F.transpose() * F * anisotropic_b;
-                    double shear_energy = I6 * I6;
-                    double stretch_energy =
-                            pow(sqrt(anisotropic_a.transpose() * F.transpose() * F * anisotropic_a) - 1, 2) +
-                            pow(sqrt(anisotropic_b.transpose() * F.transpose() * F * anisotropic_b) - 1, 2);
-                    temp_sum += (stretchS * stretch_energy + shearS * shear_energy) * mesh.areas[i];
+        tbb::blocked_range<int>(0, mesh.tri_edges.size()), 0.0,
+        [&](const tbb::blocked_range<int>& rg, double temp_sum) {
+            for (int i = rg.begin(); i != rg.end(); i++) {
+                
+                double energyVal = 0;
+                const auto& adj = mesh.tri_edges_adj_points[i];
+                const auto& edge = mesh.tri_edges[i];
+                if (adj.y() != -1) {
 
+                    auto x0 = mesh.vertexes[edge.x()];
+                    auto x1 = mesh.vertexes[edge.y()];
+                    auto x2 = mesh.vertexes[adj.x()];
+                    auto x3 = mesh.vertexes[adj.y()];
+
+                    double t = edgeTheta(x0, x1, x2, x3, nullptr, nullptr);
+
+                    auto rest_x0 = mesh.v_rest[edge.x()];
+                    auto rest_x1 = mesh.v_rest[edge.y()];
+                    auto rest_x2 = mesh.v_rest[adj.x()];
+                    auto rest_x3 = mesh.v_rest[adj.y()];
+
+                    double length = (rest_x0 - rest_x1).norm();
+
+                    double rest_t = edgeTheta(rest_x0, rest_x1, rest_x2, rest_x3, nullptr, nullptr);
+                    energyVal = mesh.bendingStiffness * (t - rest_t) * (t - rest_t) * length;
+                    
                 }
-                return temp_sum;
-            },
-            [&](double left, double right) {
-                return left + right;
+                temp_sum += energyVal;
+
             }
-    );
+            return temp_sum;
+        },
+        [&](double left, double right) {
+            return left + right;
+        }
+        );
+    return energy;
+}
+
+double getObjEnergy_baraffwitkin_3D(const mesh3D& mesh,
+    const Vector2d& anisotropic_a,
+    const Vector2d& anisotropic_b,
+    double stretchS, double shearS) {
+    double energy = parallel_reduce(
+        tbb::blocked_range<int>(0, mesh.triangleNum), 0.0,
+        [&](const tbb::blocked_range<int>& rg, double temp_sum) {
+            for (int i = rg.begin(); i != rg.end(); i++) {
+                Matrix<double, 3, 2> F =
+                    calculateDs32D_double(mesh.vertexes, mesh.triangles[i]) * mesh.DM_triangle_inverse[i];
+                double I6 = anisotropic_a.transpose() * F.transpose() * F * anisotropic_b;
+                double shear_energy = I6 * I6;
+
+
+                double I5u = (F * anisotropic_a).norm();
+                double I5v = (F * anisotropic_b).norm();
+
+                double ucoeff = 1;
+                double vcoeff = 1;
+                if (I5u < 1) {
+                    ucoeff *= 1e-2;
+                }
+                if (I5v < 1) {
+                    vcoeff *= 1e-2;
+                }
+
+
+                double stretch_energy =
+                    ucoeff * pow(I5u - 1, 2) +
+                    vcoeff * pow(I5v - 1, 2);
+                temp_sum += (stretchS * stretch_energy + shearS * shear_energy) * mesh.areas[i];
+
+            }
+            return temp_sum;
+        },
+        [&](double left, double right) {
+            return left + right;
+        }
+        );
     return energy;
 }
 
@@ -904,12 +1104,12 @@ void initMesh3D(mesh3D &mesh, int type, double scale) {
         double vlm = calculateVolum(mesh.vertexes, mesh.tetrahedras[i]);
 
 
-        mesh.masses[mesh.tetrahedras[i][0]] += vlm * density / 4;
-        mesh.masses[mesh.tetrahedras[i][1]] += vlm * density / 4;
-        mesh.masses[mesh.tetrahedras[i][2]] += vlm * density / 4;
-        mesh.masses[mesh.tetrahedras[i][3]] += vlm * density / 4;
+        mesh.masses[mesh.tetrahedras[i][0]] += vlm * mesh.density / 4;
+        mesh.masses[mesh.tetrahedras[i][1]] += vlm * mesh.density / 4;
+        mesh.masses[mesh.tetrahedras[i][2]] += vlm * mesh.density / 4;
+        mesh.masses[mesh.tetrahedras[i][3]] += vlm * mesh.density / 4;
 
-        massSum += vlm * density;
+        massSum += vlm * mesh.density;
 
         Eigen::Matrix3d DMInverse = DM.inverse();
 //        __Inverse(DM, DMInverse);
@@ -925,13 +1125,16 @@ void initMesh3D(mesh3D &mesh, int type, double scale) {
 //        Matrix3d ONE;
         //ONE << 1, 1, 1, 1, 1, 1, 1, 1, 1;
         double area = calculateTriangleArea(mesh.vertexes, mesh.triangles[i]);
-        mesh.areas.push_back(area);
-        area *= clothThicness;
-        mesh.masses[mesh.triangles[i][0]] += area * cloth_density / 3;
-        mesh.masses[mesh.triangles[i][1]] += area * cloth_density / 3;
-        mesh.masses[mesh.triangles[i][2]] += area * cloth_density / 3;
+        
+        area *= mesh.clothThicness;
 
-        massSum += area * cloth_density;
+        mesh.areas.push_back(area);
+
+        mesh.masses[mesh.triangles[i][0]] += area * mesh.cloth_density / 3;
+        mesh.masses[mesh.triangles[i][1]] += area * mesh.cloth_density / 3;
+        mesh.masses[mesh.triangles[i][2]] += area * mesh.cloth_density / 3;
+
+        massSum += area * mesh.cloth_density;
 
 
 //        Eigen::Matrix2d DMInverse;
@@ -1022,6 +1225,16 @@ computePEPF_baraffwitkin_double(const Matrix<double, 3, 2> &F,
     double I5v = (F * anisotropic_b).transpose() * F * anisotropic_b;
     double ucoeff = 1.0 - 1 / sqrt(I5u);
     double vcoeff = 1.0 - 1 / sqrt(I5v);
+
+    if (I5u < 1) {
+        ucoeff *= 1e-2;
+    }
+    if (I5v < 1) {
+        vcoeff *= 1e-2;
+    }
+
+
+
     stretch_pk1 = ucoeff * 2. * F * anisotropic_a * anisotropic_a.transpose() +
                   vcoeff * 2. * F * anisotropic_b * anisotropic_b.transpose();
     return stretchS * stretch_pk1 + shearS * shear_pk1;
@@ -1156,6 +1369,7 @@ MatrixXd project_StabbleNHK_H_3D(const Matrix3d &F, const double &lengthRate, co
 }
 
 MatrixXd project_StabbleNHK_2_H_3D(const Matrix3d &F, const double &lengthRate, const double &volumRate) {
+    //cout << lengthRate << "   " << volumRate << endl;
     SVDResult3D_double svdResult = QRSVD(F);
     Matrix3d U, sigma, V, A;
     U = svdResult.U;
@@ -1313,6 +1527,16 @@ Eigen::Matrix<double, 6, 6> project_baraffwitkint_H_3D(const Matrix<double, 3, 2
         auto fv = F.col(1).normalized();
         double uCoeff = (1.0 - invSqrtI5u >= 0.0) ? invSqrtI5u : 1.0;
         double vCoeff = (1.0 - invSqrtI5v >= 0.0) ? invSqrtI5v : 1.0;
+
+
+        if (I5u < 1) {
+            uCoeff *= 1e-2;
+        }
+        if (I5v < 1) {
+            vCoeff *= 1e-2;
+        }
+
+
         H.block<3, 3>(0, 0) += uCoeff * (fu * fu.transpose());
         H.block<3, 3>(3, 3) += vCoeff * (fv * fv.transpose());
         H *= 2;
@@ -1458,3 +1682,5 @@ MatrixXd project_ANIOSI5_Rehabi_H_3D(const Matrix3d &F, Vector3d direction, cons
 
     return H;
 }
+
+

@@ -2,6 +2,8 @@
 #include "Simulator.h"
 #include "iostream"
 #include "Eigen/Eigen"
+#include <fstream>
+
 using namespace Eigen;
 using namespace FEM;
 
@@ -32,107 +34,111 @@ void buildSpecialPoints(mesh3D &mesh) {
 
 }
 
+void DefaultSettings(mesh3D& mesh3d) {
+
+    mesh3d.density = 1e3;
+    mesh3d.cloth_density = 1e2;
+    mesh3d.clothThicness = 1e-3;
+    mesh3d.use_barrier = 0;
+    mesh3d.IPC_dt = 0.01;
+
+    mesh3d.Hhat = 9e-8;
+
+    mesh3d.Fhat = 1e-6;
+    mesh3d.Kappa = 0;
+    mesh3d.dTol = 1e-18;
+
+    mesh3d.YoungModulus = 1e4;
+    mesh3d.PoissonRate = 0.49;
+    mesh3d.friction = 0.5;
+    mesh3d.clothYoungModulus = 1e6;
+    mesh3d.Newton_Solver_Threshold = 1e-2;
+
+    mesh3d.lengthRateLame = mesh3d.YoungModulus / (2 * (1 + mesh3d.PoissonRate));
+    mesh3d.volumeRateLame = mesh3d.YoungModulus * mesh3d.PoissonRate / ((1 + mesh3d.PoissonRate) * (1 - 2 * mesh3d.PoissonRate));
+    mesh3d.lengthRate = 4 * mesh3d.lengthRateLame / 3;
+    mesh3d.volumeRate = mesh3d.volumeRateLame + 5 * mesh3d.lengthRateLame / 6;
+    mesh3d.stretchStiffness = mesh3d.clothYoungModulus / (2 * (1 + mesh3d.PoissonRate));
+    mesh3d.shearStiffness = mesh3d.stretchStiffness * 0.3;
+    mesh3d.bendingStiffness = mesh3d.clothYoungModulus * pow(mesh3d.clothThicness, 3) / (24 * (1 - mesh3d.PoissonRate * mesh3d.PoissonRate));
+
+}
+
+
+void LoadSettings(mesh3D& mesh3d) {
+    bool successfulRead = false;
+
+    //read file
+    std::ifstream infile;
+
+
+#ifdef _WIN32
+    string DEFAULT_CONFIG_FILE = "scene/parameterSetting.txt";
+#else
+    string DEFAULT_CONFIG_FILE = "../CPU IPC/scene/parameterSetting.txt";
+#endif
+
+
+    infile.open(DEFAULT_CONFIG_FILE, std::ifstream::in);
+    if (successfulRead = infile.is_open())
+    {
+        char ignoreToken[256];
+        mesh3d.Fhat = 1e-6;
+        mesh3d.Kappa = 0;
+        mesh3d.dTol = 1e-18;
+
+        // global settings:
+        infile >> ignoreToken >> mesh3d.density;
+        infile >> ignoreToken >> mesh3d.YoungModulus;
+        infile >> ignoreToken >> mesh3d.PoissonRate;
+        infile >> ignoreToken >> mesh3d.friction;
+        infile >> ignoreToken >> mesh3d.clothThicness;
+        infile >> ignoreToken >> mesh3d.clothYoungModulus;
+        infile >> ignoreToken >> mesh3d.cloth_density;
+        infile >> ignoreToken >> mesh3d.use_barrier;
+        infile >> ignoreToken >> mesh3d.IPC_dt;
+        infile >> ignoreToken >> mesh3d.Newton_Solver_Threshold;
+        infile >> ignoreToken >> mesh3d.Hhat;
+
+        mesh3d.Hhat *= mesh3d.Hhat;
+        mesh3d.lengthRateLame = mesh3d.YoungModulus / (2 * (1 + mesh3d.PoissonRate));
+        mesh3d.volumeRateLame = mesh3d.YoungModulus * mesh3d.PoissonRate / ((1 + mesh3d.PoissonRate) * (1 - 2 * mesh3d.PoissonRate));
+        mesh3d.lengthRate = 4 * mesh3d.lengthRateLame / 3;
+        mesh3d.volumeRate = mesh3d.volumeRateLame + 5 * mesh3d.lengthRateLame / 6;
+        mesh3d.stretchStiffness = mesh3d.clothYoungModulus / (2 * (1 + mesh3d.PoissonRate));
+        mesh3d.shearStiffness = mesh3d.stretchStiffness * 0.3;
+        mesh3d.bendingStiffness = mesh3d.clothYoungModulus * pow(mesh3d.clothThicness, 3) / (24 * (1 - mesh3d.PoissonRate * mesh3d.PoissonRate));
+
+        infile.close();
+    }
+
+    if (!successfulRead)
+    {
+        std::cerr << "Waning: failed loading settings, set to defaults." << std::endl;
+        DefaultSettings(mesh3d);
+    }
+}
+
 
 bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
     mesh3D mesh3d;
+    LoadSettings(mesh3d);
+
     mesh3d.maxConer = Vector3d(-1e32, -1e32, -1e32);
     mesh3d.minConer = Vector3d(1e32, 1e32, 1e32);
 
     mesh3d.objMaxConer = Vector3d(0, 0, 0);
     mesh3d.objMinConer = Vector3d(0, 0, 0);
 
-    if(false)
-    {
-        mesh3d.load_tetrahedraMesh_IPC_TetMesh("../CPU IPC/tetrahedraMesh/ipcmesh/dolphin5K.msh", 0.01, Vector3d(0, 0, 0));
-
-        Matrix3d rotate;
-        float angleZ = FEM::PI / 4;
-        rotate << cos(angleZ), -sin(angleZ), 0,  sin(angleZ), cos(angleZ), 0,0,0,1;
-
-        for (int j = 0; j < mesh3d.vertexNum; j++) {
-            mesh3d.vertexes[j] = (rotate * mesh3d.vertexes[j]);
-            mesh3d.vertexes[j] = (mesh3d.vertexes[j] + Vector3d(-0.7, -0.45, -0.525));
-        }
-        int tnum = mesh3d.vertexNum;
-
-        mesh3d.load_triangleMesh("../CPU IPC/triangleMesh/newtubing.obj", 0.05, Vector3d(0, 0, 0), 2);
-
-        angleZ = FEM::PI / 2;
-        Matrix3d rotate2;// << cos(angleZ), -sin(angleZ), 0,  sin(angleZ), cos(angleZ), 0,0,0,1;
-        rotate2 << cos(angleZ), -sin(angleZ), 0,  sin(angleZ), cos(angleZ), 0,0,0,1;
-
-        for (int j = tnum; j < mesh3d.vertexNum; j++) {
-            mesh3d.vertexes[j] = (rotate2 * mesh3d.vertexes[j]);
-            mesh3d.vertexes[j] = (mesh3d.vertexes[j] + Vector3d(0.5, .0, 0));
-        }
-
-
-        double xmin = 1e32, ymin = 1e32, zmin = 1e32;
-        double xmax = -1e32, ymax = -1e32, zmax = -1e32;
-        for (int j = 0; j < mesh3d.vertexNum; j++) {
-            double dis = pow(mesh3d.vertexes[j].y(),2)+pow(mesh3d.vertexes[j].z(),2);
-            if (dis<0.012*0.012&&mesh3d.vertexes[j].x()>-0.25&&mesh3d.vertexes[j].x()<-0.07) {
-                mesh3d.boundaryTypes[j] = 1;
-                mesh3d.Constraints[j].setZero();
-            }
-
-            Vector3d pos = mesh3d.vertexes[j];
-            if (xmin > pos[0]) xmin = pos[0];
-            if (ymin > pos[1]) ymin = pos[1];
-            if (zmin > pos[2]) zmin = pos[2];
-            if (xmax < pos[0]) xmax = pos[0];
-            if (ymax < pos[1]) ymax = pos[1];
-            if (zmax < pos[2]) zmax = pos[2];
-
-
-        }
-        mesh3d.maxConer = Vector3d(xmax, ymax, zmax);
-        mesh3d.minConer = Vector3d(xmin, ymin, zmin);
-    }
-
-
     if (false)
     {
-        mesh3d.load_tetrahedraMesh_IPC_TetMesh("../CPU IPC/tetrahedraMesh/ipcmesh/Armadillo13K.msh", 0.006, Vector3d(0, 0, 0));
-
-        Matrix3d rotate;
-        float angleX = FEM::PI / 2, angleY = -FEM::PI / 2, angleZ = FEM::PI / 2;
-        rotate << cos(angleY), 0, -sin(angleY), 0, 1, 0, sin(angleY), 0, cos(angleY);
-
-        for (int j = 0; j < mesh3d.vertexNum; j++) {
-            mesh3d.vertexes[j] = (rotate * mesh3d.vertexes[j]);
-
-            mesh3d.vertexes[j] = (mesh3d.vertexes[j] + Vector3d(-0.1, 0.4, 0));
-        }
-        mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0, -0.6, 0));
-        mesh3d.load_triangleMesh("../CPU IPC/triangleMesh/tricloth.obj", 0.7, Vector3d(0, 0, 0));
-        double xmin = 1e32, ymin = 1e32, zmin = 1e32;
-        double xmax = -1e32, ymax = -1e32, zmax = -1e32;
-        for (int j = 0; j < mesh3d.vertexNum; j++) {
-
-            Vector3d pos = mesh3d.vertexes[j];
-            if (xmin > pos[0]) xmin = pos[0];
-            if (ymin > pos[1]) ymin = pos[1];
-            if (zmin > pos[2]) zmin = pos[2];
-            if (xmax < pos[0]) xmax = pos[0];
-            if (ymax < pos[1]) ymax = pos[1];
-            if (zmax < pos[2]) zmax = pos[2];
-
-
-        }
-        mesh3d.maxConer = Vector3d(xmax, ymax, zmax);
-        mesh3d.minConer = Vector3d(xmin, ymin, zmin);
-    }
-
-    if(true)
-    {
         //mesh3d.load_triangleMesh("../CPU IPC/triangleMesh/tricloth.obj", 0.3, Vector3d(0, 0, 0));
-        mesh3d.load_triangleMesh("../CPU IPC/triangleMesh/CMU/plane1024.obj", 0.3, Vector3d(0, 0, 0));
+        mesh3d.load_triangleMesh("../CPU IPC/triangleMesh/CMU/plane100.obj", 0.3, Vector3d(0, 0, 0));
 
-        Matrix3d rotate,rotatey;
+        Matrix3d rotate, rotatey;
         float angleX = FEM::PI / 2, angleY = FEM::PI / 4, angleZ = FEM::PI / 2;
-        rotate << 1,0,0,0,cos(angleX), -sin(angleX), 0, sin(angleX), cos(angleX);
-        rotatey<<cos(angleY), -sin(angleY), 0,sin(angleY), cos(angleY),0,0,0,1;
+        rotate << 1, 0, 0, 0, cos(angleX), -sin(angleX), 0, sin(angleX), cos(angleX);
+        rotatey << cos(angleY), -sin(angleY), 0, sin(angleY), cos(angleY), 0, 0, 0, 1;
         for (int j = 0; j < mesh3d.vertexNum; j++) {
             //mesh3d.vertexes[j] = (rotate * mesh3d.vertexes[j]);
 
@@ -156,15 +162,16 @@ bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
         }
         mesh3d.maxConer = Vector3d(xmax, ymax, zmax);
         mesh3d.minConer = Vector3d(xmin, ymin, zmin);
+
+        mesh3d.boundaryTypes[0] = 1;
+        mesh3d.Constraints[0].setZero();
+
     }
 
-
-
-    
     //mesh3d.load_tetrahedraMesh_IPC_TetMesh("../CPU IPC/tetrahedraMesh/ipcmesh/cube.msh", 0.5, Vector3d(0.25, -0.6, 0.25));
-    //mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0, -0.65, 0));
+    mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny.msh", 0.2, Vector3d(0, -0, 0));
     //mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0, 0.15, 0));
-    //mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0, 0.2, 0));
+    //mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny.msh", 0.5, Vector3d(0, 0.0, 0));
     //mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/cube.msh", 0.5, Vector3d(0.25, 0.6, 0.25));
     //mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/cube.msh", 0.5, Vector3d(0.25, 0.8, 0.25));
     //mesh3d.load_tetrahedraMesh("tetrahedraMesh/cube15.msh", 0.5, Vector3d(-0.25, -0.95, -0.25));
@@ -172,71 +179,11 @@ bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
     //mesh3d.load_tetrahedraMesh("tetrahedraMesh/ipcmesh/sqballTet_.msh", 1, Vector3d(0, -0.3, 0));
     //mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/sqballTet_.msh", 1, Vector3d(0, -0.75, 0));
 
-    if(false)
-    {
-        mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0, 0, 0));
-    //mesh3d.load_triangleMesh("../CPU IPC/triangleMesh/tricloth.obj", 0.7, Vector3d(0, 0, 0));
-        mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0.6, 0, 0));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(-0.6, 0, 0));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0, 0, 0.4));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0, 0, -0.4));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0.6, 0, 0.4));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(-0.6, 0, 0.4));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0.6, 0, -0.4));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(-0.6, 0, -0.4));
-
-     //mesh3d.load_tetrahedraMesh("/home/mine/Codes/CPU_IPC_BENCHMARK/CPU-IPC/tetrahedraMesh/twoBunny.msh", 0.2, Vector3d(0, 0.65, 0));
-        mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0, 0.65, 0));
-    //mesh3d.load_tetrahedraMesh_IPC_TetMesh("/home/mine/Codes/CPU_IPC_BENCHMARK/CPU-IPC/tetrahedraMesh/sphere1K.vtk", 0.2, Vector3d(0, 0.65, 0));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0.6, 0.65, 0));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(-0.6, 0.65, 0));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0, 0.65, 0.4));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0, 0.65, -0.4));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0.6, 0.65, 0.4));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(-0.6, 0.65, 0.4));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0.6, 0.65, -0.4));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(-0.6, 0.65, -0.4));
-
-
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0, -0.65, 0));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0.6, -0.65, 0));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(-0.6, -0.65, 0));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0, -0.65, 0.4));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0, -0.65, -0.4));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0.6, -0.65, 0.4));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(-0.6, -0.65, 0.4));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(0.6, -0.65, -0.4));
-       mesh3d.load_tetrahedraMesh("../CPU IPC/tetrahedraMesh/bunny2.msh", 0.2, Vector3d(-0.6, -0.65, -0.4));
-    }
-    //mesh3d.load_tetrahedraMesh("tetrahedraMesh/twoBunny.msh", 2, Vector3d(-0, -0, -0));
-    //mesh3d.load_tetrahedraMesh("tetrahedraMesh/bunny.msh", 0.5, Vector3d(-0, 0.4, -0));
-    //mesh3d.load_tetrahedraMesh("tetrahedraMesh/bunny.msh", 0.5, Vector3d(-0, -0.4, -0));
-    //{
-    //    //mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/rod300x33.msh", 1, Vector3d(0, 0.1, 0));
-    //    //mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/rod300x33.msh", 1, Vector3d(0, -0.1, 0));
-    //    //mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/rod300x33.msh", 1, Vector3d(0, 0, 0.1));
-    //    //mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/rod300x33.msh", 1, Vector3d(0, 0, -0.1));
-
-    //    mesh3d.load_tetrahedraMesh_IPC_TetMesh("tetrahedraMesh/ipcmesh/mat150x150t40.msh", 1, Vector3d(0, 0, 0));
-    //    for (int j = 0; j < mesh3d.vertexNum; j++) {
-    //        if ((mesh3d.vertexes[j].x()) > 0.5 - 1e-4) {
-    //            mesh3d.boundaryTypes[j] = 1;
-    //            mesh3d.Constraints[j].setZero();
-    //        }
-    //        if (((mesh3d.vertexes[j].x()) < -0.5 + 1e-4)) {
-    //            mesh3d.boundaryTypes[j] = -1;
-    //            mesh3d.Constraints[j].setZero();
-    //        }
-    //    }
-    //}
-    //for (int j = mesh3d.vertexNum/2; j < mesh3d.vertexNum; j++) {
-    //    mesh3d.boundaryTypes[j] = 1;
-    //    mesh3d.Constraints[j].setZero();
-    //}
 
     mesh3d.vertexNum = mesh3d.vertexes.size();
     mesh3d.tetrahedraNum = mesh3d.tetrahedras.size();
     mesh3d.triangleNum = mesh3d.triangles.size();
+
     //mesh3d.triangleNum = 0;
     printf("tets num: %d\n", mesh3d.tetrahedraNum);
     //printf("triangles num: %d\n", mesh3d.triangleNum);
@@ -259,12 +206,10 @@ bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
 
 
     mesh3d.bboxDiagSize2 = (mesh3d.maxConer - mesh3d.minConer).squaredNorm();
-    mesh3d.Hhat = 9e-8 * mesh3d.bboxDiagSize2;// (mesh3d.objMaxConer - mesh3d.objMinConer).squaredNorm();
-    mesh3d.Fhat = 1e-6 * mesh3d.bboxDiagSize2;;
-    mesh3d.Kappa = 0;
-    mesh3d.dTol = 1e-18 * mesh3d.bboxDiagSize2;
-
-
+    mesh3d.Hhat *= mesh3d.bboxDiagSize2;// (mesh3d.objMaxConer - mesh3d.objMinConer).squaredNorm();
+    mesh3d.Fhat *= mesh3d.bboxDiagSize2;;
+    mesh3d.dTol *= mesh3d.bboxDiagSize2;
+    
 
     tetrahedra_meshes.mesh3Ds.push_back(mesh3d);
     tetrahedra_meshes.calculate_surface();
@@ -272,9 +217,9 @@ bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
     //buildSpecialPoints(tetrahedra_meshes.mesh3Ds[0]);
 
     double length = 0;
-    for (const auto &edg: (tetrahedra_meshes.mesh3Ds[0]).surfEdges) {
+    for (const auto& edg : (tetrahedra_meshes.mesh3Ds[0]).surfEdges) {
         length += (tetrahedra_meshes.mesh3Ds[0].vertexes[edg.first] -
-                   tetrahedra_meshes.mesh3Ds[0].vertexes[edg.second]).norm();
+            tetrahedra_meshes.mesh3Ds[0].vertexes[edg.second]).norm();
     }
     tetrahedra_meshes.mesh3Ds[0].averageEdgeLenth = length / (tetrahedra_meshes.mesh3Ds[0].surfEdges.size() * 3);
     printf("triangles num: %d\n", tetrahedra_meshes.mesh3Ds[0].surface.size());
@@ -282,12 +227,15 @@ bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
 
     if (!tetrahedra_meshes.mesh3Ds[0].load_tetTempData()) {
         printf("no temp data\n");
-    } else {
+    }
+    else {
         printf("load temp data\n");
     }
 
-    buildCollisionSets();
+    //if (tetrahedra_meshes.mesh3Ds[0].use_barrier) {
 
+        buildCollisionSets();
+    //}
     //printf("finish build cp\n");
 
     return true;
@@ -299,9 +247,12 @@ void FEMSimulator::buildIntegrator(const int integratorType, unsigned int sceneT
 }
 
 void FEMSimulator::buildCollisionSets() {
-    sh.build(tetrahedra_meshes.mesh3Ds[0], tetrahedra_meshes.mesh3Ds[0].averageEdgeLenth);
+    if (tetrahedra_meshes.mesh3Ds[0].use_barrier) {
+        sh.build(tetrahedra_meshes.mesh3Ds[0], tetrahedra_meshes.mesh3Ds[0].averageEdgeLenth);
+        sh.calculateActivateSet(tetrahedra_meshes.mesh3Ds[0]);
+    }
+    
     gd.calculateActivateSet(tetrahedra_meshes.mesh3Ds[0]);
-    sh.calculateActivateSet(tetrahedra_meshes.mesh3Ds[0]);
 }
 
 int FEMSimulator::simulateStick(int &stepId) {

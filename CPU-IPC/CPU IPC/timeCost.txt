@@ -1,10 +1,10 @@
-time0: 23.7147
-time1: 152.24
-time2: 98.1213
-time3: 466.161
-time4: 0.234674
-timeAll: 760.705
-total iter: 13763
-frames: 9031
-totalCollisionNum: 3.40089e+06
-averageCollision: 247.104
+time0: 0.834684
+time1: 13.7709
+time2: 3.29594
+time3: 3.23717
+time4: 0.0007647
+timeAll: 21.768
+total iter: 324
+frames: 147
+totalCollisionNum: 0
+averageCollision: 0

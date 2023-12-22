@@ -5,6 +5,15 @@
 #include "fem_math.h"
 #include "collisionUtil.h"
 
+
+double edgeTheta(
+    const Eigen::Vector3d& q0,
+    const Eigen::Vector3d& q1,
+    const Eigen::Vector3d& q2,
+    const Eigen::Vector3d& q3,
+    Eigen::Matrix<double, 1, 12>* derivative, // edgeVertex, then edgeOppositeVertex
+    Eigen::Matrix<double, 12, 12>* hessian);
+
 //host functions
 void initMesh3D(mesh3D &mesh, int type, double scale);
 
@@ -46,6 +55,8 @@ double getObjEnergy_baraffwitkin_3D(const mesh3D &mesh,
                                   const Vector2d &anisotropic_a,
                                   const Vector2d &anisotropic_b,
                                   double stretchS, double shearS);
+
+double getObjBending_Energy(const mesh3D& mesh);
 
 Matrix3d computePEPF_StableNHK3D_2_double(const Matrix3d &F, const double &lengthRate, const double &volumRate);
 

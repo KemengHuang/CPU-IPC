@@ -5,3 +5,4 @@ CPU-IPC/*.zip
 CPU-IPC/CPU IPC/saveScreen*
 CPU-IPC/CPU IPC/saveSurface*
 CPU-IPC/CPU IPC/*.mp4
+build/

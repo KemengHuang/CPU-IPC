@@ -115,6 +115,22 @@ public:
 
 class mesh3D {
 public:
+	double density;
+	double lengthRateLame;
+	double volumeRateLame;
+	double lengthRate;
+	double volumeRate;
+	double friction;
+
+	double cloth_density;
+	double YoungModulus;
+	double PoissonRate;
+
+	double clothThicness;
+	double clothYoungModulus;
+	double stretchStiffness;
+	double shearStiffness;
+	double bendingStiffness;
 	double maxVolum;
 	vector<Matrix3d> Constraints;
 	//vector<bool> isDelete;
@@ -128,9 +144,13 @@ public:
 	double averageEdgeLenth;
 	double Hhat;
     double Fhat;
+	double IPC_dt;
 	double Kappa;
 	double bboxDiagSize2;
 	double dTol;
+	double Newton_Solver_Threshold;
+	bool use_barrier;
+
 	vector<Vector3d> vertexes;
 	vector<Vector3d> v_rest;
 	vector<Vector4i> tetrahedras;
@@ -161,6 +181,14 @@ public:
 	//IPC
 	vector<Vector3d> xTilta, dx_Elastic, acceleration;
 	vector<Vector3d> V_prev;
+
+	vector<Eigen::VectorXd> EKF;
+
+
+	std::vector<Vector2i> tri_edges_adj_points;
+	std::vector<Vector2i> tri_edges;
+
+
 	int D12x12Num;
 	int D9x9Num;
 	int D6x6Num;
@@ -177,6 +205,15 @@ public:
 	bool output_tetrahedraMesh(const std::string& filename);
 	bool output_tetTempData();
 	bool load_tetTempData();
+
+	vector<Eigen::VectorXd> get_dXn1_dXn();
+	vector<Eigen::VectorXd> get_dXn1_dVn();
+	vector<Eigen::VectorXd> get_dVn1_dXn();
+	vector<Eigen::VectorXd> get_dVn1_dVn();
+
+
+
+
 };
 
 class mesh_obj {

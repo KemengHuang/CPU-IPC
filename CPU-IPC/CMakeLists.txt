@@ -5,6 +5,8 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose Release or Debug")
 endif()
 
+include(cmake/FindSuiteSparse.cmake)
+
 # project meta
 # ============
 project(cpu_ipc
@@ -32,12 +34,12 @@ add_compile_definitions(gipc PRIVATE USE_SNK NDEBUG)
 
 find_package(Eigen3 REQUIRED)
 find_package(TBB REQUIRED)
-target_link_directories(gipc PRIVATE /usr/local/lib /opt/intel/oneapi/mkl/2022.0.2/lib/intel64 /opt/intel/oneapi/compiler/2022.0.2/linux/compiler/lib/intel64_lin)
 target_link_libraries(gipc PRIVATE Eigen3::Eigen TBB::tbb)
-target_link_libraries(gipc PRIVATE mkl_intel_lp64 mkl_intel_thread mkl_core iomp5 pthread m dl mkl_lapack95_lp64 mkl_blas95_lp64 cholmod)
 
 if (MSVC)
     message("win build")
+    target_link_directories(gipc PRIVATE /usr/local/lib /opt/intel/oneapi/mkl/2022.0.2/lib/intel64 /opt/intel/oneapi/compiler/2022.0.2/linux/compiler/lib/intel64_lin)
+    target_link_libraries(gipc PRIVATE mkl_intel_lp64 mkl_intel_thread mkl_core iomp5 pthread m dl mkl_lapack95_lp64 mkl_blas95_lp64 cholmod)
     target_include_directories(gipc PRIVATE 
         mLBVH/GL_LIB/glew_64/include
         mLBVH/GL_LIB/freeglut_64/include
@@ -51,8 +53,12 @@ if (MSVC)
         freeglut.lib
     )
 elseif(UNIX)
+    target_link_directories(gipc PRIVATE /usr/local/lib)
+    target_link_libraries(gipc PRIVATE pthread m dl cholmod)
     find_package(OpenGL REQUIRED)
     find_package(GLUT REQUIRED)
     find_package(GLEW REQUIRED)
+    target_include_directories(gipc PRIVATE /usr/include/suitesparse/)
+    target_link_libraries(gipc PRIVATE ${SUITESPARSE_LIBRARIES}) 
     target_link_libraries(gipc PRIVATE OpenGL::OpenGL GLUT::GLUT GLEW::GLEW OpenGL::GLU)
 endif(MSVC)

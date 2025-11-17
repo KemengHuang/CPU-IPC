@@ -1,4 +1,4 @@
-#CPU-IPC
+# CPU-IPC
 Concise CPU Incremental Potential Contact Simulation
 
 ## Dependencies

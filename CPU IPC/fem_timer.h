@@ -52,13 +52,13 @@ public:
 
     void set_start() {
         struct timespec t;
-        std::timespec_get(&t, TIME_UTC);
+        timespec_get(&t, TIME_UTC);
         start_ = t.tv_sec * 1e3 + t.tv_nsec * 1e-6;
     }
 
     void set_end() {
         struct timespec t;
-        std::timespec_get(&t, TIME_UTC);
+        timespec_get(&t, TIME_UTC);
         end_ = t.tv_sec * 1e3 + t.tv_nsec * 1e-6;
     }
 

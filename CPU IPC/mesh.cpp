@@ -2,7 +2,7 @@
 #include <unordered_map>
 #include <fstream>
 #include <set>
-
+#include <assert.h>
 unsigned long long calculate_Triangle_hash(const uint64_t &index0, const uint64_t &index1, const uint64_t &index2,
                                            const uint64_t &length) {
     unsigned long long hashVal = (index2 * length + index1) * length + index0;
@@ -262,9 +262,10 @@ bool mesh3D::load_tetrahedraMesh(const std::string &filename, double scale, Vect
                 vector<std::string> nodePos;
                 std::string spacer = " ";
                 split(line, nodePos, spacer);
-                x = atof(nodePos[1].c_str());
-                y = atof(nodePos[2].c_str());
-                z = atof(nodePos[3].c_str());
+                int posNum = nodePos.size();
+                x = atof(nodePos[posNum - 3].c_str());
+                y = atof(nodePos[posNum - 2].c_str());
+                z = atof(nodePos[posNum - 1].c_str());
                 Vector3d d_velocity = Vector3d(0, 0, 0);
                 Vector3d vertex = scale * Vector3d(x, y, z) + position_offset;
                 Matrix3d Constraint;

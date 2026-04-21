@@ -12,7 +12,7 @@
 #include <chrono>
 #include "FrictionUtils.hpp"
 #include "Solver.h"
-
+#include <assert.h>
 
 
 using namespace FEM;
@@ -511,7 +511,11 @@ void compute_fiction_hessian(mesh3D& mesh, const Ground& grd, BHessian& BH, doub
 
 void computeXTilta(mesh3D& mesh) {
     mesh.xTilta.resize(mesh.vertexes.size());
-    Vector3d gravityDtSq = Vector3d(0, -9.8, 0) * mesh.IPC_dt * mesh.IPC_dt;
+	double gravity = -9.8;
+    if(!mesh.apply_gravity) {
+        gravity = 0;
+	}
+    Vector3d gravityDtSq = Vector3d(0, gravity, 0) * mesh.IPC_dt * mesh.IPC_dt;
 
     tbb::parallel_for(0, (int)mesh.vertexes.size(), 1, [&](int vI) {
         mesh.xTilta[vI] = (mesh.V_prev[vI] + (mesh.velocities[vI] * mesh.IPC_dt + gravityDtSq));
@@ -2073,11 +2077,13 @@ void export_obj(const mesh3D& mesh, int index) {
 bool isRotate = false;
 bool loadTempTimeInfo = true;
 
-void updateVelocity(const vector<Vector3d>& currentPos, const vector<Vector3d> originalPos, vector<Vector3d>& velocity, const double& delta_t, const int& number) {
+void updateVelocity(const vector<Vector3d>& currentPos, const vector<Vector3d> originalPos, vector<Vector3d>& velocity, const double& delta_t, const int& number, bool is_quasi_static) {
     tbb::parallel_for(0, number, 1, [&](int i)
-
         {
-            velocity[i] = (currentPos[i] - originalPos[i]) / delta_t;
+            if (is_quasi_static)
+                velocity[i] = Vector3d(0, 0, 0);
+            else
+                velocity[i] = (currentPos[i] - originalPos[i]) / delta_t;
         }
     );
 }
@@ -2111,15 +2117,25 @@ int IPC_Solver(int& stepId, mesh3D& mesh, SpatialHash& sh, Ground& gd) {
     buildFriction(mesh, gd);
 #endif
 
-    if (isRotate)
-    {
+    if (true && mesh.update_hard_constraint_functor != nullptr) {
         vector<Vector3d> moveDir(mesh.vertexNum, Vector3d(0, 0, 0));
         double new_alpha = 1;
-        updateBoundaryMoveDir(mesh, moveDir, mesh.IPC_dt, new_alpha);
+        //for (int i = 0; i < mesh.boundary_vertexes_indices.size(); i++)
+        int boundary_vertex_num = mesh.boundary_vertexes_indices.size();
+        tbb::parallel_for(0, boundary_vertex_num, 1, [&](int i)
+            {
+                moveDir[mesh.boundary_vertexes_indices[i]] = mesh.update_hard_constraint_functor(
+                    mesh.vertexes[mesh.boundary_vertexes_indices[i]], new_alpha, mesh.IPC_dt);
+            }
+        );
         sh.build(mesh, moveDir, new_alpha, mesh.averageEdgeLenth);
         Self_largestFeasibleStepSize_CCD(mesh, sh, moveDir, 0.8, new_alpha);
-        //new_alpha *= 0.5;
-        updateBoundaryMoveDir(mesh, moveDir, mesh.IPC_dt, new_alpha);
+        tbb::parallel_for(0, boundary_vertex_num, 1, [&](int i)
+            {
+                moveDir[mesh.boundary_vertexes_indices[i]] = mesh.update_hard_constraint_functor(
+                    mesh.vertexes[mesh.boundary_vertexes_indices[i]], new_alpha, mesh.IPC_dt);
+            }
+        );
         vector<Vector3d> resultV0 = mesh.vertexes;
         stepForward(resultV0, moveDir, mesh, 1, true);
 
@@ -2128,7 +2144,12 @@ int IPC_Solver(int& stepId, mesh3D& mesh, SpatialHash& sh, Ground& gd) {
 
         while (isIntersected(gd, sh, mesh, mesh.vertexes)) {
             new_alpha /= 2.0;
-            updateBoundaryMoveDir(mesh, moveDir, mesh.IPC_dt, new_alpha);
+            tbb::parallel_for(0, boundary_vertex_num, 1, [&](int i)
+                {
+                    moveDir[mesh.boundary_vertexes_indices[i]] = mesh.update_hard_constraint_functor(
+                        mesh.vertexes[mesh.boundary_vertexes_indices[i]], new_alpha, mesh.IPC_dt);
+                }
+            );
             stepForward(resultV0, moveDir, mesh, 1, true);
             sh.build(mesh, mesh.averageEdgeLenth);
         }
@@ -2174,7 +2195,7 @@ int IPC_Solver(int& stepId, mesh3D& mesh, SpatialHash& sh, Ground& gd) {
     }
 
 
-    updateVelocity(mesh.vertexes, mesh.V_prev, mesh.velocities, mesh.IPC_dt, mesh.vertexNum);
+    updateVelocity(mesh.vertexes, mesh.V_prev, mesh.velocities, mesh.IPC_dt, mesh.vertexNum, mesh.is_quasi_static);
 
 
     mesh.V_prev = mesh.vertexes;

@@ -4,6 +4,7 @@
 #include "Eigen/Eigen"
 #include "mIPC.h"
 #include <vector>
+#include <array>
 using namespace std;
 using namespace Eigen;
 struct mesh_circle {
@@ -100,7 +101,7 @@ struct mesh_cuboid {
 
 struct QuadBendingInfo
 {
-	array<size_t, 4> verts;					// [edge1, edge2, trig1 outer, trig2 outer]
+	std::array<size_t, 4> verts;            // [edge1, edge2, trig1 outer, trig2 outer]
 	Matrix4d Q;								// precomputed local const Hessian
 
 	QuadBendingInfo(size_t edge1, size_t edge2, size_t trig1_outer, size_t trig2_outer, Matrix4d Q)
@@ -169,6 +170,7 @@ public:
 	bool use_barrier;
 
 	vector<Vector3d> vertexes;
+	vector<int> boundary_vertexes_indices;
 	vector<Vector3d> v_rest;
 	vector<Vector4i> tetrahedras;
 	vector<Vector3i> triangles;
@@ -205,7 +207,9 @@ public:
 	std::vector<Vector2i> tri_edges;
 
 	vector<QuadBendingInfo> quadBendingInfo;
-
+	std::function<Vector3d(Vector3d vertex, int step_id, double ipc_dt)> update_hard_constraint_functor = nullptr;
+	bool apply_gravity = true;
+	bool is_quasi_static = false;
 	int D12x12Num;
 	int D9x9Num;
 	int D6x6Num;

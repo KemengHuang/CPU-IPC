@@ -296,12 +296,31 @@ if (NOT BLAS_FOUND)
     "Did not find BLAS library (required for SuiteSparse).")
 endif (NOT BLAS_FOUND)
 
-# LAPACK.
-find_package(LAPACK QUIET)
+# ------------------------------------------------------------
+# Try to use OpenBLAS as LAPACK provider (it includes LAPACK)
+# ------------------------------------------------------------
 if (NOT LAPACK_FOUND)
-  suitesparse_report_not_found(
-    "Did not find LAPACK library (required for SuiteSparse).")
-endif (NOT LAPACK_FOUND)
+  # 查找 OpenBLAS 包（vcpkg 会提供 OpenBLASConfig.cmake）
+  find_package(OpenBLAS QUIET)
+  if (OpenBLAS_FOUND)
+    set(LAPACK_FOUND TRUE)
+    # 将 LAPACK 库指向 OpenBLAS 的库（可能是 IMPORTED 目标或路径）
+    if (TARGET OpenBLAS::OpenBLAS)
+      set(LAPACK_LIBRARIES OpenBLAS::OpenBLAS)
+    else()
+      set(LAPACK_LIBRARIES ${OpenBLAS_LIBRARIES})
+    endif()
+    message(STATUS "Using OpenBLAS for LAPACK.")
+  else()
+    # 如果没找到 OpenBLAS，再尝试标准 LAPACK 查找
+    find_package(LAPACK QUIET)
+    if (NOT LAPACK_FOUND)
+      suitesparse_report_not_found(
+        "Did not find LAPACK library (required for SuiteSparse). "
+        "Please install openblas or a LAPACK implementation.")
+    endif()
+  endif()
+endif()
 
 foreach (component IN LISTS SuiteSparse_FIND_COMPONENTS)
   if (component STREQUAL Partition)

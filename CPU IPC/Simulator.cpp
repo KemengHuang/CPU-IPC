@@ -181,17 +181,66 @@ void LoadSettings(mesh3D& mesh3d) {
     }
 }
 
+void update_material(mesh3D& mesh3d) {
+    mesh3d.lengthRateLame = mesh3d.YoungModulus / (2 * (1 + mesh3d.PoissonRate));
+    mesh3d.volumeRateLame = mesh3d.YoungModulus * mesh3d.PoissonRate / ((1 + mesh3d.PoissonRate) * (1 - 2 * mesh3d.PoissonRate));
+    mesh3d.lengthRate = 4 * mesh3d.lengthRateLame / 3;
+    mesh3d.volumeRate = mesh3d.volumeRateLame + 5 * mesh3d.lengthRateLame / 6;
+    mesh3d.stretchStiffness = mesh3d.clothYoungModulus / (2 * (1 + mesh3d.PoissonRate));
+    mesh3d.shearStiffness = mesh3d.stretchStiffness * 0.3;
+    mesh3d.bendingStiffness = mesh3d.bendYoungModulus * pow(mesh3d.clothThicness, 3) / (36 * (1 - mesh3d.PoissonRate * mesh3d.PoissonRate));
 
-bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
-    mesh3D mesh3d;
-    LoadSettings(mesh3d);
-    string asset_dir = string{ CIPC_ASSETS_DIR };
-    mesh3d.maxConer = Vector3d(-1e32, -1e32, -1e32);
-    mesh3d.minConer = Vector3d(1e32, 1e32, 1e32);
+}
 
+void case1(mesh3D& mesh3d, string asset_dir) {
+
+    mesh3d.YoungModulus = 1e6;
+    update_material(mesh3d);
     mesh3d.objMaxConer = Vector3d(0, 0, 0);
     mesh3d.objMinConer = Vector3d(0, 0, 0);
+	mesh3d.is_quasi_static = true;
+	mesh3d.apply_gravity = false;
+    mesh3d.load_tetrahedraMesh(asset_dir + "tetrahedraMesh/ipcmesh/mat40x40.msh", 1, Vector3d(0, -0, 0));
 
+    const double eps = 1e-4;
+    for (int i = 0; i < mesh3d.vertexes.size(); i++)
+    {
+        if (mesh3d.vertexes[i][0] < mesh3d.objMinConer[0] + eps || mesh3d.vertexes[i][0] > mesh3d.objMaxConer[0] - eps)
+        {
+            mesh3d.boundary_vertexes_indices.push_back(i);
+            mesh3d.boundaryTypes[i] = 1;
+        }
+    }
+
+    mesh3d.update_hard_constraint_functor =
+        [](Vector3d vertex, double alpha, double ipc_dt) -> Vector3d
+        {
+            double angleX = 3.14 / 5 * ipc_dt * alpha;
+            Matrix3d rotationL, rotationR;
+            rotationL << 1, 0, 0, 0, cos(angleX), sin(angleX), 0, -sin(angleX), cos(angleX);
+            rotationR << 1, 0, 0, 0, cos(angleX), -sin(angleX), 0, sin(angleX), cos(angleX);
+            double mvl = -1 * ipc_dt * alpha;
+            Vector3d moveDir = Vector3d(0, 0, 0);
+            if (vertex[0] < 0)
+            {
+                moveDir = rotationL * vertex - vertex;
+            }
+            if (vertex[0] > 0)
+            {
+                // rotate along x axis counterclockwise
+                moveDir = rotationR * vertex - vertex;
+            }
+            return moveDir;
+        };
+}
+
+void case2(mesh3D& mesh3d, string asset_dir) {
+
+    mesh3d.YoungModulus = 1e4;
+    update_material(mesh3d);
+    mesh3d.objMaxConer = Vector3d(0, 0, 0);
+    mesh3d.objMinConer = Vector3d(0, 0, 0);
+    //mesh3d.is_quasi_static = true;
     if (true)
     {
         mesh3d.load_triangleMesh(asset_dir + "triangleMesh/CMU/plane100.obj", 1, Vector3d(0, 0, 0));
@@ -228,6 +277,17 @@ bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
     }
 
     mesh3d.load_tetrahedraMesh(asset_dir + "tetrahedraMesh/bunny.msh", 0.5, Vector3d(0, -0.5, 0));
+
+}
+
+bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
+    mesh3D mesh3d;
+    LoadSettings(mesh3d);
+    string asset_dir = string{ CIPC_ASSETS_DIR };
+    mesh3d.maxConer = Vector3d(-1e32, -1e32, -1e32);
+    mesh3d.minConer = Vector3d(1e32, 1e32, 1e32);
+
+	case2(mesh3d, asset_dir);
 
     mesh3d.vertexNum = mesh3d.vertexes.size();
     mesh3d.tetrahedraNum = mesh3d.tetrahedras.size();

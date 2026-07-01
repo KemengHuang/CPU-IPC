@@ -4,7 +4,7 @@
 
 //#include "setting.h"
 //#include "mesh/Mesh.h"
-#include "collision/SpatialHash.h"
+#include "collision/BroadPhase.h"
 //#include "FEMMeshes.cuh"
 #include "core/TimeIntegrator.h"
 
@@ -27,7 +27,7 @@ private:
 	model_obj triangle_meshes;
 	model_tet tetrahedra_meshes;
 	//fiber_obj fiberObj;
-	SpatialHash sh;
+	BroadPhase sh;
 	Ground gd;
 	std::unique_ptr<FEMIntegrator>  integrator;
 	double dt;

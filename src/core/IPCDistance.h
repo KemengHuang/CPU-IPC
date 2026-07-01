@@ -1,7 +1,7 @@
 #pragma once
 #include "Eigen/Eigen"
 #include "mesh/Mesh.h"
-#include "collision/SpatialHash.h"
+#include "collision/BroadPhase.h"
 
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
@@ -150,13 +150,13 @@ void compute_H_dee(const mesh3D& mesh,
     double dHat, double coef);
 
 void Self_largestFeasibleStepSize(const mesh3D& mesh,
-    const SpatialHash& sh,
+    const BroadPhase& sh,
     const std::vector<Eigen::Vector3d>& searchDir,
     double slackness,
     std::vector<std::pair<int, int>>& candidates,
     double& stepSize);
 void Self_largestFeasibleStepSize_CCD(const mesh3D& mesh,
-    SpatialHash& sh,
+    BroadPhase& sh,
     const std::vector<Eigen::Vector3d>& searchDir,
     double slackness,
     double& stepSize);

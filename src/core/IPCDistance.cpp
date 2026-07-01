@@ -3810,7 +3810,7 @@ void compute_H_dee(const mesh3D& mesh,
 
 
 void Self_largestFeasibleStepSize(const mesh3D& mesh,
-    const SpatialHash& sh,
+    const BroadPhase& sh,
     const vector<Eigen::Vector3d>& searchDir,
     double slackness,
     std::vector<std::pair<int, int>>& candidates,
@@ -3875,7 +3875,7 @@ void Self_largestFeasibleStepSize(const mesh3D& mesh,
 }
 
 void Self_largestFeasibleStepSize_CCD(const mesh3D& mesh,
-    SpatialHash& sh,
+    BroadPhase& sh,
     const vector<Eigen::Vector3d>& searchDir,
     double slackness,
     double& stepSize)

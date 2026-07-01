@@ -11,7 +11,7 @@ ImplicitFEMIntegrator::ImplicitFEMIntegrator(model_tet* tetra_mesh3d, unsigned i
 
 
 
-int ImplicitFEMIntegrator::integrate(int& stepId, int& total_cg_iterations, int& total_newton_iterations, SpatialHash& sh, Ground& gd) {
+int ImplicitFEMIntegrator::integrate(int& stepId, int& total_cg_iterations, int& total_newton_iterations, BroadPhase& sh, Ground& gd) {
 
     mesh3D& mesh = meshTetes->mesh3Ds[0];
 

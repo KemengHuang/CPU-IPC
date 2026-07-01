@@ -38,6 +38,7 @@ option(CIPC_USE_SNK "Use Stable Neo-Hookean (SNK) elasticity model" ON)
 option(CIPC_USE_FRICTION "Enable friction support" ON)
 option(CIPC_USE_QUADRATIC_BENDING "Enable quadratic bending energy" ON)
 option(CIPC_USE_NEWBARRIER "Use the new log-barrier formulation (NEWB)" OFF)
+option(CIPC_USE_BVH "Use BVH-based broad-phase instead of SpatialHash" OFF)
 option(CIPC_BUILD_TESTS "Build optional unit/verification tests" OFF)
 
 # ------------------------------------------------------------------------------
@@ -115,6 +116,10 @@ if(CIPC_USE_NEWBARRIER)
     target_compile_definitions(cipc PRIVATE NEWB)
 endif()
 
+if(CIPC_USE_BVH)
+    target_compile_definitions(cipc PRIVATE CIPC_USE_BVH)
+endif()
+
 # ------------------------------------------------------------------------------
 # Include directories
 # ------------------------------------------------------------------------------
@@ -170,6 +175,7 @@ message(STATUS "  - USE_SNK: ${CIPC_USE_SNK}")
 message(STATUS "  - USE_FRICTION: ${CIPC_USE_FRICTION}")
 message(STATUS "  - USE_QUADRATIC_BENDING: ${CIPC_USE_QUADRATIC_BENDING}")
 message(STATUS "  - USE_NEWBARRIER: ${CIPC_USE_NEWBARRIER}")
+message(STATUS "  - USE_BVH: ${CIPC_USE_BVH}")
 message(STATUS "  - BUILD_TESTS: ${CIPC_BUILD_TESTS}")
 message(STATUS "===============================================================")
 

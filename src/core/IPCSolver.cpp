@@ -1538,7 +1538,7 @@ void stepForward(const vector<Vector3d>& dataV0,
 
 
 bool checkEdgeTriIntersectionIfAny(const mesh3D& mesh,
-    SpatialHash& sh) {
+    BroadPhase& sh) {
     Eigen::ArrayXi intersected(mesh.surface.size());
     intersected.setZero();
     tbb::parallel_for(0, (int)mesh.surface.size(), 1, [&](int sfI) {
@@ -1581,7 +1581,7 @@ bool checkEdgeTriIntersectionIfAny(const mesh3D& mesh,
 
 
 bool isIntersected(const Ground& grd,
-    SpatialHash& sh,
+    BroadPhase& sh,
     const mesh3D& mesh,
     const vector<Vector3d>& V0) {
     Eigen::VectorXd constraint_vals;
@@ -1602,7 +1602,7 @@ bool isIntersected(const Ground& grd,
 }
 
 void buildCollisionSets(mesh3D& mesh,
-    SpatialHash& sh,
+    BroadPhase& sh,
     const Ground& gd,
     bool rehash = true) {
     if (mesh.use_barrier) {
@@ -1616,7 +1616,7 @@ void buildCollisionSets(mesh3D& mesh,
 }
 
 bool lineSearch(mesh3D& mesh,
-    SpatialHash& sh,
+    BroadPhase& sh,
     const Ground& gd,
     const vector<Vector3d>& searchDir,
     const vector<Vector3d>& gradient,
@@ -1923,7 +1923,7 @@ static bool computeNewtonDirection(const mesh3D& mesh, BHessian& BH, vector<Vect
     return true;
 }
 
-static double computeFeasibleStepSize(mesh3D& mesh, SpatialHash& sh, Ground& gd, vector<Vector3d>& moveDir) {
+static double computeFeasibleStepSize(mesh3D& mesh, BroadPhase& sh, Ground& gd, vector<Vector3d>& moveDir) {
     double alpha = SimulationParameters::lineSearchInitialStep;
     double slackness_a = SimulationParameters::environmentSlackness;
     double slackness_m = SimulationParameters::selfContactSlackness;
@@ -1965,7 +1965,7 @@ static double computeFeasibleStepSize(mesh3D& mesh, SpatialHash& sh, Ground& gd,
     return alpha;
 }
 
-static bool performLineSearch(mesh3D& mesh, SpatialHash& sh, Ground& gd, vector<Vector3d>& moveDir, vector<Vector3d>& gradient, double& alpha, double Kappa) {
+static bool performLineSearch(mesh3D& mesh, BroadPhase& sh, Ground& gd, vector<Vector3d>& moveDir, vector<Vector3d>& gradient, double& alpha, double Kappa) {
     bool isStop = lineSearch(mesh, sh, gd, moveDir, gradient, alpha, 0, 0, Kappa);
     return isStop;
 }
@@ -2004,7 +2004,7 @@ static void updateVelocityAndState(const mesh3D& mesh, double totalTimeStep, con
     (void)Kappa;
 }
 
-int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa, float& time0, float& time1, float& time2, float& time3, float& time4, double& collisionNum) {
+int solve_subIP(mesh3D& mesh, BroadPhase& sh, Ground& gd, double Kappa, float& time0, float& time1, float& time2, float& time3, float& time4, double& collisionNum) {
     int iterCap = SimulationParameters::newtonIterCap, k = 0;
 
     vector<Vector3d> moveDir;
@@ -2100,7 +2100,7 @@ void updateVelocity(const vector<Vector3d>& currentPos, const vector<Vector3d> o
 }
 
 
-int IPC_Solver(int& stepId, mesh3D& mesh, SpatialHash& sh, Ground& gd) {
+int IPC_Solver(int& stepId, mesh3D& mesh, BroadPhase& sh, Ground& gd) {
     //mesh3D& mesh = meshTetes->mesh3Ds[0];
 
     if (loadTempTimeInfo) {

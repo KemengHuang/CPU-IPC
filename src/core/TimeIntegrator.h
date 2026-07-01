@@ -2,14 +2,14 @@
 
 #include "mesh/Mesh.h"
 #include <memory>
-#include "collision/SpatialHash.h"
+#include "collision/BroadPhase.h"
 #include "core/IPCSolver.h"
 class FEMIntegrator {
 public:
 	FEMIntegrator() {};
 	FEMIntegrator(int vertexNUm, int tetrahedraNum);
 	~FEMIntegrator() {};
-	virtual int integrate(int& stepId, int& total_cg_iterations, int& total_newton_iterations, SpatialHash& sh, Ground& gd) = 0;
+	virtual int integrate(int& stepId, int& total_cg_iterations, int& total_newton_iterations, BroadPhase& sh, Ground& gd) = 0;
 public:
 	int vertex_Num;
 	int tetrahedra_Num;
@@ -25,7 +25,7 @@ class ImplicitFEMIntegrator : public FEMIntegrator {
 public:
 	ImplicitFEMIntegrator(model_tet* tetra_mesh3d, unsigned int sceneType);
 	~ImplicitFEMIntegrator() {}
-	virtual int integrate(int& stepId, int& total_cg_iterations, int& total_newton_iterations, SpatialHash& sh, Ground& gd);
+	virtual int integrate(int& stepId, int& total_cg_iterations, int& total_newton_iterations, BroadPhase& sh, Ground& gd);
 private:
 
 	//void Projected_Newton3D(mesh3D& mesh, double& mfsum, int& total_cg_iterations, int& total_newton_iterations);

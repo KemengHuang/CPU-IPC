@@ -4,7 +4,7 @@
 //#include <vector>
 //#include "Eigen/Eigen"
 #include "mesh/Mesh.h"
-#include "collision/SpatialHash.h"
+#include "collision/BroadPhase.h"
 //void computeInjectiveStepSize_3d(const std::vector<std::vector<uint64_t>>& F,
 //    const std::vector<Eigen::Vector3d>& x,
 //    const std::vector<Eigen::Vector3d>& p,

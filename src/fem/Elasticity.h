@@ -2,7 +2,7 @@
 #ifndef FEM3D_H
 #define FEM3D_H
 #include "math/MathUtils.h"
-#include "collision/SpatialHash.h"
+#include "collision/BroadPhase.h"
 
 double edgeTheta(
     const Eigen::Vector3d& q0,

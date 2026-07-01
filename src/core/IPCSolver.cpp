@@ -583,9 +583,9 @@ static void addTetrahedralElasticityGradientHessian(const mesh3D& mesh, vector<V
         }
 
         //std::cout << F << std::endl;
-        MatrixXd Hq = project_StabbleNHK_2_H_3D(F, mesh.lengthRate, mesh.volumeRate);
+        Eigen::Matrix<double, 9, 9> Hq = project_StableNHK_2_H_3D(F, mesh.lengthRate, mesh.volumeRate);
 
-        MatrixXd HE = mesh.volum[ii] * mesh.IPC_dt * mesh.IPC_dt * PFPX.transpose() * Hq * PFPX;
+        Eigen::Matrix<double, 12, 12> HE = mesh.volum[ii] * mesh.IPC_dt * mesh.IPC_dt * PFPX.transpose() * Hq * PFPX;
         BH.H12x12[ii] = (HE);
 
         }
@@ -602,7 +602,7 @@ static void addTriangleShellGradientHessian(const mesh3D& mesh, vector<Vector3d>
         Matrix<double, 3, 2> F =
             calculateDs32D_double(mesh.vertexes, mesh.triangles[ii]) * mesh.DM_triangle_inverse[ii];
         Vector2d anisotropic_a = Vector2d(1, 0), anisotropic_b = Vector2d(0, 1);
-        Matrix<double, 3, 2> PEPF = computePEPF_baraffwitkin_double(F, anisotropic_a, anisotropic_b, mesh.stretchStiffness,
+        Matrix<double, 3, 2> PEPF = computePEPF_baraffWitkin_double(F, anisotropic_a, anisotropic_b, mesh.stretchStiffness,
             mesh.shearStiffness, mesh.strainRate);
 
         Eigen::Map<const Eigen::Matrix<double, 6, 1>> pepf(PEPF.data());
@@ -615,10 +615,10 @@ static void addTriangleShellGradientHessian(const mesh3D& mesh, vector<Vector3d>
         }
 
         //std::cout << F << std::endl;
-        MatrixXd Hq = project_baraffwitkint_H_3D(F, anisotropic_a, anisotropic_b, mesh.stretchStiffness,
+        Eigen::Matrix<double, 6, 6> Hq = project_baraffWitkin_H_3D(F, anisotropic_a, anisotropic_b, mesh.stretchStiffness,
             mesh.shearStiffness, mesh.strainRate);
 
-        MatrixXd HE = mesh.areas[ii] * mesh.IPC_dt * mesh.IPC_dt * PFPX.transpose() * Hq * PFPX;
+        Eigen::Matrix<double, 9, 9> HE = mesh.areas[ii] * mesh.IPC_dt * mesh.IPC_dt * PFPX.transpose() * Hq * PFPX;
         BH.H9x9[ii] = (HE);
 
         }
@@ -1328,7 +1328,7 @@ void computeEnergyVal(const mesh3D& mesh, double& energyVal, const Ground& gd, d
     energyVal = 0;
     energyVal += getObjEnergy_StableNHK2_3D(mesh.vertexes, mesh, mesh.lengthRate, mesh.volumeRate);
     Vector2d anisotropic_a = Vector2d(1, 0), anisotropic_b = Vector2d(0, 1);
-    energyVal += getObjEnergy_baraffwitkin_3D(mesh, anisotropic_a, anisotropic_b, mesh.stretchStiffness, mesh.shearStiffness, mesh.strainRate);
+    energyVal += getObjEnergy_baraffWitkin_3D(mesh, anisotropic_a, anisotropic_b, mesh.stretchStiffness, mesh.shearStiffness, mesh.strainRate);
 
 #if defined USE_QUADRATIC_BENDING
     const std::vector<Vector3d>& verts = mesh.vertexes;

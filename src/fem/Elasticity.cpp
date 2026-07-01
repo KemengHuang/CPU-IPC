@@ -1,12 +1,9 @@
 #include "fem/Elasticity.h"
-#include<iostream>
 #include <vector>
-#include <map>
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <tbb/parallel_reduce.h>
 #include <tbb/spin_mutex.h>
-#include<fstream>
 //#include <igl/winding_number.h>
 #include "math/Constants.h"
 #include "core/IPCDistance.h"
@@ -354,47 +351,6 @@ Matrix3d calculateIsoDms_double(const vector<Vector3d> &vertexes, const vector<u
         //Vector3d tb = ed[1] - ed[1].dot(n) * n;
         em = max(ed[0].norm(), ed[2].norm());
         solveLinearFunc(ed[0], ed[1], ed[2], n, b0, b2);
-        /*if (abs(ed[0][0]) < 1e-15 && abs(ed[0][1]) < 1e-15) {
-            if (abs(ed[0][2]) < 1e-15) {
-            }
-            if (abs(tb[0]) > 1e-15) {
-                b2 = tb[0] / ed[2][0];
-                b0 = (tb[2] - b2 * ed[2][2]) / ed[0][2];
-            }
-            else if (abs(tb[1]) > 1e-15) {
-                b2 = tb[1] / ed[2][1];
-                b0 = (tb[2] - b2 * ed[2][2]) / ed[0][2];
-            }
-            else {
-                b2 = 0;
-                b0 = tb[2] / ed[0][2];
-            }
-        }
-        else if (abs(ed[2][0]) < 1e-15 && abs(ed[2][1]) < 1e-15) {
-            if (abs(ed[2][2]) < 1e-15) {
-            }
-            if (abs(tb[0]) > 1e-15) {
-                b0 = tb[0] / ed[0][0];
-                b2 = (tb[2] - b0 * ed[0][2]) / ed[2][2];
-            }
-            else if (abs(tb[1]) > 1e-15) {
-                b0 = tb[1] / ed[0][1];
-                b2 = (tb[2] - b0 * ed[0][2]) / ed[2][2];
-            }
-            else {
-                b0 = 0;
-                b2 = tb[2] / ed[2][2];
-            }
-        }
-        else if (abs(ed[0][0] * ed[2][1] - ed[2][0] * ed[0][1]) < 1e-15) {
-            b2 = tb.dot(ed[2]) / (ed[2].norm()) / ed[2].norm();
-            b0 = tb.dot(ed[0]) / (ed[0].norm()) / ed[0].norm();
-        }
-        else {
-
-            b0 = (tb[0] * ed[2][1] - tb[1] * ed[2][0]) / (ed[0][0] * ed[2][1] - ed[2][0] * ed[0][1]);
-            b2 = (tb[0] * ed[0][1] - tb[1] * ed[0][0]) / (ed[2][0] * ed[0][1] - ed[0][0] * ed[2][1]);
-        }*/
         B[0] = b0;
         B[1] = b2;
         B[2] = em;
@@ -421,7 +377,7 @@ Matrix3d calculateIsoDms_double(const vector<Vector3d> &vertexes, const vector<u
     return M;
 }
 
-double calculateVolum(const vector<Vector3d> &vertexes, const Vector4i &index) {
+double calculateVolume(const vector<Vector3d> &vertexes, const Vector4i &index) {
     int id0 = 0;
     int id1 = 1;
     int id2 = 2;
@@ -581,6 +537,9 @@ double calculateRestMaxEdg_double(const vector<Vector3d> &vertexes, const vector
     return max(max(ed0.norm(), ed1.norm()), ed2.norm());
 }
 
+// ------------------------------------------------------------------
+// Tetrahedral elasticity (Stable Neo-Hookean)
+// ------------------------------------------------------------------
 double getObjEnergy_StableNHK2_3D(const vector<Vector3d> &vertexes, const mesh3D &mesh, const double &lengthRate,
                                   const double &volumeRate) {
     double energy = parallel_reduce(
@@ -616,6 +575,9 @@ double getObjEnergy_StableNHK2_3D(const vector<Vector3d> &vertexes, const mesh3D
     return energy;
 }
 
+// ------------------------------------------------------------------
+// Bending
+// ------------------------------------------------------------------
 double getObjBending_Energy(const mesh3D& mesh) {
     double energy = parallel_reduce(
         tbb::blocked_range<int>(0, mesh.tri_edges.size()), 0.0,
@@ -657,7 +619,10 @@ double getObjBending_Energy(const mesh3D& mesh) {
     return energy;
 }
 
-double getObjEnergy_baraffwitkin_3D(const mesh3D& mesh,
+// ------------------------------------------------------------------
+// Triangle shell elasticity (Baraff-Witkin)
+// ------------------------------------------------------------------
+double getObjEnergy_baraffWitkin_3D(const mesh3D& mesh,
     const Vector2d& anisotropic_a,
     const Vector2d& anisotropic_b,
     double stretchS, double shearS, double strainRate) {
@@ -731,8 +696,11 @@ double getObjRestEnergy_StableNHK2_3D(const vector<Vector3d> &vertexes, const me
 }
 
 
-MatrixXd computePFPX3D_double(const Matrix3d &InverseDm) {
-    MatrixXd PFPX = MatrixXd::Zero(9, 12);
+// ------------------------------------------------------------------
+// Deformation gradient helpers
+// ------------------------------------------------------------------
+Eigen::Matrix<double, 9, 12> computePFPX3D_double(const Matrix3d &InverseDm) {
+    Eigen::Matrix<double, 9, 12> PFPX = Eigen::Matrix<double, 9, 12>::Zero();
     double m = InverseDm(0, 0), n = InverseDm(0, 1), o = InverseDm(0, 2);
     double p = InverseDm(1, 0), q = InverseDm(1, 1), r = InverseDm(1, 2);
     double s = InverseDm(2, 0), t = InverseDm(2, 1), u = InverseDm(2, 2);
@@ -779,7 +747,7 @@ MatrixXd computePFPX3D_double(const Matrix3d &InverseDm) {
 }
 
 
-MatrixXd computePFPX32D_double(const Matrix2d &InverseDm) {
+Eigen::Matrix<double, 6, 9> computePFPX32D_double(const Matrix2d &InverseDm) {
     double s0 = InverseDm.col(0).sum();
     double s1 = InverseDm.col(1).sum();
 
@@ -987,7 +955,7 @@ void initMesh3D(mesh3D &mesh, int type, double scale) {
         Matrix3d DM = calculateDms3D_double(mesh.vertexes, mesh.tetrahedras[i], 0);
         Matrix3d ONE;
         //ONE << 1, 1, 1, 1, 1, 1, 1, 1, 1;
-        double vlm = calculateVolum(mesh.vertexes, mesh.tetrahedras[i]);
+        double vlm = calculateVolume(mesh.vertexes, mesh.tetrahedras[i]);
 
 
         mesh.masses[mesh.tetrahedras[i][0]] += vlm * mesh.density / 4;
@@ -1047,6 +1015,9 @@ void initMesh3D(mesh3D &mesh, int type, double scale) {
 }
 
 
+// ------------------------------------------------------------------
+// Tetrahedral elasticity (Stable Neo-Hookean)
+// ------------------------------------------------------------------
 Matrix3d computePEPF_StableNHK3D_double(const Matrix3d &F, const double &lengthRate, const double &volumRate) {
     SVDResult3D_double svdResult = QRSVD(F);
     Matrix3d U, V, R, S, sigma;
@@ -1102,8 +1073,11 @@ Matrix3d computePEPF_StableNHK3D_2_double(const Matrix3d &F, const double &lengt
 }
 
 
+// ------------------------------------------------------------------
+// Triangle shell elasticity (Baraff-Witkin)
+// ------------------------------------------------------------------
 Matrix<double, 3, 2>
-computePEPF_baraffwitkin_double(const Matrix<double, 3, 2>& F,
+computePEPF_baraffWitkin_double(const Matrix<double, 3, 2>& F,
     const Vector2d& anisotropic_a,
     const Vector2d& anisotropic_b,
     double stretchS, double shearS, double strainRate) {
@@ -1136,10 +1110,11 @@ computePEPF_baraffwitkin_double(const Matrix<double, 3, 2>& F,
     return stretchS * stretch_pk1 + shearS * shear_pk1;
 }
 
-Matrix3d computePEPF_Aniostropic3D_double(const Matrix3d &F, Vector3d direction, const double &scale,
+Matrix3d computePEPF_Anisotropic3D_double(const Matrix3d &F, const Vector3d& direction, const double &scale,
                                           const double &contract_length) {
 
-    direction.normalize();
+    Eigen::Vector3d d = direction;
+    d.normalize();
     SVDResult3D_double svdResult = QRSVD(F);
     Matrix3d U, V, R, S, sigma;
 
@@ -1148,8 +1123,8 @@ Matrix3d computePEPF_Aniostropic3D_double(const Matrix3d &F, Vector3d direction,
 
     S = V * sigma * V.transpose();
 
-    double I4 = direction.transpose() * S * direction;
-    double I5 = direction.transpose() * S.transpose() * S * direction;
+    double I4 = d.transpose() * S * d;
+    double I5 = d.transpose() * S.transpose() * S * d;
 
     if (I4 == 0) {
         // system("pause");
@@ -1162,17 +1137,18 @@ Matrix3d computePEPF_Aniostropic3D_double(const Matrix3d &F, Vector3d direction,
         s = 1;
     }
 
-    Matrix3d PEPF = scale * (1 - s * contract_length / sqrt(I5)) * F * direction * direction.transpose();
+    Matrix3d PEPF = scale * (1 - s * contract_length / sqrt(I5)) * F * d * d.transpose();
     return PEPF;
 }
 
-Matrix3d computePEPF_AniostropicRehabi3D_double(const Matrix3d &F, Vector3d direction, const double &u_anios) {
-    direction.normalize();
-    Matrix3d PEPF = 2 * u_anios * F * direction * direction.transpose();
+Matrix3d computePEPF_AnisotropicRehabi3D_double(const Matrix3d &F, const Vector3d& direction, const double &u_anios) {
+    Eigen::Vector3d d = direction;
+    d.normalize();
+    Matrix3d PEPF = 2 * u_anios * F * d * d.transpose();
     return PEPF;
 }
 
-MatrixXd project_StabbleNHK_H_3D(const Matrix3d &F, const double &lengthRate, const double &volumRate) {
+MatrixXd project_StableNHK_H_3D(const Matrix3d &F, const double &lengthRate, const double &volumRate) {
     SVDResult3D_double svdResult = QRSVD(F);
     Matrix3d U, sigma, V, A;
     U = svdResult.U;
@@ -1264,148 +1240,59 @@ MatrixXd project_StabbleNHK_H_3D(const Matrix3d &F, const double &lengthRate, co
     return H;
 }
 
-MatrixXd project_StabbleNHK_2_H_3D(const Matrix3d &F, const double &lengthRate, const double &volumRate) {
-    //cout << lengthRate << "   " << volumRate << endl;
+Eigen::Matrix<double, 9, 9> project_StableNHK_2_H_3D(const Matrix3d &F, const double &lengthRate, const double &volumRate) {
     SVDResult3D_double svdResult = QRSVD(F);
-    Matrix3d U, sigma, V, A;
-    U = svdResult.U;
-    sigma = svdResult.SIGMA;
-    V = svdResult.V;
+    Matrix3d sigma = svdResult.SIGMA;
 
     double I3 = sigma(0, 0) * sigma(1, 1) * sigma(2, 2);
     double I2 = sigma(0, 0) * sigma(0, 0) + sigma(1, 1) * sigma(1, 1) + sigma(2, 2) * sigma(2, 2);
-    double g2 = sigma(0, 0) * sigma(1, 1) * sigma(0, 0) * sigma(1, 1) +
-                sigma(0, 0) * sigma(2, 2) * sigma(0, 0) * sigma(2, 2) +
-                sigma(2, 2) * sigma(1, 1) * sigma(2, 2) * sigma(1, 1);
 
     double u = lengthRate, r = volumRate;
-    Matrix<double, 9, 9> H = MatrixXd::Zero(9, 9);
-    if (false) {
-        double n = 2 * u / ((I2 + 1) * (I2 + 1) * (r * (I3 - 1) - 3 * u / 4));
-        double p = r / (r * (I3 - 1) - 3 * u / 4);
-        double c2 = -g2 * p - I2 * n;
-        double c1 = -(1 + 2 * I3 * p) * I2 - 6 * I3 * n + (g2 * I2 - 9 * I3 * I3) * p * n;
-        double c0 = -(2 + 3 * I3 * p) * I3 + (I2 * I2 - 4 * g2) * n + 2 * I3 * p * n * (I2 * I2 - 3 * g2);
-
-        vector<double> roots = NewtonSolverForCubicEquation_snk(1, c2, c1, c0);
-
-        Matrix3d D[3];
-        double q[3];
-        Matrix3d Q[9];
-        double lamda[9];
-        double Ut = u * (1 - 1 / (I2 + 1));
-        double alpha = 1 + 3 * u / r / 4;
-
-        for (int i = 0; i < 3; i++) {
-            double alpha0 = roots[i] * (sigma(1, 1) + sigma(0, 0) * sigma(2, 2) * n + I3 * sigma(1, 1) * p) +
-                            sigma(0, 0) * sigma(2, 2) + sigma(1, 1) *
-                                                        (sigma(0, 0) * sigma(0, 0) - sigma(1, 1) * sigma(1, 1) +
-                                                         sigma(2, 2) * sigma(2, 2)) * n +
-                            I3 * sigma(0, 0) * sigma(2, 2) * p +
-                            sigma(0, 0) * (sigma(0, 0) * sigma(0, 0) - sigma(1, 1) * sigma(1, 1)) * sigma(2, 2) *
-                            (sigma(1, 1) * sigma(1, 1) - sigma(2, 2) * sigma(2, 2)) * p * n;
-
-            double alpha1 = roots[i] * (sigma(0, 0) + sigma(1, 1) * sigma(2, 2) * n + I3 * sigma(0, 0) * p) +
-                            sigma(1, 1) * sigma(2, 2) - sigma(0, 0) *
-                                                        (sigma(0, 0) * sigma(0, 0) - sigma(1, 1) * sigma(1, 1) -
-                                                         sigma(2, 2) * sigma(2, 2)) * n +
-                            I3 * sigma(1, 1) * sigma(2, 2) * p -
-                            sigma(1, 1) * (sigma(0, 0) * sigma(0, 0) - sigma(1, 1) * sigma(1, 1)) * sigma(2, 2) *
-                            (sigma(0, 0) * sigma(0, 0) - sigma(2, 2) * sigma(2, 2)) * p * n;
-
-            double alpha2 = roots[i] * roots[i] - roots[i] * (sigma(0, 0) * sigma(0, 0) + sigma(1, 1) * sigma(1, 1)) *
-                                                  (n + sigma(2, 2) * sigma(2, 2) * p) -
-                            sigma(2, 2) * sigma(2, 2) - 2 * I3 * n - 2 * I3 * sigma(2, 2) * sigma(2, 2) * p +
-                            ((sigma(0, 0) * sigma(0, 0) - sigma(1, 1) * sigma(1, 1)) * sigma(2, 2)) *
-                            ((sigma(0, 0) * sigma(0, 0) - sigma(1, 1) * sigma(1, 1)) * sigma(2, 2)) * p * n;
-
-            double CheckZeroV = alpha0 * alpha0 + alpha1 * alpha1 + alpha2 * alpha2;
-
-            if (CheckZeroV == 0) {
-                lamda[i] = 0;
-                continue;
-            }
-
-            q[i] = 1 / sqrt(CheckZeroV);
-            D[i] << alpha0, 0, 0, 0, alpha1, 0, 0, 0, alpha2;
-            Q[i] = q[i] * U * D[i] * V.transpose();
-            lamda[i] = r * (I3 - alpha) * roots[i] + Ut;
-        }
-
-        lamda[3] = Ut + sigma(2, 2) * r * (I3 - alpha);
-        lamda[4] = Ut + sigma(0, 0) * r * (I3 - alpha);
-        lamda[5] = Ut + sigma(1, 1) * r * (I3 - alpha);
-
-        lamda[6] = Ut - sigma(2, 2) * r * (I3 - alpha);
-        lamda[7] = Ut - sigma(0, 0) * r * (I3 - alpha);
-        lamda[8] = Ut - sigma(1, 1) * r * (I3 - alpha);
-
-        Q[3] << 0, -1, 0, 1, 0, 0, 0, 0, 0;
-        Q[4] << 0, 0, 0, 0, 0, 1, 0, -1, 0;
-        Q[5] << 0, 0, 1, 0, 0, 0, -1, 0, 0;
-        Q[6] << 0, 1, 0, 1, 0, 0, 0, 0, 0;
-        Q[7] << 0, 0, 0, 0, 0, 1, 0, 1, 0;
-        Q[8] << 0, 0, 1, 0, 0, 0, 1, 0, 0;
-
-        double ml = 1 / sqrt(2);
-        Q[3] = ml * U * Q[3] * V.transpose();
-        Q[4] = ml * U * Q[4] * V.transpose();
-        Q[5] = ml * U * Q[5] * V.transpose();
-        Q[6] = ml * U * Q[6] * V.transpose();
-        Q[7] = ml * U * Q[7] * V.transpose();
-        Q[8] = ml * U * Q[8] * V.transpose();
-
-        for (int i = 0; i < 9; i++) {
-            if (lamda[i] > 0) {
-                H += lamda[i] * vec_double(Q[i]) * vec_double(Q[i]).transpose();
-            }
-        }
-    } else {
-        double mu = u, lambda = r;
-        double Ic = I2;
-        Eigen::Matrix<double, 9, 9> H1 = 2 * Eigen::Matrix<double, 9, 9>::Identity();
-        Eigen::Matrix<double, 9, 1> g1;
-        g1.block<3, 1>(0, 0) = 2 * F.col(0);
-        g1.block<3, 1>(3, 0) = 2 * F.col(1);
-        g1.block<3, 1>(6, 0) = 2 * F.col(2);
-        Eigen::Matrix<double, 9, 1> gJ;
-        gJ.block<3, 1>(0, 0) = F.col(1).cross(F.col(2));
-        gJ.block<3, 1>(3, 0) = F.col(2).cross(F.col(0));
-        gJ.block<3, 1>(6, 0) = F.col(0).cross(F.col(1));
-        Eigen::Matrix3d f0hat;
-        f0hat <<
-              0, -F(2, 0), F(1, 0),
-                F(2, 0), 0, -F(0, 0),
-                -F(1, 0), F(0, 0), 0;
-        Eigen::Matrix3d f1hat;
-        f1hat <<
-              0, -F(2, 1), F(1, 1),
-                F(2, 1), 0, -F(0, 1),
-                -F(1, 1), F(0, 1), 0;
-        Eigen::Matrix3d f2hat;
-        f2hat <<
-              0, -F(2, 2), F(1, 2),
-                F(2, 2), 0, -F(0, 2),
-                -F(1, 2), F(0, 2), 0;
-        Eigen::Matrix<double, 9, 9> HJ;
-        HJ.block<3, 3>(0, 0) = Eigen::Matrix3d::Zero();
-        HJ.block<3, 3>(0, 3) = -f2hat;
-        HJ.block<3, 3>(0, 6) = f1hat;
-        HJ.block<3, 3>(3, 0) = f2hat;
-        HJ.block<3, 3>(3, 3) = Eigen::Matrix3d::Zero();
-        HJ.block<3, 3>(3, 6) = -f0hat;
-        HJ.block<3, 3>(6, 0) = -f1hat;
-        HJ.block<3, 3>(6, 3) = f0hat;
-        HJ.block<3, 3>(6, 6) = Eigen::Matrix3d::Zero();
-        double J = I3;
-        H = (Ic * mu) / (2 * (Ic + 1)) * H1 + lambda * (J - 1 - (3 * mu) / (4.0 * lambda)) * HJ +
-            (mu / (2 * (Ic + 1) * (Ic + 1))) * g1 * g1.transpose() + lambda * gJ * gJ.transpose();
-        IglUtils::makePD<double, 9>(H);
-    }
+    double mu = u, lambda = r;
+    double Ic = I2;
+    Eigen::Matrix<double, 9, 9> H1 = 2 * Eigen::Matrix<double, 9, 9>::Identity();
+    Eigen::Matrix<double, 9, 1> g1;
+    g1.block<3, 1>(0, 0) = 2 * F.col(0);
+    g1.block<3, 1>(3, 0) = 2 * F.col(1);
+    g1.block<3, 1>(6, 0) = 2 * F.col(2);
+    Eigen::Matrix<double, 9, 1> gJ;
+    gJ.block<3, 1>(0, 0) = F.col(1).cross(F.col(2));
+    gJ.block<3, 1>(3, 0) = F.col(2).cross(F.col(0));
+    gJ.block<3, 1>(6, 0) = F.col(0).cross(F.col(1));
+    Eigen::Matrix3d f0hat;
+    f0hat <<
+          0, -F(2, 0), F(1, 0),
+            F(2, 0), 0, -F(0, 0),
+            -F(1, 0), F(0, 0), 0;
+    Eigen::Matrix3d f1hat;
+    f1hat <<
+          0, -F(2, 1), F(1, 1),
+            F(2, 1), 0, -F(0, 1),
+            -F(1, 1), F(0, 1), 0;
+    Eigen::Matrix3d f2hat;
+    f2hat <<
+          0, -F(2, 2), F(1, 2),
+            F(2, 2), 0, -F(0, 2),
+            -F(1, 2), F(0, 2), 0;
+    Eigen::Matrix<double, 9, 9> HJ;
+    HJ.block<3, 3>(0, 0) = Eigen::Matrix3d::Zero();
+    HJ.block<3, 3>(0, 3) = -f2hat;
+    HJ.block<3, 3>(0, 6) = f1hat;
+    HJ.block<3, 3>(3, 0) = f2hat;
+    HJ.block<3, 3>(3, 3) = Eigen::Matrix3d::Zero();
+    HJ.block<3, 3>(3, 6) = -f0hat;
+    HJ.block<3, 3>(6, 0) = -f1hat;
+    HJ.block<3, 3>(6, 3) = f0hat;
+    HJ.block<3, 3>(6, 6) = Eigen::Matrix3d::Zero();
+    double J = I3;
+    Eigen::Matrix<double, 9, 9> H = (Ic * mu) / (2 * (Ic + 1)) * H1 + lambda * (J - 1 - (3 * mu) / (4.0 * lambda)) * HJ +
+        (mu / (2 * (Ic + 1) * (Ic + 1))) * g1 * g1.transpose() + lambda * gJ * gJ.transpose();
+    // Project the element Hessian to positive semi-definite for Newton stability.
+    IglUtils::makePD<double, 9>(H);
     return H;
 }
 
-Eigen::Matrix<double, 6, 6> project_baraffwitkint_H_3D(const Matrix<double, 3, 2>& F,
+Eigen::Matrix<double, 6, 6> project_baraffWitkin_H_3D(const Matrix<double, 3, 2>& F,
     const Vector2d& anisotropic_a,
     const Vector2d& anisotropic_b,
     double stretchS, double shearS, double strainRate) {
@@ -1471,8 +1358,9 @@ Eigen::Matrix<double, 6, 6> project_baraffwitkint_H_3D(const Matrix<double, 3, 2
 }
 
 MatrixXd
-project_ANIOSI5_H_3D(const Matrix3d &F, Vector3d direction, const double &scale, const double &contract_length) {
-    direction.normalize();
+project_ANIOSI5_H_3D(const Matrix3d &F, const Vector3d& direction, const double &scale, const double &contract_length) {
+    Eigen::Vector3d d = direction;
+    d.normalize();
     SVDResult3D_double svdResult = QRSVD(F);
     Matrix3d U, sigma, V, S;
     U = svdResult.U;
@@ -1480,8 +1368,8 @@ project_ANIOSI5_H_3D(const Matrix3d &F, Vector3d direction, const double &scale,
     V = svdResult.V;
 
     S = V * sigma * V.transpose();
-    double I4 = direction.transpose() * S * direction;
-    double I5 = direction.transpose() * S.transpose() * S * direction;
+    double I4 = d.transpose() * S * d;
+    double I5 = d.transpose() * S.transpose() * S * d;
 
     if (abs(I5) < 1e-15) return MatrixXd::Zero(9, 9);
 
@@ -1495,9 +1383,8 @@ project_ANIOSI5_H_3D(const Matrix3d &F, Vector3d direction, const double &scale,
     double lamda0 = scale;
     double lamda1 = scale * (1 - s * contract_length / sqrt(I5));
     double lamda2 = lamda1;
-    //double lamda2 = lamda1;
     Matrix3d Q0, Q1, Q2, A;
-    A = direction * direction.transpose();
+    A = d * d.transpose();
     Q0 = (1 / sqrt(I5)) * F * A;
 
     Matrix3d Tx, Ty, Tz;
@@ -1505,15 +1392,15 @@ project_ANIOSI5_H_3D(const Matrix3d &F, Vector3d direction, const double &scale,
     Tx << 0, 0, 0, 0, 0, 1, 0, -1, 0;
     Ty << 0, 0, -1, 0, 0, 0, 1, 0, 0;
     Tz << 0, 1, 0, -1, 0, 0, 0, 0, 0;
-    Vector3d directionM = V.transpose() * direction;
+    Vector3d dM = V.transpose() * d;
 
     Tx *= 1.f / sqrt(2.f);
     Ty *= 1.f / sqrt(2.f);
     Tz *= 1.f / sqrt(2.f);
 
     Q1 = U * Tx * sigma * V.transpose() * A;
-    Q2 = (sigma(1, 1) * directionM[1]) * U * Tz * sigma * V.transpose() * A -
-         (sigma(2, 2) * directionM[2]) * U * Ty * sigma * V.transpose() * A;
+    Q2 = (sigma(1, 1) * dM[1]) * U * Tz * sigma * V.transpose() * A -
+         (sigma(2, 2) * dM[2]) * U * Ty * sigma * V.transpose() * A;
 
     MatrixXd H = lamda0 * vec_double(Q0) * vec_double(Q0).transpose();
     if (lamda1 > 0) {
@@ -1524,8 +1411,9 @@ project_ANIOSI5_H_3D(const Matrix3d &F, Vector3d direction, const double &scale,
     return H;
 }
 
-MatrixXd project_ANIOSI5_Rehabi_H_3D(const Matrix3d &F, Vector3d direction, const double &u_anios) {
-    direction.normalize();
+MatrixXd project_ANIOSI5_Rehabi_H_3D(const Matrix3d &F, const Vector3d& direction, const double &u_anios) {
+    Eigen::Vector3d d = direction;
+    d.normalize();
     SVDResult3D_double svdResult = QRSVD(F);
     Matrix3d U, sigma, V, S;
     U = svdResult.U;
@@ -1533,46 +1421,15 @@ MatrixXd project_ANIOSI5_Rehabi_H_3D(const Matrix3d &F, Vector3d direction, cons
     V = svdResult.V;
 
     S = V * sigma * V.transpose();
-    //double I4 = direction.transpose() * S * direction;
-
-
-    //if (abs(I5) < 1e-15) return MatrixXd::Zero(9, 9);
-
-    //double s = 0;
-    //if (I4 < 0) {
-    //    s = -1;
-    //}
-    //else if (I4 > 0) {
-    //    s = 1;
-    //}
 
     double lamda0 = 2 * u_anios;
     double lamda1 = lamda0;
     double lamda2 = lamda1;
-    //double lamda2 = lamda1;
     Matrix3d Q0, Q1, Q2, A;
 
-    /*double I5 = direction.transpose() * S.transpose() * S * direction;
-    A = direction * direction.transpose();
-    Q0 = (1 / sqrt(I5)) * F * A;
-
-    Matrix3d Tx, Ty, Tz;
-
-    Tx << 0, 0, 0, 0, 0, 1, 0, -1, 0;
-    Ty << 0, 0, -1, 0, 0, 0, 1, 0, 0;
-    Tz << 0, 1, 0, -1, 0, 0, 0, 0, 0;
-    Vector3d directionM = V.transpose() * direction;
-
-    Tx *= 1.f / sqrt(2.f);
-    Ty *= 1.f / sqrt(2.f);
-    Tz *= 1.f / sqrt(2.f);
-
-    Q1 = U * Tx * sigma * V.transpose() * A;
-    Q2 = (sigma(1, 1) * directionM[1]) * U * Tz * sigma * V.transpose() * A - (sigma(2, 2) * directionM[2]) * U * Ty * sigma * V.transpose() * A;*/
-
-    Q0 << direction[0], direction[1], direction[2], 0, 0, 0, 0, 0, 0;
-    Q1 << 0, 0, 0, direction[0], direction[1], direction[2], 0, 0, 0;
-    Q2 << 0, 0, 0, 0, 0, 0, direction[0], direction[1], direction[2];
+    Q0 << d[0], d[1], d[2], 0, 0, 0, 0, 0, 0;
+    Q1 << 0, 0, 0, d[0], d[1], d[2], 0, 0, 0;
+    Q2 << 0, 0, 0, 0, 0, 0, d[0], d[1], d[2];
 
 
     MatrixXd H = lamda0 * vec_double(Q0) * vec_double(Q0).transpose();

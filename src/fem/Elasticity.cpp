@@ -1229,12 +1229,12 @@ MatrixXd project_StableNHK_H_3D(const Matrix3d &F, const double &lengthRate, con
     Q[6] = U * (ml * Q[6]) * V.transpose();
     Q[7] = U * (ml * Q[7]) * V.transpose();
     Q[8] = U * (ml * Q[8]) * V.transpose();
-    MatrixXd H = MatrixXd::Zero(9, 9);
+    Eigen::Matrix<double, 9, 9> H = Eigen::Matrix<double, 9, 9>::Zero();
     //H.setZero(9, 9);
 
     for (int i = 0; i < 9; i++) {
         if (lamda[i] > 0) {
-            H += lamda[i] * vec_double(Q[i]) * vec_double(Q[i]).transpose();
+            H += lamda[i] * vec9(Q[i]) * vec9(Q[i]).transpose();
         }
     }
     return H;
@@ -1371,7 +1371,7 @@ project_ANIOSI5_H_3D(const Matrix3d &F, const Vector3d& direction, const double 
     double I4 = d.transpose() * S * d;
     double I5 = d.transpose() * S.transpose() * S * d;
 
-    if (abs(I5) < 1e-15) return MatrixXd::Zero(9, 9);
+    if (abs(I5) < 1e-15) return Eigen::Matrix<double, 9, 9>::Zero();
 
     double s = 0;
     if (I4 < 0) {
@@ -1402,10 +1402,10 @@ project_ANIOSI5_H_3D(const Matrix3d &F, const Vector3d& direction, const double 
     Q2 = (sigma(1, 1) * dM[1]) * U * Tz * sigma * V.transpose() * A -
          (sigma(2, 2) * dM[2]) * U * Ty * sigma * V.transpose() * A;
 
-    MatrixXd H = lamda0 * vec_double(Q0) * vec_double(Q0).transpose();
+    Eigen::Matrix<double, 9, 9> H = lamda0 * vec9(Q0) * vec9(Q0).transpose();
     if (lamda1 > 0) {
-        H += lamda1 * vec_double(Q1) * vec_double(Q1).transpose();
-        H += lamda2 * vec_double(Q2) * vec_double(Q2).transpose();
+        H += lamda1 * vec9(Q1) * vec9(Q1).transpose();
+        H += lamda2 * vec9(Q2) * vec9(Q2).transpose();
     }
 
     return H;
@@ -1432,9 +1432,9 @@ MatrixXd project_ANIOSI5_Rehabi_H_3D(const Matrix3d &F, const Vector3d& directio
     Q2 << 0, 0, 0, 0, 0, 0, d[0], d[1], d[2];
 
 
-    MatrixXd H = lamda0 * vec_double(Q0) * vec_double(Q0).transpose();
-    H += lamda1 * vec_double(Q1) * vec_double(Q1).transpose();
-    H += lamda2 * vec_double(Q2) * vec_double(Q2).transpose();
+    Eigen::Matrix<double, 9, 9> H = lamda0 * vec9(Q0) * vec9(Q0).transpose();
+    H += lamda1 * vec9(Q1) * vec9(Q1).transpose();
+    H += lamda2 * vec9(Q2) * vec9(Q2).transpose();
 
     return H;
 }

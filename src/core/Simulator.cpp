@@ -357,7 +357,7 @@ void FEMSimulator::buildIntegrator(const int integratorType, unsigned int sceneT
 
 void FEMSimulator::buildCollisionSets() {
     if (tetrahedra_meshes.mesh3Ds[0].use_barrier) {
-        sh.build(tetrahedra_meshes.mesh3Ds[0], tetrahedra_meshes.mesh3Ds[0].averageEdgeLength);
+        sh.build(tetrahedra_meshes.mesh3Ds[0], tetrahedra_meshes.mesh3Ds[0].averageEdgeLength * SimulationParameters::spatialHashDefaultVoxelSizeFactor);
         sh.calculateActivateSet(tetrahedra_meshes.mesh3Ds[0]);
     }
     

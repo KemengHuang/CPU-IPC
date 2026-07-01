@@ -1607,7 +1607,7 @@ void buildCollisionSets(mesh3D& mesh,
     bool rehash = true) {
     if (mesh.use_barrier) {
         if (rehash) {
-            sh.build(mesh, mesh.averageEdgeLength);
+            sh.build(mesh, mesh.averageEdgeLength * SimulationParameters::spatialHashDefaultVoxelSizeFactor);
         }
 
         sh.calculateActivateSet(mesh);

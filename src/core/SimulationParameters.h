@@ -36,8 +36,12 @@ struct SimulationParameters {
 
     // IPC / CCD parameters
     static constexpr double CCDDistRatio = 0.2;               // tet injective step slackness
+    static constexpr double defaultCCDDistRatio = CCDDistRatio;
     static constexpr double environmentSlackness = 0.8;
     static constexpr double selfContactSlackness = 0.8;
+
+    // Spatial hash defaults
+    static constexpr double spatialHashDefaultVoxelSizeFactor = 1.0; // voxel size = factor * average edge length
 
     // Newton solver convergence: tolerance factor inside sqrt(...)
     static constexpr double newtonConvergenceTolFactor = 1e-4;
@@ -59,6 +63,7 @@ struct SimulationParameters {
 
     // Newton iteration cap
     static constexpr int newtonIterCap = 10000;
+
 };
 
 #endif // SIMULATION_PARAMETERS_H

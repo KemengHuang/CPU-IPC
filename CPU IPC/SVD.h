@@ -1,22 +1,19 @@
 #pragma once
-#ifndef FEM_SVD_H
-#define FEM_SVD_H
 
 #include "Eigen/Eigen"
-using namespace Eigen;
 
 struct SVDResult2D_double
 {
-    Matrix2d U;
-    Matrix2d SIGMA;
-    Matrix2d V;
+    Eigen::Matrix2d U;
+    Eigen::Matrix2d SIGMA;
+    Eigen::Matrix2d V;
 };
 
 struct SVDResult3D_float
 {
-    Matrix3f U;
-    Matrix3f SIGMA;
-    Matrix3f V;
+    Eigen::Matrix3f U;
+    Eigen::Matrix3f SIGMA;
+    Eigen::Matrix3f V;
 };
 
 struct SVDResult3D_double
@@ -27,9 +24,7 @@ struct SVDResult3D_double
 };
 
 
-SVDResult2D_double SingularValueDecomposition2D_double(Matrix2d F);
-SVDResult3D_float SingularValueDecomposition3D_float(Matrix3f F);
-SVDResult3D_double SingularValueDecomposition3D_double(Matrix3d F);
-SVDResult3D_double QRSVD(Matrix3d F);
-
-#endif //FEM_SVD_H
+SVDResult2D_double SingularValueDecomposition2D_double(const Eigen::Matrix2d& F);
+SVDResult3D_float SingularValueDecomposition3D_float(const Eigen::Matrix3f& F);
+SVDResult3D_double SingularValueDecomposition3D_double(const Eigen::Matrix3d& F);
+SVDResult3D_double QRSVD(const Eigen::Matrix3d& F);

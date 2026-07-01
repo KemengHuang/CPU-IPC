@@ -6,6 +6,7 @@
 
 using namespace Eigen;
 using namespace FEM;
+using namespace std;
 
 void buildSpecialPoints(mesh3D &mesh) {
     Vector3d tp[6];
@@ -15,14 +16,14 @@ void buildSpecialPoints(mesh3D &mesh) {
     tp[3] = Vector3d(-0.26145, -0.12829, -0.23713);
     tp[4] = Vector3d(-0.06139, -0.10531, -0.09838);
     tp[5] = Vector3d(0.015541, -0.32489, 0.02275);
-    mesh.spectialPontsArray.resize(6);
-    for(int i=0;i<mesh.spectialPontsArray.size();i++){
+    mesh.specialPointsArray.resize(6);
+    for(int i=0;i<mesh.specialPointsArray.size();i++){
         double mindist = 1e32;
         for(int j=0;j<mesh.surfVerts.size();j++){
             double dist = (mesh.vertexes[mesh.surfVerts[j]]-tp[i]).norm();
             if(dist<mindist){
                 mindist = dist;
-                mesh.spectialPontsArray[i] = mesh.surfVerts[j];
+                mesh.specialPointsArray[i] = mesh.surfVerts[j];
             }
         }
     }
@@ -269,8 +270,8 @@ void case2(mesh3D& mesh3d, string asset_dir) {
 
 
         }
-        mesh3d.maxConer = Vector3d(xmax, ymax, zmax);
-        mesh3d.minConer = Vector3d(xmin, ymin, zmin);
+        mesh3d.maxCorner = Vector3d(xmax, ymax, zmax);
+        mesh3d.minCorner = Vector3d(xmin, ymin, zmin);
 
         //mesh3d.boundaryTypes[0] = 1;
         //mesh3d.Constraints[0].setZero();
@@ -284,8 +285,8 @@ bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
     mesh3D mesh3d;
     LoadSettings(mesh3d);
     string asset_dir = string{ CIPC_ASSETS_DIR };
-    mesh3d.maxConer = Vector3d(-1e32, -1e32, -1e32);
-    mesh3d.minConer = Vector3d(1e32, 1e32, 1e32);
+    mesh3d.maxCorner = Vector3d(-1e32, -1e32, -1e32);
+    mesh3d.minCorner = Vector3d(1e32, 1e32, 1e32);
 
 	case2(mesh3d, asset_dir);
 
@@ -305,7 +306,7 @@ bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
     computeXTilta(mesh3d);
 
 
-    mesh3d.bboxDiagSize2 = (mesh3d.maxConer - mesh3d.minConer).squaredNorm();
+    mesh3d.bboxDiagSize2 = (mesh3d.maxCorner - mesh3d.minCorner).squaredNorm();
     mesh3d.Hhat *= mesh3d.bboxDiagSize2;
     mesh3d.Fhat *= mesh3d.bboxDiagSize2;;
     mesh3d.dTol *= mesh3d.bboxDiagSize2;
@@ -319,7 +320,7 @@ bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
         length += (tetrahedra_meshes.mesh3Ds[0].vertexes[edg.first] -
             tetrahedra_meshes.mesh3Ds[0].vertexes[edg.second]).norm();
     }
-    tetrahedra_meshes.mesh3Ds[0].averageEdgeLenth = length / (tetrahedra_meshes.mesh3Ds[0].surfEdges.size() * 3);
+    tetrahedra_meshes.mesh3Ds[0].averageEdgeLength = length / (tetrahedra_meshes.mesh3Ds[0].surfEdges.size() * 3);
     printf("triangles num: %d\n", tetrahedra_meshes.mesh3Ds[0].surface.size());
     buildIntegrator(buildType, sceneType);
 
@@ -342,7 +343,7 @@ void FEMSimulator::buildIntegrator(const int integratorType, unsigned int sceneT
 
 void FEMSimulator::buildCollisionSets() {
     if (tetrahedra_meshes.mesh3Ds[0].use_barrier) {
-        sh.build(tetrahedra_meshes.mesh3Ds[0], tetrahedra_meshes.mesh3Ds[0].averageEdgeLenth);
+        sh.build(tetrahedra_meshes.mesh3Ds[0], tetrahedra_meshes.mesh3Ds[0].averageEdgeLength);
         sh.calculateActivateSet(tetrahedra_meshes.mesh3Ds[0]);
     }
     

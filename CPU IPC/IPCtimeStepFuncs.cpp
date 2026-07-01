@@ -1,6 +1,8 @@
 #include "IPCtimeStepFuns.h"
 #include <complex>
 #include <tbb/parallel_for.h>
+using namespace std;
+using namespace Eigen;
 double getSmallestPositiveRealQuadRoot(double a, double b, double c,
     double tol)
 {

@@ -2,27 +2,14 @@
 // Created by lamws on 2021/8/3.
 //
 
-#ifndef CLOTHSIMULATION_SOLVER_H
-#define CLOTHSIMULATION_SOLVER_H
+#pragma once
 
 #include "Eigen/Dense"
 #include "Eigen/Sparse"
-#include "cfloat"
-//#include "common/declarations.h"
 
-//#include "cholmod.h"
 #include <suitesparse/cholmod.h>
-using namespace Eigen;
-//#ifdef NDEBUG
-class Solver {
 
-};
-
-
-
-
-
-class CholmodSolver : public Solver {
+class CholmodSolver {
 public:
     CholmodSolver();
 
@@ -35,8 +22,8 @@ public:
     void solve(Eigen::VectorXd& rhs,
         Eigen::VectorXd& result);
 
-    void preFactorize(const SparseMatrix<double>& mtr);
-    void solve_with_preFactorize(VectorXd& rhs, VectorXd& result);
+    void preFactorize(const Eigen::SparseMatrix<double>& mtr);
+    void solve_with_preFactorize(Eigen::VectorXd& rhs, Eigen::VectorXd& result);
 protected:
     int numRows;
     Eigen::VectorXi ia, ja;
@@ -52,5 +39,3 @@ protected:
 
     void* Ai, * Ap, * Ax, * bx, * solutionx, * x_cdx, * y_cdx;
 };
-//#endif
-#endif //CLOTHSIMULATION_SOLVER_H

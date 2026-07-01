@@ -1,6 +1,7 @@
 #include "SVD.h"
 #include "SVD/ImplicitQRSVD.h"
-SVDResult2D_double SingularValueDecomposition2D_double(Matrix2d F)
+using namespace Eigen;
+SVDResult2D_double SingularValueDecomposition2D_double(const Matrix2d& F)
 {
     Eigen::JacobiSVD<Eigen::Matrix2d> svd(F, Eigen::ComputeFullU | Eigen::ComputeFullV);
     SVDResult2D_double result;
@@ -34,7 +35,7 @@ SVDResult2D_double SingularValueDecomposition2D_double(Matrix2d F)
     return result;
 }
 
-SVDResult3D_float SingularValueDecomposition3D_float(Matrix3f F)
+SVDResult3D_float SingularValueDecomposition3D_float(const Matrix3f& F)
 {
     Eigen::JacobiSVD<Eigen::Matrix3f> svd(F, Eigen::ComputeFullU | Eigen::ComputeFullV);
     SVDResult3D_float result;
@@ -69,7 +70,7 @@ SVDResult3D_float SingularValueDecomposition3D_float(Matrix3f F)
     return result;
 }
 
-SVDResult3D_double QRSVD(Matrix3d F)
+SVDResult3D_double QRSVD(const Matrix3d& F)
 {
     typename Eigen::JacobiSVD<Matrix3d>::SingularValuesType singularValues_flipped;
     Matrix3d matrixU_flipped, matrixV_flipped;
@@ -95,7 +96,7 @@ SVDResult3D_double QRSVD(Matrix3d F)
     return result;
 }
 
-SVDResult3D_double SingularValueDecomposition3D_double(Matrix3d F)
+SVDResult3D_double SingularValueDecomposition3D_double(const Matrix3d& F)
 {
     Eigen::JacobiSVD<Eigen::Matrix3d> svd(F, Eigen::ComputeFullU | Eigen::ComputeFullV);
     SVDResult3D_double result;

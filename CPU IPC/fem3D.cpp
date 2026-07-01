@@ -13,6 +13,7 @@
 
 using namespace std;
 using namespace FEM;
+using namespace Eigen;
 
 namespace LibShell {
 
@@ -357,7 +358,6 @@ calculateIsoDms_double(const vector<Vector3d> &vertexes, const vector<uint64_t> 
         solveLinearFunc(ed[0], ed[1], ed[2], n, b0, b2);
         /*if (abs(ed[0][0]) < 1e-15 && abs(ed[0][1]) < 1e-15) {
             if (abs(ed[0][2]) < 1e-15) {
-                system("pause");
             }
             if (abs(tb[0]) > 1e-15) {
                 b2 = tb[0] / ed[2][0];
@@ -374,7 +374,6 @@ calculateIsoDms_double(const vector<Vector3d> &vertexes, const vector<uint64_t> 
         }
         else if (abs(ed[2][0]) < 1e-15 && abs(ed[2][1]) < 1e-15) {
             if (abs(ed[2][2]) < 1e-15) {
-                system("pause");
             }
             if (abs(tb[0]) > 1e-15) {
                 b0 = tb[0] / ed[0][0];
@@ -423,119 +422,6 @@ calculateIsoDms_double(const vector<Vector3d> &vertexes, const vector<uint64_t> 
 
     return M;
 }
-
-void __Inverse2x2(const Eigen::Matrix2d &input, Eigen::Matrix2d &result) {
-    double eps = 1e-15;
-    const int dim = 2;
-    double mat[dim * 2][dim * 2];
-    for (int i = 0; i < dim; i++) {
-        for (int j = 0; j < 2 * dim; j++) {
-            if (j < dim) {
-                mat[i][j] = input(i, j);
-            } else {
-                mat[i][j] = j - dim == i ? 1 : 0;
-            }
-        }
-    }
-
-    for (int i = 0; i < dim; i++) {
-        if (abs(mat[i][i]) < eps) {
-            int j;
-            for (j = i + 1; j < dim; j++) {
-                if (abs(mat[j][i]) > eps) break;
-            }
-            if (j == dim) return;
-            for (int r = i; r < 2 * dim; r++) {
-                mat[i][r] += mat[j][r];
-            }
-        }
-        double ep = mat[i][i];
-        for (int r = i; r < 2 * dim; r++) {
-            mat[i][r] /= ep;
-        }
-
-        for (int j = i + 1; j < dim; j++) {
-            double e = -1 * (mat[j][i] / mat[i][i]);
-            for (int r = i; r < 2 * dim; r++) {
-                mat[j][r] += e * mat[i][r];
-            }
-        }
-    }
-
-    for (int i = dim - 1; i >= 0; i--) {
-        for (int j = i - 1; j >= 0; j--) {
-            double e = -1 * (mat[j][i] / mat[i][i]);
-            for (int r = i; r < 2 * dim; r++) {
-                mat[j][r] += e * mat[i][r];
-            }
-        }
-    }
-
-
-    for (int i = 0; i < dim; i++) {
-        for (int r = dim; r < 2 * dim; r++) {
-            result(i, r - dim) = mat[i][r];
-        }
-    }
-}
-
-
-
-void __Inverse(const Eigen::Matrix3d &input, Eigen::Matrix3d &result) {
-    double eps = 1e-15;
-    const int dim = 3;
-    double mat[dim * 2][dim * 2];
-    for (int i = 0; i < dim; i++) {
-        for (int j = 0; j < 2 * dim; j++) {
-            if (j < dim) {
-                mat[i][j] = input(i, j);
-            } else {
-                mat[i][j] = j - dim == i ? 1 : 0;
-            }
-        }
-    }
-
-    for (int i = 0; i < dim; i++) {
-        if (abs(mat[i][i]) < eps) {
-            int j;
-            for (j = i + 1; j < dim; j++) {
-                if (abs(mat[j][i]) > eps) break;
-            }
-            if (j == dim) return;
-            for (int r = i; r < 2 * dim; r++) {
-                mat[i][r] += mat[j][r];
-            }
-        }
-        double ep = mat[i][i];
-        for (int r = i; r < 2 * dim; r++) {
-            mat[i][r] /= ep;
-        }
-
-        for (int j = i + 1; j < dim; j++) {
-            double e = -1 * (mat[j][i] / mat[i][i]);
-            for (int r = i; r < 2 * dim; r++) {
-                mat[j][r] += e * mat[i][r];
-            }
-        }
-    }
-
-    for (int i = dim - 1; i >= 0; i--) {
-        for (int j = i - 1; j >= 0; j--) {
-            double e = -1 * (mat[j][i] / mat[i][i]);
-            for (int r = i; r < 2 * dim; r++) {
-                mat[j][r] += e * mat[i][r];
-            }
-        }
-    }
-
-
-    for (int i = 0; i < dim; i++) {
-        for (int r = dim; r < 2 * dim; r++) {
-            result(i, r - dim) = mat[i][r];
-        }
-    }
-}
-
 
 double calculateVolum(const vector<Vector3d> &vertexes, const Vector4i &index) {
     int id0 = 0;
@@ -1114,7 +1000,6 @@ void initMesh3D(mesh3D &mesh, int type, double scale) {
         massSum += vlm * mesh.density;
 
         Eigen::Matrix3d DMInverse = DM.inverse();
-//        __Inverse(DM, DMInverse);
 //        mesh.DM_tetrahedra_inverse.push_back(DMInverse);
 
         mesh.DM_tetrahedra_inverse.push_back(DMInverse);
@@ -1140,7 +1025,6 @@ void initMesh3D(mesh3D &mesh, int type, double scale) {
 
 
 //        Eigen::Matrix2d DMInverse;
-//        __Inverse2x2(DM, DMInverse);
 //        mesh.DM_triangle_inverse.push_back(DMInverse);
 //
         Eigen::Matrix2d DMInverse = DM.inverse();

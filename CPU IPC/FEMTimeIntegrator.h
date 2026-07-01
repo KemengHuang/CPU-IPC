@@ -1,11 +1,7 @@
 #pragma once
-#ifndef _FEM_TIME_INTEGRATOR_CUH_
-#define _FEM_TIME_INTEGRATOR_CUH_
 
 #include "mesh.h"
-//#include "FEMMeshes.cuh"
 #include <memory>
-//#include "Device_PCG.cuh"
 #include "collisionUtil.h"
 #include "IPC_FUNC.h"
 class FEMIntegrator {
@@ -14,7 +10,6 @@ public:
 	FEMIntegrator(int vertexNUm, int tetrahedraNum);
 	~FEMIntegrator() {};
 	virtual int integrate(int& stepId, int& total_cg_iterations, int& total_newton_iterations, SpatialHash& sh, Ground& gd) = 0;
-	void solveCollision();
 public:
 	int vertex_Num;
 	int tetrahedra_Num;
@@ -41,5 +36,3 @@ private:
 
 
 };
-
-#endif //_FEM_TIME_INTEGRATOR_CUH_

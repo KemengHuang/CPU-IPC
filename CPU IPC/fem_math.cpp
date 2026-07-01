@@ -1,5 +1,7 @@
 #include "fem_math.h"
 
+using namespace Eigen;
+
 double vector_squareNorm(std::vector<Vector3d> vecs) {
 	double norm = 0;
 	for (const auto& v : vecs) {
@@ -8,7 +10,7 @@ double vector_squareNorm(std::vector<Vector3d> vecs) {
 	return norm;
 }
 
-MatrixXd vec_double(MatrixXd F) {
+MatrixXd vec_double(const MatrixXd& F) {
     const int cols = F.cols();
     const int rows = F.rows();
     const int nums = cols * rows;
@@ -21,7 +23,7 @@ MatrixXd vec_double(MatrixXd F) {
     return result;
 }
 
-MatrixXf vec_float(MatrixXf F) {
+MatrixXf vec_float(const MatrixXf& F) {
     const int cols = F.cols();
     const int rows = F.rows();
     const int nums = cols * rows;

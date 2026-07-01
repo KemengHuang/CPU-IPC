@@ -7,6 +7,8 @@
 #include <tbb/spin_mutex.h>
 #include "collisionUtil.h"
 #include <assert.h>
+using namespace std;
+using namespace Eigen;
 void SpatialHash::locateVoxelAxisIndex(const Vector3d& pos, Eigen::Array<int, 1, 3>& voxelAxisIndex)
 {
     voxelAxisIndex = ((pos - leftBottomCorner) * one_div_voxelSize).array().floor().template cast<int>();

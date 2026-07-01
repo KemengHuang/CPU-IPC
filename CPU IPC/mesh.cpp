@@ -3,6 +3,8 @@
 #include <fstream>
 #include <set>
 #include <assert.h>
+using namespace std;
+using namespace Eigen;
 unsigned long long calculate_Triangle_hash(const uint64_t &index0, const uint64_t &index1, const uint64_t &index2,
                                            const uint64_t &length) {
     unsigned long long hashVal = (index2 * length + index1) * length + index0;
@@ -223,8 +225,8 @@ void mesh3D::load_test(double scale, int num) {
             tetrahedras.push_back(tet);
         }
     }
-    minConer = Vector3d(xmin, ymin, zmin);
-    maxConer = Vector3d(xmax, ymax, zmax);
+    minCorner = Vector3d(xmin, ymin, zmin);
+    maxCorner = Vector3d(xmax, ymax, zmax);
     V_prev = vertexes;
 }
 
@@ -294,12 +296,12 @@ bool mesh3D::load_tetrahedraMesh(const std::string &filename, double scale, Vect
             tempMinConer = Vector3d(xmin, ymin, zmin);
             tempMaxConer = Vector3d(xmax, ymax, zmax);
 
-            if (maxConer[0] < tempMaxConer[0]) maxConer[0] = tempMaxConer[0];
-            if (maxConer[1] < tempMaxConer[1]) maxConer[1] = tempMaxConer[1];
-            if (maxConer[2] < tempMaxConer[2]) maxConer[2] = tempMaxConer[2];
-            if (minConer[0] > tempMinConer[0]) minConer[0] = tempMinConer[0];
-            if (minConer[1] > tempMinConer[1]) minConer[1] = tempMinConer[1];
-            if (minConer[2] > tempMinConer[2]) minConer[2] = tempMinConer[2];
+            if (maxCorner[0] < tempMaxConer[0]) maxCorner[0] = tempMaxConer[0];
+            if (maxCorner[1] < tempMaxConer[1]) maxCorner[1] = tempMaxConer[1];
+            if (maxCorner[2] < tempMaxConer[2]) maxCorner[2] = tempMaxConer[2];
+            if (minCorner[0] > tempMinConer[0]) minCorner[0] = tempMinConer[0];
+            if (minCorner[1] > tempMinConer[1]) minCorner[1] = tempMinConer[1];
+            if (minCorner[2] > tempMinConer[2]) minCorner[2] = tempMinConer[2];
 
         }
 
@@ -624,12 +626,12 @@ bool mesh3D::load_triangleMesh(const string &filename, double scale, Vector3d po
     Vector3d tempMinConer, tempMaxConer;
     tempMinConer = Vector3d(xmin, ymin, zmin);
     tempMaxConer = Vector3d(xmax, ymax, zmax);
-    if (maxConer[0] < tempMaxConer[0]) maxConer[0] = tempMaxConer[0];
-    if (maxConer[1] < tempMaxConer[1]) maxConer[1] = tempMaxConer[1];
-    if (maxConer[2] < tempMaxConer[2]) maxConer[2] = tempMaxConer[2];
-    if (minConer[0] > tempMinConer[0]) minConer[0] = tempMinConer[0];
-    if (minConer[1] > tempMinConer[1]) minConer[1] = tempMinConer[1];
-    if (minConer[2] > tempMinConer[2]) minConer[2] = tempMinConer[2];
+    if (maxCorner[0] < tempMaxConer[0]) maxCorner[0] = tempMaxConer[0];
+    if (maxCorner[1] < tempMaxConer[1]) maxCorner[1] = tempMaxConer[1];
+    if (maxCorner[2] < tempMaxConer[2]) maxCorner[2] = tempMaxConer[2];
+    if (minCorner[0] > tempMinConer[0]) minCorner[0] = tempMinConer[0];
+    if (minCorner[1] > tempMinConer[1]) minCorner[1] = tempMinConer[1];
+    if (minCorner[2] > tempMinConer[2]) minCorner[2] = tempMinConer[2];
 
 
 

@@ -1,12 +1,9 @@
 #pragma once
-#ifndef FEM_MESH_H
-#define FEM_MESH_H
 #include "Eigen/Eigen"
 #include "mIPC.h"
 #include <vector>
 #include <array>
-using namespace std;
-using namespace Eigen;
+
 struct mesh_circle {
 	double vertex[9][2] = { {0,0},
 		{1,0},
@@ -29,7 +26,7 @@ struct mesh_circle {
 	{6, 7, 0},
 	{7, 8, 0},
 	{8, 1, 0} };
-	//Matrix2d DM_tetrahedra_inverse[8];
+	//Eigen::Matrix2d DM_tetrahedra_inverse[8];
 	int vertexNum = 9;
 	int triangleNum = 8;
 };
@@ -70,7 +67,7 @@ struct mesh_rectangle {
 		{12, 13, 10},
 		{9, 12, 10},
 		{6, 9, 10} };
-	//Matrix2d DM_tetrahedra_inverse[16];
+	//Eigen::Matrix2d DM_tetrahedra_inverse[16];
 	int vertexNum = 15;
 	int triangleNum = 16;
 };
@@ -94,7 +91,7 @@ struct mesh_cuboid {
 		{2, 6, 7, 5},
 		{0, 1, 2, 5},
 		{0, 2, 7, 5} };
-	//Matrix3d DM_tetrahedra_inverse[5];
+	//Eigen::Matrix3d DM_tetrahedra_inverse[5];
 	int vertexNum = 8;
 	int tetrahedraNum = 5;
 };
@@ -102,9 +99,9 @@ struct mesh_cuboid {
 struct QuadBendingInfo
 {
 	std::array<size_t, 4> verts;            // [edge1, edge2, trig1 outer, trig2 outer]
-	Matrix4d Q;								// precomputed local const Hessian
+	Eigen::Matrix4d Q;						// precomputed local const Hessian
 
-	QuadBendingInfo(size_t edge1, size_t edge2, size_t trig1_outer, size_t trig2_outer, Matrix4d Q)
+	QuadBendingInfo(size_t edge1, size_t edge2, size_t trig1_outer, size_t trig2_outer, Eigen::Matrix4d Q)
 		: Q(Q)
 	{
 		verts[0] = edge1;
@@ -116,13 +113,13 @@ struct QuadBendingInfo
 
 class mesh2D {
 public:
-	vector<double> areas;
-	vector<double> masses;
-	vector<Vector2d> vertexes;
-	vector<Vector3i> triangles;
-	vector<Vector2d> forces;
-	vector<Vector2d> velocities;
-	vector<Matrix2d> DM_triangle_inverse;
+	std::vector<double> areas;
+	std::vector<double> masses;
+	std::vector<Eigen::Vector2d> vertexes;
+	std::vector<Eigen::Vector3i> triangles;
+	std::vector<Eigen::Vector2d> forces;
+	std::vector<Eigen::Vector2d> velocities;
+	std::vector<Eigen::Matrix2d> DM_triangle_inverse;
 	int vertexNum;
 	int triangleNum;
 	void InitMesh(int type, double scale);
@@ -149,16 +146,16 @@ public:
 	double strainRate;
 	double bendingStiffness;
 	double maxVolum;
-	vector<Matrix3d> Constraints;
-	//vector<bool> isDelete;
-	//vector<int> idmap;
-	//vector<int> idinverseMap;
-	vector<double> volum;
-	vector<double> areas;
-	vector<double> masses;
+	std::vector<Eigen::Matrix3d> Constraints;
+	//std::vector<bool> isDelete;
+	//std::vector<int> idmap;
+	//std::vector<int> idinverseMap;
+	std::vector<double> volum;
+	std::vector<double> areas;
+	std::vector<double> masses;
 	double meanMass;
 	double restSNKE;
-	double averageEdgeLenth;
+	double averageEdgeLength;
 	double Hhat;
     double Fhat;
 	double drag_coeff;
@@ -169,45 +166,45 @@ public:
 	double Newton_Solver_Threshold;
 	bool use_barrier;
 
-	vector<Vector3d> vertexes;
-	vector<int> boundary_vertexes_indices;
-	vector<Vector3d> v_rest;
-	vector<Vector4i> tetrahedras;
-	vector<Vector3i> triangles;
-	vector<Vector3d> velocities;
-	vector<Matrix3d> DM_tetrahedra_inverse;
-	vector<Matrix2d> DM_triangle_inverse;
-	vector<Vector4i> surface;
-	vector<uint64_t> surfVerts;
-	vector<pair<uint64_t, uint64_t>> surfEdges;
-	vector<double> Self_lambda_lastH;
-	vector<double> Environment_lambda_lastH;
-	vector<Eigen::Vector2d> MMDistCoord;
-	vector<Eigen::Matrix<double, 3, 2>> MMTanBasis;
-	vector<int> Environment_ActiveSet, Environment_activeSet_lastH;
-	vector<MMCVID> Self_ActiveSet, Self_activeSet_lastH;
-	vector<MMCVID> Self_EE_ActiveSet;
-	vector<pair<int, int>> Self_EEeIe_ActiveSet;
-	vector<pair<int, int>> Self_CCD_ActiveSet;
-	vector<int> closeConstraintID;
+	std::vector<Eigen::Vector3d> vertexes;
+	std::vector<int> boundary_vertexes_indices;
+	std::vector<Eigen::Vector3d> v_rest;
+	std::vector<Eigen::Vector4i> tetrahedras;
+	std::vector<Eigen::Vector3i> triangles;
+	std::vector<Eigen::Vector3d> velocities;
+	std::vector<Eigen::Matrix3d> DM_tetrahedra_inverse;
+	std::vector<Eigen::Matrix2d> DM_triangle_inverse;
+	std::vector<Eigen::Vector4i> surface;
+	std::vector<uint64_t> surfVerts;
+	std::vector<std::pair<uint64_t, uint64_t>> surfEdges;
+	std::vector<double> Self_lambda_lastH;
+	std::vector<double> Environment_lambda_lastH;
+	std::vector<Eigen::Vector2d> MMDistCoord;
+	std::vector<Eigen::Matrix<double, 3, 2>> MMTanBasis;
+	std::vector<int> Environment_ActiveSet, Environment_activeSet_lastH;
+	std::vector<MMCVID> Self_ActiveSet, Self_activeSet_lastH;
+	std::vector<MMCVID> Self_EE_ActiveSet;
+	std::vector<std::pair<int, int>> Self_EEeIe_ActiveSet;
+	std::vector<std::pair<int, int>> Self_CCD_ActiveSet;
+	std::vector<int> closeConstraintID;
 	std::vector<MMCVID> closeMConstraintID;
-	vector<double> closeConstraintVal;
-	vector<double> closeMConstraintVal;
-	Vector3d minConer, maxConer;
-	Vector3d objMinConer, objMaxConer;
-	vector<int> boundaryTypes;
-    vector<int> spectialPontsArray;
+	std::vector<double> closeConstraintVal;
+	std::vector<double> closeMConstraintVal;
+	Eigen::Vector3d minCorner, maxCorner;
+	Eigen::Vector3d objMinConer, objMaxConer;
+	std::vector<int> boundaryTypes;
+    std::vector<int> specialPointsArray;
 	//IPC
-	vector<Vector3d> xTilta, dx_Elastic, acceleration;
-	vector<Vector3d> V_prev;
+	std::vector<Eigen::Vector3d> xTilta, dx_Elastic, acceleration;
+	std::vector<Eigen::Vector3d> V_prev;
 
-	vector<Eigen::VectorXd> EKF;
+	std::vector<Eigen::VectorXd> EKF;
 
-	std::vector<Vector2i> tri_edges_adj_points;
-	std::vector<Vector2i> tri_edges;
+	std::vector<Eigen::Vector2i> tri_edges_adj_points;
+	std::vector<Eigen::Vector2i> tri_edges;
 
-	vector<QuadBendingInfo> quadBendingInfo;
-	std::function<Vector3d(Vector3d vertex, int step_id, double ipc_dt)> update_hard_constraint_functor = nullptr;
+	std::vector<QuadBendingInfo> quadBendingInfo;
+	std::function<Eigen::Vector3d(Eigen::Vector3d vertex, int step_id, double ipc_dt)> update_hard_constraint_functor = nullptr;
 	bool apply_gravity = true;
 	bool is_quasi_static = false;
 	int D12x12Num;
@@ -218,27 +215,27 @@ public:
 	int tetrahedraNum;
 	int triangleNum;
 	void InitMesh(int type, double scale);
-	bool load_tetrahedraMesh(const std::string& filename, double scale, Vector3d offset);
-	bool load_triangleMesh(const std::string& filename, double scale, Vector3d position_offset, int type=0);
+	bool load_tetrahedraMesh(const std::string& filename, double scale, Eigen::Vector3d offset);
+	bool load_triangleMesh(const std::string& filename, double scale, Eigen::Vector3d position_offset, int type=0);
 	void load_test(double scale, int num = 1);
 	void getSurface();
 	bool output_tetrahedraMesh(const std::string& filename);
 	bool output_tetTempData();
 	bool load_tetTempData();
 
-	vector<Eigen::VectorXd> get_dXn1_dXn();
-	vector<Eigen::VectorXd> get_dXn1_dVn();
-	vector<Eigen::VectorXd> get_dVn1_dXn();
-	vector<Eigen::VectorXd> get_dVn1_dVn();
+	std::vector<Eigen::VectorXd> get_dXn1_dXn();
+	std::vector<Eigen::VectorXd> get_dXn1_dVn();
+	std::vector<Eigen::VectorXd> get_dVn1_dXn();
+	std::vector<Eigen::VectorXd> get_dVn1_dVn();
 
 };
 
 class mesh_obj {
 public:
-	vector<Vector3d> vertexes;
-	vector<Vector3d> normals;
-	vector<Vector3i> facenormals;
-	vector<Vector3i> faces;
+	std::vector<Eigen::Vector3d> vertexes;
+	std::vector<Eigen::Vector3d> normals;
+	std::vector<Eigen::Vector3i> facenormals;
+	std::vector<Eigen::Vector3i> faces;
 	int vertexNum;
 	int faceNum;
 	void InitMesh(int type, double scale);
@@ -247,27 +244,25 @@ public:
 
 class model_obj {
 public:
-	vector<mesh_obj> meshes;
-	vector<string> names;
+	std::vector<mesh_obj> meshes;
+	std::vector<std::string> names;
 	bool load_model(const std::string& filename);
 };
 
 class model_tet {
 public:
-	vector<mesh3D> mesh3Ds;
-	//vector<vector<Vector4i>> surfaces;
-	vector<string> names;
+	std::vector<mesh3D> mesh3Ds;
+	//std::vector<std::vector<Eigen::Vector4i>> surfaces;
+	std::vector<std::string> names;
 	bool load_model(const std::string& filename, int offset);
 	void calculate_surface();
 };
 
 class fiber_obj {
 public:
-	vector<mesh_obj> muscles;
-	vector<mesh_obj> tendonIns;
-	vector<mesh_obj> tendonOuts;
-	//vector<string> names;
+	std::vector<mesh_obj> muscles;
+	std::vector<mesh_obj> tendonIns;
+	std::vector<mesh_obj> tendonOuts;
+	//std::vector<std::string> names;
 	bool load_model(const std::string* filename);
 };
-
-#endif // !FEM_MESH.H

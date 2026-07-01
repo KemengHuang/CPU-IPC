@@ -13,6 +13,7 @@
 #include "tbb/parallel_reduce.h"
 
 using namespace std;
+using namespace Eigen;
 
 //#ifdef NDEBUG
 

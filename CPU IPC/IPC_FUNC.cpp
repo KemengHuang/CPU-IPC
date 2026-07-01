@@ -16,6 +16,8 @@
 
 
 using namespace FEM;
+using namespace std;
+using namespace Eigen;
 #define NEWB2
 //index count to export
 int step_index = 0;
@@ -998,70 +1000,6 @@ vector<Vector3d> cholmod_solver_EPF(BHessian& BH, std::vector<Eigen::Vector3d> g
     return direction;
 }
 
-//void getEKF(BHessian& BH, std::vector<Eigen::Vector3d> gradient, mesh3D& mesh/*, vector<Eigen::VectorXd>& KK*/) {
-//    vector<Eigen::VectorXd> EKF;
-//    vector<Vector3d> direction(mesh.vertexNum, Vector3d(0, 0, 0));
-//    const int vectorSize = 3 * mesh.vertexNum;
-//    CholmodSolver solver;
-//    std::vector<Triplet<double>> triplets = BH.toTriplets(mesh.boundaryTypes);
-//    int offset = triplets.size();
-//    triplets.resize(offset + vectorSize);
-//
-//    tbb::parallel_for(0, vectorSize, 1, [&](int i) {
-//        triplets[offset + i] = Triplet<double>(i, i, mesh.masses[i / 3]);
-//        }
-//    );
-//
-//    Eigen::SparseMatrix<double> sparseFEM(vectorSize, vectorSize);
-//    sparseFEM.setFromTriplets(triplets.begin(), triplets.end());
-//
-//    solver.preFactorize(sparseFEM);
-//
-//    auto vec_gradient = Eigen::VectorXd(vectorSize);
-//
-//    for (int i = 0; i < mesh.vertexNum; i++) {
-//        for (int j = 0; j < 3; j++) {
-//            vec_gradient.setZero();
-//            vec_gradient(i * 3 + j) = mesh.masses[i];
-//            auto result = Eigen::VectorXd(vectorSize);
-//            solver.solve_with_preFactorize(vec_gradient, result);
-//            EKF.push_back(result);
-//        }
-//    }
-//    mesh.EKF = EKF;
-//}
-
-//vector<Eigen::VectorXd> get_dXn1_dXn(mesh3D& mesh, vector<Eigen::VectorXd>& KK) {
-//    KK = mesh.EKF;
-//}
-
-
-//void test_jacobian(const mesh3D& mesh) {
-//    const double eps = 1e-3;
-//
-//    mesh3D mesh_sym = mesh;
-//    //TODO: use mesh_sym to run simulation and update its vertex positions
-//    vector<Eigen::VectorXd> jacobian_sym;
-//    //TODO: cholmod_solver_EPF(BH, gradient, mesh_sym, jacobian_sym);
-//
-//    double error = 0;
-//    for (int vI = 0; vI < mesh.vertexNum; ++vI) {
-//        for (int d = 0; d < 3; ++d) {
-//            mesh3D mesh_perturbed = mesh;
-//            mesh_perturbed.vertexes[vI][d] += eps;
-//            //TODO: use mesh_purturbed to run simulation and update its vertex positions
-//
-//            Eigen::VectorXd derivative_fd(mesh.vertexNum * 3);
-//            for (int vJ = 0; vJ < mesh.vertexNum; ++vJ) {
-//                derivative_fd.template segment<3>(vJ * 3) = (mesh_perturbed.vertexes[vJ] - mesh_sym.vertexes[vJ]) / eps;
-//            }
-//
-//            error += (derivative_fd - jacobian_sym[vI * 3 + d]).norm() / derivative_fd.norm();
-//        }
-//    }
-//    printf("jacobian rel_error: %lf\n", error);
-//}
-
 
 vector<Vector3d> Eigen_CG_solver(BHessian& BH,
     std::vector<Eigen::Vector3d> gradient,
@@ -1650,7 +1588,7 @@ void buildCollisionSets(mesh3D& mesh,
     bool rehash = true) {
     if (mesh.use_barrier) {
         if (rehash) {
-            sh.build(mesh, mesh.averageEdgeLenth);
+            sh.build(mesh, mesh.averageEdgeLength);
         }
 
         sh.calculateActivateSet(mesh);
@@ -1704,13 +1642,13 @@ bool lineSearch(mesh3D& mesh,
 
     int numOfIntersect = 0;
     if (mesh.use_barrier) {
-        sh.build(mesh, mesh.averageEdgeLenth);
+        sh.build(mesh, mesh.averageEdgeLength);
         while (isIntersected(gd, sh, mesh, resultV0)) {
             numOfIntersect++;
             printf("intersect\n");
             stepSize /= 2.0;
             stepForward(resultV0, searchDir, mesh, stepSize);
-            sh.build(mesh, mesh.averageEdgeLenth);
+            sh.build(mesh, mesh.averageEdgeLength);
         }
         //msg << stepSize << "(safeGuard_IP) -> ";
 
@@ -1758,7 +1696,7 @@ bool lineSearch(mesh3D& mesh,
                 numOfIntersect++;
                 printf("intersect\n");
                 stepForward(resultV0, searchDir, mesh, stepSize);
-                sh.build(mesh, mesh.averageEdgeLenth);
+                sh.build(mesh, mesh.averageEdgeLength);
                 needRecomputeCS = true;
             }
         }
@@ -1780,7 +1718,7 @@ void suggestKappa(double& kappa, const double& Hhat, const double& bboxDiagSize2
 
 void upperBoundKappa(double& kappa, const double& Hhat, const double& bboxDiagSize2, const double& meanMass) {
     double H_b;
-    //double bboxDiagSize2 = (maxConer - minConer).squaredNorm();
+    //double bboxDiagSize2 = (maxCorner - minCorner).squaredNorm();
     compute_H_b(1.0e-16 * bboxDiagSize2, Hhat, H_b);
     double kappaMax = 100 * 1e13 * meanMass / (4.0e-16 * bboxDiagSize2 * H_b);
     if (kappa > kappaMax) {
@@ -1883,11 +1821,11 @@ void postLineSearch(mesh3D& mesh, const Ground& grd, double alpha, double& kappa
         int constraintValIndStart = constraintVal.size();
         Evaluate_GroundConstraintVals(grd, mesh, constraintVal, constraintValIndStart);
 
-        //double bboxDiagSize2 = (mesh.maxConer - mesh.minConer).squaredNorm();
+        //double bboxDiagSize2 = (mesh.maxCorner - mesh.minCorner).squaredNorm();
         //double dTol = 1e-18 * mesh.bboxDiagSize2;
         //animConfig.collisionObjects[coI]->evaluateConstraints(result,
         //    activeSet[coI], constraintVal);
-        //double bboxDiagSize2 = (mesh.maxConer - mesh.minConer).squaredNorm();
+        //double bboxDiagSize2 = (mesh.maxCorner - mesh.minCorner).squaredNorm();
         for (int i = 0; i < mesh.Environment_ActiveSet.size(); ++i) {
             if (constraintVal[constraintValIndStart + i] < mesh.dTol) {
                 mesh.closeConstraintID.emplace_back(mesh.Environment_ActiveSet[i]);
@@ -2012,7 +1950,7 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa, float& 
             double alpha_CFL = std::sqrt(mesh.Hhat) / (pMag.maxCoeff() * 2.0);
 
             double fullCCD_alpha = alpha;
-            sh.build(mesh, moveDir, fullCCD_alpha, mesh.averageEdgeLenth);
+            sh.build(mesh, moveDir, fullCCD_alpha, mesh.averageEdgeLength);
             Self_largestFeasibleStepSize_CCD(mesh, sh, moveDir, slackness_m, fullCCD_alpha);
 
             alpha = min(alpha, alpha_CFL);
@@ -2128,7 +2066,7 @@ int IPC_Solver(int& stepId, mesh3D& mesh, SpatialHash& sh, Ground& gd) {
                     mesh.vertexes[mesh.boundary_vertexes_indices[i]], new_alpha, mesh.IPC_dt);
             }
         );
-        sh.build(mesh, moveDir, new_alpha, mesh.averageEdgeLenth);
+        sh.build(mesh, moveDir, new_alpha, mesh.averageEdgeLength);
         Self_largestFeasibleStepSize_CCD(mesh, sh, moveDir, 0.8, new_alpha);
         tbb::parallel_for(0, boundary_vertex_num, 1, [&](int i)
             {
@@ -2139,7 +2077,7 @@ int IPC_Solver(int& stepId, mesh3D& mesh, SpatialHash& sh, Ground& gd) {
         vector<Vector3d> resultV0 = mesh.vertexes;
         stepForward(resultV0, moveDir, mesh, 1, true);
 
-        sh.build(mesh, mesh.averageEdgeLenth);
+        sh.build(mesh, mesh.averageEdgeLength);
         int numOfIntersect = 0;
 
         while (isIntersected(gd, sh, mesh, mesh.vertexes)) {
@@ -2151,7 +2089,7 @@ int IPC_Solver(int& stepId, mesh3D& mesh, SpatialHash& sh, Ground& gd) {
                 }
             );
             stepForward(resultV0, moveDir, mesh, 1, true);
-            sh.build(mesh, mesh.averageEdgeLenth);
+            sh.build(mesh, mesh.averageEdgeLength);
         }
         cout << "new_alpha:";
         cout << new_alpha << endl;

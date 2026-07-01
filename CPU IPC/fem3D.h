@@ -17,62 +17,58 @@ double edgeTheta(
 //host functions
 void initMesh3D(mesh3D &mesh, int type, double scale);
 
-double calculateVolum(const vector<Vector3d> &vertexes, const Vector4i &index);
+double calculateVolum(const std::vector<Eigen::Vector3d> &vertexes, const Eigen::Vector4i &index);
 
-void __Inverse(const Eigen::Matrix3d &input, Eigen::Matrix3d &result);
+Eigen::Matrix3d calculateDms3D_double(const std::vector<Eigen::Vector3d> &vertexes, const Eigen::Vector4i &index, const int &i);
 
-void __Inverse2x2(const Eigen::Matrix2d &input, Eigen::Matrix2d &result);
+Eigen::Matrix<double, 3, 2> calculateDs32D_double(const std::vector<Eigen::Vector3d> &vertexes, const Eigen::Vector3i &index);
 
-Matrix3d calculateDms3D_double(const vector<Vector3d> &vertexes, const Vector4i &index, const int &i);
-
-Matrix<double, 3, 2> calculateDs32D_double(const vector<Vector3d> &vertexes, const Vector3i &index);
-
-double getObjEnergy_StableNHK2_3D(const vector<Vector3d> &vertexes, const mesh3D &mesh, const double &lengthRate,
+double getObjEnergy_StableNHK2_3D(const std::vector<Eigen::Vector3d> &vertexes, const mesh3D &mesh, const double &lengthRate,
                                   const double &volumeRate);
 
-double getObjRestEnergy_StableNHK2_3D(const vector<Vector3d> &vertexes, const mesh3D &mesh, const double &lengthRate,
+double getObjRestEnergy_StableNHK2_3D(const std::vector<Eigen::Vector3d> &vertexes, const mesh3D &mesh, const double &lengthRate,
                                       const double &volumeRate);
 
-MatrixXd computePFPX3D_double(const Matrix3d &InverseDm);
+Eigen::MatrixXd computePFPX3D_double(const Eigen::Matrix3d &InverseDm);
 
-MatrixXd computePFPX32D_double(const Matrix2d &InverseDm);
+Eigen::MatrixXd computePFPX32D_double(const Eigen::Matrix2d &InverseDm);
 
-Matrix3d computePEPF_StableNHK3D_double(const Matrix3d &F, const double &lengthRate, const double &volumRate);
+Eigen::Matrix3d computePEPF_StableNHK3D_double(const Eigen::Matrix3d &F, const double &lengthRate, const double &volumRate);
 
-Matrix<double, 3, 2>
-computePEPF_baraffwitkin_double(const Matrix<double, 3, 2>& F,
-    const Vector2d& anisotropic_a,
-    const Vector2d& anisotropic_b,
+Eigen::Matrix<double, 3, 2>
+computePEPF_baraffwitkin_double(const Eigen::Matrix<double, 3, 2>& F,
+    const Eigen::Vector2d& anisotropic_a,
+    const Eigen::Vector2d& anisotropic_b,
     double stretchS, double shearS, double strainRate);
 
 
-Matrix<double, 6, 6>
-project_baraffwitkint_H_3D(const Matrix<double, 3, 2>& F,
-    const Vector2d& anisotropic_a,
-    const Vector2d& anisotropic_b,
+Eigen::Matrix<double, 6, 6>
+project_baraffwitkint_H_3D(const Eigen::Matrix<double, 3, 2>& F,
+    const Eigen::Vector2d& anisotropic_a,
+    const Eigen::Vector2d& anisotropic_b,
     double stretchS, double shearS, double strainRate);
 double getObjEnergy_baraffwitkin_3D(const mesh3D& mesh,
-    const Vector2d& anisotropic_a,
-    const Vector2d& anisotropic_b,
+    const Eigen::Vector2d& anisotropic_a,
+    const Eigen::Vector2d& anisotropic_b,
     double stretchS, double shearS, double strainRate);
 
 double getObjBending_Energy(const mesh3D& mesh);
 
-Matrix3d computePEPF_StableNHK3D_2_double(const Matrix3d &F, const double &lengthRate, const double &volumRate);
+Eigen::Matrix3d computePEPF_StableNHK3D_2_double(const Eigen::Matrix3d &F, const double &lengthRate, const double &volumRate);
 
-Matrix3d computePEPF_Aniostropic3D_double(const Matrix3d &F, Vector3d direction, const double &scale,
+Eigen::Matrix3d computePEPF_Aniostropic3D_double(const Eigen::Matrix3d &F, Eigen::Vector3d direction, const double &scale,
                                           const double &contract_length);
 
-Matrix3d computePEPF_AniostropicRehabi3D_double(const Matrix3d &F, Vector3d direction, const double &u_anios);
+Eigen::Matrix3d computePEPF_AniostropicRehabi3D_double(const Eigen::Matrix3d &F, Eigen::Vector3d direction, const double &u_anios);
 
-MatrixXd project_StabbleNHK_H_3D(const Matrix3d &F, const double &lengthRate, const double &volumRate);
+Eigen::MatrixXd project_StabbleNHK_H_3D(const Eigen::Matrix3d &F, const double &lengthRate, const double &volumRate);
 
-MatrixXd project_StabbleNHK_2_H_3D(const Matrix3d &F, const double &lengthRate, const double &volumRate);
+Eigen::MatrixXd project_StabbleNHK_2_H_3D(const Eigen::Matrix3d &F, const double &lengthRate, const double &volumRate);
 
-MatrixXd
-project_ANIOSI5_H_3D(const Matrix3d &F, Vector3d direction, const double &scale, const double &contract_length);
+Eigen::MatrixXd
+project_ANIOSI5_H_3D(const Eigen::Matrix3d &F, Eigen::Vector3d direction, const double &scale, const double &contract_length);
 
-MatrixXd project_ANIOSI5_Rehabi_H_3D(const Matrix3d &F, Vector3d direction, const double &u_anios);
+Eigen::MatrixXd project_ANIOSI5_Rehabi_H_3D(const Eigen::Matrix3d &F, Eigen::Vector3d direction, const double &u_anios);
 
 
 #endif // !FEM3D_CUH

@@ -9,6 +9,7 @@
 #include <tbb/spin_mutex.h>
 #include "fem_parameters.h"
 using namespace std;
+using namespace Eigen;
 
 int surfNumId = 0;
 float xRot = 0.0f;
@@ -429,7 +430,7 @@ void display(void) {
     draw_Scene3D();
 
 
-    if (stop) return;
+    //if (stop) return;
 
     int step = 0;
     int k = simulator.simulateStick(step);

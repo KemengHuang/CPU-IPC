@@ -7,15 +7,15 @@
 #include "Eigen/Sparse"
 class BHessian {
 public:
-    vector<int> D1Index;//pIndex, DpeIndex, DptIndex;
-    vector<Vector3i> D3Index;
-    vector<Vector4i> D4Index;
-    vector<Vector2i> D2Index;//, DempIndex;
-    vector<Matrix<double, 12, 12>> H12x12;//, HDee, HDpt;
-    vector<Matrix<double, 3, 3>> H3x3;//, HDpm, HDpm, HDpm;
-    vector<Matrix<double, 6, 6>> H6x6;//, HDeme;
-    vector<Matrix<double, 9, 9>> H9x9;
-    std::vector<Eigen::Triplet<double>> toTriplets(const vector<int>& Btype);
+    std::vector<int> D1Index;//pIndex, DpeIndex, DptIndex;
+    std::vector<Eigen::Vector3i> D3Index;
+    std::vector<Eigen::Vector4i> D4Index;
+    std::vector<Eigen::Vector2i> D2Index;//, DempIndex;
+    std::vector<Eigen::Matrix<double, 12, 12>> H12x12;//, HDee, HDpt;
+    std::vector<Eigen::Matrix<double, 3, 3>> H3x3;//, HDpm, HDpm, HDpm;
+    std::vector<Eigen::Matrix<double, 6, 6>> H6x6;//, HDeme;
+    std::vector<Eigen::Matrix<double, 9, 9>> H9x9;
+    std::vector<Eigen::Triplet<double>> toTriplets(const std::vector<int>& Btype);
 };
 
 class IglUtils {
@@ -121,19 +121,19 @@ void compute_H_b(double d, double dHat, double& H);
 int compute_g_dpt(const mesh3D& mesh,
     const std::vector<MMCVID>& activeSet,
     const Eigen::VectorXd& input,
-    vector<Vector3d>& output_incremental,
+    std::vector<Eigen::Vector3d>& output_incremental,
     int offset,
     double coef);
 void compute_g_dpt_new(const mesh3D& mesh,
     const std::vector<MMCVID>& activeSet,
     const Eigen::VectorXd& input,
-    vector<Vector3d>& output_incremental,
+    std::vector<Eigen::Vector3d>& output_incremental,
     int offset,
     double coef, double d_hat);
 void compute_g_dee(const mesh3D& mesh,
     //const std::vector<MMCVID>& paraEEMMCVIDSet,
     //const std::vector<std::pair<int, int>>& paraEEeIeJSet,
-    vector<Vector3d>& grad_inc, double dHat, double coef);
+    std::vector<Eigen::Vector3d>& grad_inc, double dHat, double coef);
 
 void Evaluate_SelfPTConstraintVals(const mesh3D& mesh, Eigen::VectorXd& vals, const int& offset);
 void Evaluate_SelfEEConstraintVals(const mesh3D& mesh, Eigen::VectorXd& vals, const int& offset);
@@ -151,13 +151,13 @@ void compute_H_dee(const mesh3D& mesh,
 
 void Self_largestFeasibleStepSize(const mesh3D& mesh,
     const SpatialHash& sh,
-    const vector<Eigen::Vector3d>& searchDir,
+    const std::vector<Eigen::Vector3d>& searchDir,
     double slackness,
     std::vector<std::pair<int, int>>& candidates,
     double& stepSize);
 void Self_largestFeasibleStepSize_CCD(const mesh3D& mesh,
     SpatialHash& sh,
-    const vector<Eigen::Vector3d>& searchDir,
+    const std::vector<Eigen::Vector3d>& searchDir,
     double slackness,
     double& stepSize);
 

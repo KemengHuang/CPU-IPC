@@ -5,6 +5,8 @@
 #include <tbb/spin_mutex.h>
 #include "ACCD.h"
 #include<iostream>
+using namespace std;
+using namespace Eigen;
 
 std::vector<Eigen::Triplet<double>> BHessian::toTriplets(const vector<int>& Btype) {
     //std::cout<<"hello 00\n";

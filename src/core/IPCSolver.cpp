@@ -1,4 +1,4 @@
-﻿#include "core/IPCSolver.h"
+#include "core/IPCSolver.h"
 #include "core/IPCDistance.h"
 #include "math/Constants.h"
 #include "core/TimeStepFilter.h"
@@ -20,17 +20,7 @@ using namespace FEM;
 using namespace std;
 using namespace Eigen;
 #define NEWB2
-//index count to export
-int step_index = 0;
-double time_total = 0;
-
-double ttime0 = 0;
-double ttime1 = 0;
-double ttime2 = 0;
-double ttime3 = 0;
-double ttime4 = 0;
-double totalCollision = 0;
-int total_iter = 0;
+IPCSolverState g_solverState;
 
 void buildConstraintStartIndsWithMM(const vector<int>& activeSet,
     const std::vector<MMCVID>& MMActiveSet,
@@ -119,7 +109,7 @@ void buildFriction(mesh3D& mesh, const Ground& grd) {
 }
 
 
-void compute_fiction_gradient(mesh3D& mesh, const Ground& grd, std::vector<Eigen::Vector3d>& grad_inc, double eps2,
+void compute_fiction_gradient(const mesh3D& mesh, const Ground& grd, std::vector<Eigen::Vector3d>& grad_inc, double eps2,
     double coef) {
     double eps = std::sqrt(eps2);
     //TODO: parallelize
@@ -150,18 +140,10 @@ void compute_fiction_gradient(mesh3D& mesh, const Ground& grd, std::vector<Eigen
             IPC::liftRelDXTanToMesh_EE(relDX, mesh.MMTanBasis[cI],
                 mesh.MMDistCoord[cI][0], mesh.MMDistCoord[cI][1], TTTDX);
             TTTDX *= coef * mesh.Self_lambda_lastH[cI];
-            //            for (int i = 0; i < 4; i++) {
-            //                grad_inc[MMCVIDI[i]] += TTTDX.template segment<3>(3 * i);
-            //            }
-
             grad_inc[MMCVIDI[0]] += TTTDX.template segment<3>(0);
             grad_inc[MMCVIDI[1]] += TTTDX.template segment<3>(3);
             grad_inc[MMCVIDI[2]] += TTTDX.template segment<3>(6);
             grad_inc[MMCVIDI[3]] += TTTDX.template segment<3>(9);
-            //            grad_inc.template segment<3>(MMCVIDI[0] * 3) += TTTDX.template segment<3>(0);
-            //            grad_inc.template segment<3>(MMCVIDI[1] * 3) += TTTDX.template segment<3>(3);
-            //            grad_inc.template segment<3>(MMCVIDI[2] * 3) += TTTDX.template segment<3>(6);
-            //            grad_inc.template segment<3>(MMCVIDI[3] * 3) += TTTDX.template segment<3>(9);
         }
         else {
             // point-triangle and degenerate edge-edge
@@ -266,7 +248,7 @@ void compute_fiction_gradient(mesh3D& mesh, const Ground& grd, std::vector<Eigen
     }
 }
 
-void compute_fiction_hessian(mesh3D& mesh, const Ground& grd, BHessian& BH, double eps2, double coef) {
+void compute_fiction_hessian(const mesh3D& mesh, const Ground& grd, BHessian& BH, double eps2, double coef) {
     double eps = std::sqrt(eps2);
 
     int contactPairI = 0;
@@ -566,7 +548,7 @@ void computeEGradient(const mesh3D& mesh, vector<Vector3d>& gradient) {
     );
 }
 
-static void addInertiaAndDragGradient(mesh3D& mesh, vector<Vector3d>& gradient) {
+static void addInertiaAndDragGradient(const mesh3D& mesh, vector<Vector3d>& gradient) {
     //calculate inertial gradient
     Matrix3d massM;
     massM.setIdentity();
@@ -582,7 +564,7 @@ static void addInertiaAndDragGradient(mesh3D& mesh, vector<Vector3d>& gradient) 
     );
 }
 
-static void addTetrahedralElasticityGradientHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessian& BH) {
+static void addTetrahedralElasticityGradientHessian(const mesh3D& mesh, vector<Vector3d>& gradient, BHessian& BH) {
     vector<tbb::spin_mutex> countMutex(mesh.vertexNum);
     tbb::parallel_for(0, mesh.tetrahedraNum, 1, [&](int ii) {
         const Eigen::Matrix<double, 9, 12>& PFPX = mesh.tetPFPX[ii];
@@ -612,7 +594,7 @@ static void addTetrahedralElasticityGradientHessian(mesh3D& mesh, vector<Vector3
     BH.D4Index = mesh.tetrahedras;
 }
 
-static void addTriangleShellGradientHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessian& BH) {
+static void addTriangleShellGradientHessian(const mesh3D& mesh, vector<Vector3d>& gradient, BHessian& BH) {
     vector<tbb::spin_mutex> countMutex(mesh.vertexNum);
     BH.H9x9.resize(mesh.triangleNum);
     tbb::parallel_for(0, mesh.triangleNum, 1, [&](int ii) {
@@ -645,12 +627,12 @@ static void addTriangleShellGradientHessian(mesh3D& mesh, vector<Vector3d>& grad
     BH.D3Index = mesh.triangles;
 }
 
-static void addBendingGradientHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessian& BH) {
+static void addBendingGradientHessian(const mesh3D& mesh, vector<Vector3d>& gradient, BHessian& BH) {
     vector<tbb::spin_mutex> countMutex(mesh.vertexNum);
 
 #if defined USE_QUADRATIC_BENDING
     size_t bendingInfoSize = mesh.quadBendingInfo.size();
-    std::vector<Vector3d>& verts = mesh.vertexes;
+    const std::vector<Vector3d>& verts = mesh.vertexes;
 
     vector<Vector4i> bendIndexes(bendingInfoSize);
 
@@ -774,7 +756,7 @@ static void addBendingGradientHessian(mesh3D& mesh, vector<Vector3d>& gradient, 
 #endif
 }
 
-static void addGroundBarrierGradientHessian(mesh3D& mesh, const Ground& grd, vector<Vector3d>& gradient, BHessian& BH) {
+static void addGroundBarrierGradientHessian(const mesh3D& mesh, const Ground& grd, vector<Vector3d>& gradient, BHessian& BH) {
     //calculate barrier gradient and hessian for the ground plane collision
     VectorXd constraintVals;
     int offset = 0;
@@ -801,7 +783,7 @@ static void addGroundBarrierGradientHessian(mesh3D& mesh, const Ground& grd, vec
     );
 }
 
-static int addSelfContactGradientHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessian& BH) {
+static int addSelfContactGradientHessian(const mesh3D& mesh, vector<Vector3d>& gradient, BHessian& BH) {
     int collisionNum = 0;
 
     VectorXd constraintVals;
@@ -831,14 +813,14 @@ static int addSelfContactGradientHessian(mesh3D& mesh, vector<Vector3d>& gradien
     return collisionNum;
 }
 
-static void addFrictionGradientHessian(mesh3D& mesh, const Ground& grd, vector<Vector3d>& gradient, BHessian& BH) {
+static void addFrictionGradientHessian(const mesh3D& mesh, const Ground& grd, vector<Vector3d>& gradient, BHessian& BH) {
 #ifdef USE_FRICTION
     compute_fiction_gradient(mesh, grd, gradient, mesh.Fhat * mesh.IPC_dt * mesh.IPC_dt, mesh.friction);
     compute_fiction_hessian(mesh, grd, BH, mesh.Fhat * mesh.IPC_dt * mesh.IPC_dt, mesh.friction);
 #endif
 }
 
-int computeGradientAndHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessian& BH, const Ground& grd) {
+int computeGradientAndHessian(const mesh3D& mesh, vector<Vector3d>& gradient, BHessian& BH, const Ground& grd) {
     addInertiaAndDragGradient(mesh, gradient);
 
 #if defined USE_QUADRATIC_BENDING
@@ -1325,9 +1307,19 @@ vector<Vector3d> PCG_Solver(const mesh3D& mesh, const BHessian& BH, const vector
     return dX;
 }
 
+static bool solveLinearSystem(const mesh3D& mesh, BHessian& BH,
+    const vector<Vector3d>& gradient, vector<Vector3d>& moveDir)
+{
+    // Central dispatch point for the linear solver.  Currently CHOLMOD is the
+    // active backend; future phases can switch to CG/PCG here without touching
+    // the Newton loop.
+    moveDir = cholmod_solver(BH, gradient, mesh);
+    return true;
+}
+
 void
 calculateMovingDirection(const mesh3D& mesh, BHessian& BH, vector<Vector3d> gradient, vector<Vector3d>& direction) {
-    direction = cholmod_solver(BH, gradient, mesh);
+    solveLinearSystem(mesh, BH, gradient, direction);
     //direction = Eigen_CG_solver(BH, gradient, mesh);
     //direction = PCG_Solver(mesh, BH, gradient);
 }
@@ -1694,7 +1686,7 @@ bool lineSearch(mesh3D& mesh,
 
     int numOfLineSearch = 0;
     double LFStepSize = stepSize;
-    while ((testingE > lastEnergyVal + stepSize * c1m) && (stepSize > SimulationParameters::lineSearchMinFraction *
+    while ((testingE > lastEnergyVal + stepSize * c1m) && (stepSize > SimulationParameters::lineSearchMinStepFactor *
         LFStepSize)) {
 
         printf("ls iteration id:  %d,  testingE:  %f       lastEnergyVal:   %f\n", numOfLineSearch, testingE, lastEnergyVal);
@@ -1875,7 +1867,7 @@ void postLineSearch(mesh3D& mesh, const Ground& grd, double alpha, double& kappa
 
 }
 
-void updateBoundaryMoveDir(mesh3D& mesh, vector<Vector3d>& moveDir, double ipc_dt, double alpha) {
+void updateBoundaryMoveDir(const mesh3D& mesh, vector<Vector3d>& moveDir, double ipc_dt, double alpha) {
     double angleX = PI / 2.5 * ipc_dt * alpha;
     Matrix3d rotationL, rotationR;
     rotationL << 1, 0, 0, 0, cos(angleX), sin(angleX), 0, -sin(angleX), cos(angleX);
@@ -1926,13 +1918,13 @@ static bool hasConverged(const mesh3D& mesh, const vector<Vector3d>& moveDir) {
     return gradVanish;
 }
 
-static bool computeNewtonDirection(mesh3D& mesh, BHessian& BH, vector<Vector3d>& gradient, vector<Vector3d>& moveDir) {
+static bool computeNewtonDirection(const mesh3D& mesh, BHessian& BH, vector<Vector3d>& gradient, vector<Vector3d>& moveDir) {
     calculateMovingDirection(mesh, BH, gradient, moveDir);
     return true;
 }
 
 static double computeFeasibleStepSize(mesh3D& mesh, SpatialHash& sh, Ground& gd, vector<Vector3d>& moveDir) {
-    double alpha = 1.0;
+    double alpha = SimulationParameters::lineSearchInitialStep;
     double slackness_a = SimulationParameters::environmentSlackness;
     double slackness_m = SimulationParameters::selfContactSlackness;
 
@@ -1956,7 +1948,7 @@ static double computeFeasibleStepSize(mesh3D& mesh, SpatialHash& sh, Ground& gd,
             int surfId = mesh.surfVerts[i];
             pMag[i] = moveDir[surfId].norm();
         }
-        double alpha_CFL = std::sqrt(mesh.Hhat) / (pMag.maxCoeff() * 2.0);
+        double alpha_CFL = std::sqrt(mesh.Hhat) / (pMag.maxCoeff() * SimulationParameters::ccdCFLFactor);
 
         double fullCCD_alpha = alpha;
         sh.build(mesh, moveDir, fullCCD_alpha, mesh.averageEdgeLength);
@@ -1964,7 +1956,7 @@ static double computeFeasibleStepSize(mesh3D& mesh, SpatialHash& sh, Ground& gd,
 
         alpha = min(alpha, alpha_CFL);
 
-        if (partialCCD_alpha > 2 * alpha_CFL) {
+        if (partialCCD_alpha > SimulationParameters::ccdPartialToFullRatio * alpha_CFL) {
             alpha = min(partialCCD_alpha, fullCCD_alpha * 1.0);
             alpha = max(alpha, alpha_CFL);
         }
@@ -1974,41 +1966,57 @@ static double computeFeasibleStepSize(mesh3D& mesh, SpatialHash& sh, Ground& gd,
 }
 
 static bool performLineSearch(mesh3D& mesh, SpatialHash& sh, Ground& gd, vector<Vector3d>& moveDir, vector<Vector3d>& gradient, double& alpha, double Kappa) {
-    double alpha_feasible = alpha;
-
     bool isStop = lineSearch(mesh, sh, gd, moveDir, gradient, alpha, 0, 0, Kappa);
     return isStop;
 }
 
-static void finalizeNewtonStep(mesh3D& mesh, double alpha, double& totalTimeStep, vector<Vector3d>& moveDir) {
+static void finalizeNewtonStep(const mesh3D& mesh, double alpha, double& totalTimeStep, const vector<Vector3d>& moveDir) {
     totalTimeStep += alpha;
+}
+
+static void initializeNewtonLoop(const mesh3D& mesh, vector<Vector3d>& moveDir, vector<Vector3d>& gradient, BHessian& BH) {
+    moveDir.resize(mesh.vertexNum, Vector3d(0, 0, 0));
+    gradient.assign(mesh.vertexNum, Vector3d(0, 0, 0));
+#if defined USE_QUADRATIC_BENDING
+    size_t fem12x12Size = mesh.tetrahedraNum + mesh.quadBendingInfo.size();
+#else
+    size_t fem12x12Size = mesh.tetrahedraNum + mesh.tri_edges.size();
+#endif
+    BH.H3x3.reserve(mesh.Environment_ActiveSet.size() + mesh.Self_ActiveSet.size() * 4);
+    BH.H6x6.reserve(mesh.Self_ActiveSet.size() * 2 + mesh.Self_EE_ActiveSet.size() * 2);
+    BH.H9x9.reserve(mesh.Self_ActiveSet.size() + mesh.Self_EE_ActiveSet.size());
+    BH.H12x12.reserve(fem12x12Size + mesh.Self_ActiveSet.size() + mesh.Self_EE_ActiveSet.size() * 2);
+    BH.D1Index.reserve(mesh.Environment_ActiveSet.size());
+    BH.D2Index.reserve(mesh.Self_EE_ActiveSet.size());
+    BH.D3Index.reserve(mesh.Self_ActiveSet.size());
+    BH.D4Index.reserve(mesh.Self_ActiveSet.size() + mesh.Self_EE_ActiveSet.size());
+}
+
+static void updateVelocityAndState(const mesh3D& mesh, double totalTimeStep, const vector<Vector3d>& moveDir, double Kappa) {
+    // Placeholder for the sub-IP post-step state update.  In the current
+    // implementation the line search already writes the accepted
+    // configuration into mesh.vertexes, so there is no additional explicit
+    // stepForward or velocity update at this point.  The frame-level
+    // velocity update happens in IPC_Solver.
+    (void)mesh;
+    (void)totalTimeStep;
+    (void)moveDir;
+    (void)Kappa;
 }
 
 int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa, float& time0, float& time1, float& time2, float& time3, float& time4, double& collisionNum) {
     int iterCap = SimulationParameters::newtonIterCap, k = 0;
 
-    vector<Vector3d> moveDir(mesh.vertexNum, Vector3d(0, 0, 0));
+    vector<Vector3d> moveDir;
 
     double totalTimeStep = 0;
     for (; k < iterCap; ++k) {
 
         HighResolutionTimerForWin timer0, timer1, timer2, timer3, timer4;
 
-        vector<Vector3d> gradient(mesh.vertexNum, Vector3d(0, 0, 0));
+        vector<Vector3d> gradient;
         BHessian BH;
-#if defined USE_QUADRATIC_BENDING
-        size_t fem12x12Size = mesh.tetrahedraNum + mesh.quadBendingInfo.size();
-#else
-        size_t fem12x12Size = mesh.tetrahedraNum + mesh.tri_edges.size();
-#endif
-        BH.H3x3.reserve(mesh.Environment_ActiveSet.size() + mesh.Self_ActiveSet.size() * 4);
-        BH.H6x6.reserve(mesh.Self_ActiveSet.size() * 2 + mesh.Self_EE_ActiveSet.size() * 2);
-        BH.H9x9.reserve(mesh.Self_ActiveSet.size() + mesh.Self_EE_ActiveSet.size());
-        BH.H12x12.reserve(fem12x12Size + mesh.Self_ActiveSet.size() + mesh.Self_EE_ActiveSet.size() * 2);
-        BH.D1Index.reserve(mesh.Environment_ActiveSet.size());
-        BH.D2Index.reserve(mesh.Self_EE_ActiveSet.size());
-        BH.D3Index.reserve(mesh.Self_ActiveSet.size());
-        BH.D4Index.reserve(mesh.Self_ActiveSet.size() + mesh.Self_EE_ActiveSet.size());
+        initializeNewtonLoop(mesh, moveDir, gradient, BH);
         timer0.set_start();
         collisionNum += computeGradientAndHessian(mesh, gradient, BH, gd);
 
@@ -2047,11 +2055,13 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa, float& 
         time2 += time22;
         time3 += time33;
         time4 += time44;
+
         finalizeNewtonStep(mesh, alpha, totalTimeStep, moveDir);
+        updateVelocityAndState(mesh, totalTimeStep, moveDir, Kappa);
         //printf("time0 = %f,  time1 = %f,  time2 = %f,  time3 = %f,  time4 = %f\n", time00, time11, time22, time33, time44);
     }
     printf("newton iteration:  %d    and    Kappa:  %f\n", k, mesh.Kappa);
-    total_iter += k;
+    g_solverState.total_iter += k;
     return k;
 }
 
@@ -2097,14 +2107,14 @@ int IPC_Solver(int& stepId, mesh3D& mesh, SpatialHash& sh, Ground& gd) {
         std::string fileVertex = "tempData/timeCost.txt";
         ifstream ifs(fileVertex);
         if (ifs) {
-            ifs >> ttime0 >> ttime1 >> ttime2 >> ttime3 >> ttime4 >> time_total >> total_iter >> step_index
+            ifs >> g_solverState.ttime0 >> g_solverState.ttime1 >> g_solverState.ttime2 >> g_solverState.ttime3 >> g_solverState.ttime4 >> g_solverState.time_total >> g_solverState.total_iter >> g_solverState.step_index
                 >> mesh.Kappa;
             loadTempTimeInfo = false;
         }
         ifs.close();
     }
 
-    stepId = step_index;
+    stepId = g_solverState.step_index;
 
     std::chrono::steady_clock::time_point begin = std::chrono::steady_clock::now();
     //printf("hello 0 p\n");
@@ -2138,7 +2148,7 @@ int IPC_Solver(int& stepId, mesh3D& mesh, SpatialHash& sh, Ground& gd) {
             }
         );
         vector<Vector3d> resultV0 = mesh.vertexes;
-        stepForward(resultV0, moveDir, mesh, 1, true);
+        stepForward(resultV0, moveDir, mesh, SimulationParameters::solverStepForwardFullStep, true);
 
         sh.build(mesh, mesh.averageEdgeLength);
         int numOfIntersect = 0;
@@ -2151,7 +2161,7 @@ int IPC_Solver(int& stepId, mesh3D& mesh, SpatialHash& sh, Ground& gd) {
                         mesh.vertexes[mesh.boundary_vertexes_indices[i]], new_alpha, mesh.IPC_dt);
                 }
             );
-            stepForward(resultV0, moveDir, mesh, 1, true);
+            stepForward(resultV0, moveDir, mesh, SimulationParameters::solverStepForwardFullStep, true);
             sh.build(mesh, mesh.averageEdgeLength);
         }
         cout << "new_alpha:";
@@ -2202,69 +2212,69 @@ int IPC_Solver(int& stepId, mesh3D& mesh, SpatialHash& sh, Ground& gd) {
     mesh.V_prev = mesh.vertexes;
     computeXTilta(mesh);
 
-    ttime0 += time0;
-    ttime1 += time1;
-    ttime2 += time2;
-    ttime3 += time3;
-    ttime4 += time4;
+    g_solverState.ttime0 += time0;
+    g_solverState.ttime1 += time1;
+    g_solverState.ttime2 += time2;
+    g_solverState.ttime3 += time3;
+    g_solverState.ttime4 += time4;
 
     std::cout << "                                                finished a step" << endl;
 
     std::chrono::steady_clock::time_point end = std::chrono::steady_clock::now();
     std::cout << "Time for a step = "
         << std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count() << "[ms]" << std::endl;
-    time_total += std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
+    g_solverState.time_total += std::chrono::duration_cast<std::chrono::milliseconds>(end - begin).count();
 
-    totalCollision += collisonNum;
+    g_solverState.totalCollision += collisonNum;
 
     std::cout << "totalCollision  = "
-        << totalCollision << std::endl;
+        << g_solverState.totalCollision << std::endl;
 
 
     std::cout << "averageCollision  = "
-        << totalCollision / total_iter << std::endl;
+        << g_solverState.totalCollision / g_solverState.total_iter << std::endl;
 
 
     std::cout << "total  = "
-        << time_total << "[ms]" << std::endl;
-    std::cout << "total newton step:" << total_iter << std::endl;
+        << g_solverState.time_total << "[ms]" << std::endl;
+    std::cout << "total newton step:" << g_solverState.total_iter << std::endl;
 
     std::cout << "frame number  = "
-        << step_index++ << std::endl;
+        << g_solverState.step_index++ << std::endl;
 
     ofstream outTime("timeCost.txt");
 
-    outTime << "time0: " << ttime0 / 1000.0 << endl;
-    outTime << "time1: " << ttime1 / 1000.0 << endl;
-    outTime << "time2: " << ttime2 / 1000.0 << endl;
-    outTime << "time3: " << ttime3 / 1000.0 << endl;
-    outTime << "time4: " << ttime4 / 1000.0 << endl;
+    outTime << "time0: " << g_solverState.ttime0 / 1000.0 << endl;
+    outTime << "time1: " << g_solverState.ttime1 / 1000.0 << endl;
+    outTime << "time2: " << g_solverState.ttime2 / 1000.0 << endl;
+    outTime << "time3: " << g_solverState.ttime3 / 1000.0 << endl;
+    outTime << "time4: " << g_solverState.ttime4 / 1000.0 << endl;
 
-    outTime << "timeAll: " << time_total / 1000.0 << endl;
-    outTime << "total iter: " << total_iter << endl;
-    outTime << "frames: " << step_index << endl;
-    outTime << "totalCollisionNum: " << totalCollision << endl;
+    outTime << "timeAll: " << g_solverState.time_total / 1000.0 << endl;
+    outTime << "total iter: " << g_solverState.total_iter << endl;
+    outTime << "frames: " << g_solverState.step_index << endl;
+    outTime << "totalCollisionNum: " << g_solverState.totalCollision << endl;
 
-    outTime << "averageCollision: " << totalCollision / total_iter << endl;
+    outTime << "averageCollision: " << g_solverState.totalCollision / g_solverState.total_iter << endl;
     outTime.close();
 
-    if (step_index % 10 == 0)
+    if (g_solverState.step_index % 10 == 0)
     {
         ofstream outTime2("tempData/timeCost.txt");
-        outTime2 << ttime0 << endl;
-        outTime2 << ttime1 << endl;
-        outTime2 << ttime2 << endl;
-        outTime2 << ttime3 << endl;
-        outTime2 << ttime4 << endl;
-        outTime2 << time_total << endl;
-        outTime2 << total_iter << endl;
-        outTime2 << step_index << endl;
+        outTime2 << g_solverState.ttime0 << endl;
+        outTime2 << g_solverState.ttime1 << endl;
+        outTime2 << g_solverState.ttime2 << endl;
+        outTime2 << g_solverState.ttime3 << endl;
+        outTime2 << g_solverState.ttime4 << endl;
+        outTime2 << g_solverState.time_total << endl;
+        outTime2 << g_solverState.total_iter << endl;
+        outTime2 << g_solverState.step_index << endl;
         outTime2 << mesh.Kappa << endl;
         outTime2.close();
         mesh.output_tetTempData();
     }
 
-    //if (step_index == 250) {
+    //if (g_solverState.step_index == 250) {
     //    exit(0);
     //}
     return k;

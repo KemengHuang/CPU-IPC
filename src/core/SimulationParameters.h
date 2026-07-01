@@ -42,8 +42,16 @@ struct SimulationParameters {
     // Newton solver convergence: tolerance factor inside sqrt(...)
     static constexpr double newtonConvergenceTolFactor = 1e-4;
 
-    // Line search: lower-bound fraction of the feasible step size
-    static constexpr double lineSearchMinFraction = 1e-3;
+    // Line search parameters
+    static constexpr double lineSearchMinStepFactor = 1e-3;   // lower-bound factor in lineSearch
+    static constexpr double lineSearchInitialStep = 1.0;      // initial step size
+
+    // CCD / CFL parameters
+    static constexpr double ccdCFLFactor = 2.0;               // denominator factor in CFL bound
+    static constexpr double ccdPartialToFullRatio = 2.0;      // threshold ratio for partial-vs-full CCD switch
+
+    // Step-forward control
+    static constexpr int solverStepForwardFullStep = 1;       // full-step flag passed to stepForward
 
     // Kappa initialization / bounding
     static constexpr double kappaMaxMassFactor = 1e13;

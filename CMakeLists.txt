@@ -33,7 +33,7 @@ find_package(GLEW REQUIRED)
 add_executable(cipc)
 
 # Configure source files
-set(IPC_SOURCE_DIR "CPU IPC")
+set(IPC_SOURCE_DIR "src")
 
 file(GLOB_RECURSE CIPC_SOURCES
     CONFIGURE_DEPENDS

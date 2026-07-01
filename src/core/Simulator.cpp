@@ -194,20 +194,23 @@ void update_material(mesh3D& mesh3d) {
 
 }
 
-void case1(mesh3D& mesh3d, string asset_dir) {
+bool case1(mesh3D& mesh3d, string asset_dir) {
 
     mesh3d.YoungModulus = 1e6;
     update_material(mesh3d);
-    mesh3d.objMaxConer = Vector3d(0, 0, 0);
-    mesh3d.objMinConer = Vector3d(0, 0, 0);
+    mesh3d.objMaxCorner = Vector3d(0, 0, 0);
+    mesh3d.objMinCorner = Vector3d(0, 0, 0);
 	mesh3d.is_quasi_static = true;
 	mesh3d.apply_gravity = false;
-    mesh3d.load_tetrahedraMesh(asset_dir + "tetrahedraMesh/ipcmesh/mat40x40.msh", 1, Vector3d(0, -0, 0));
+    if (!mesh3d.load_tetrahedraMesh(asset_dir + "tetrahedraMesh/ipcmesh/mat40x40.msh", 1, Vector3d(0, -0, 0))) {
+        std::cerr << "Failed to load tetrahedra mesh in case1" << std::endl;
+        return false;
+    }
 
     const double eps = 1e-4;
     for (int i = 0; i < mesh3d.vertexes.size(); i++)
     {
-        if (mesh3d.vertexes[i][0] < mesh3d.objMinConer[0] + eps || mesh3d.vertexes[i][0] > mesh3d.objMaxConer[0] - eps)
+        if (mesh3d.vertexes[i][0] < mesh3d.objMinCorner[0] + eps || mesh3d.vertexes[i][0] > mesh3d.objMaxCorner[0] - eps)
         {
             mesh3d.boundary_vertexes_indices.push_back(i);
             mesh3d.boundaryTypes[i] = 1;
@@ -234,18 +237,22 @@ void case1(mesh3D& mesh3d, string asset_dir) {
             }
             return moveDir;
         };
+    return true;
 }
 
-void case2(mesh3D& mesh3d, string asset_dir) {
+bool case2(mesh3D& mesh3d, string asset_dir) {
 
     mesh3d.YoungModulus = 1e4;
     update_material(mesh3d);
-    mesh3d.objMaxConer = Vector3d(0, 0, 0);
-    mesh3d.objMinConer = Vector3d(0, 0, 0);
+    mesh3d.objMaxCorner = Vector3d(0, 0, 0);
+    mesh3d.objMinCorner = Vector3d(0, 0, 0);
     //mesh3d.is_quasi_static = true;
     if (true)
     {
-        mesh3d.load_triangleMesh(asset_dir + "triangleMesh/CMU/plane100.obj", 1, Vector3d(0, 0, 0));
+        if (!mesh3d.load_triangleMesh(asset_dir + "triangleMesh/CMU/plane100.obj", 1, Vector3d(0, 0, 0))) {
+            std::cerr << "Failed to load triangle mesh in case2" << std::endl;
+            return false;
+        }
 
         PrepQuadBending(mesh3d);
 
@@ -278,8 +285,12 @@ void case2(mesh3D& mesh3d, string asset_dir) {
         //mesh3d.Constraints[0].setZero();
     }
 
-    mesh3d.load_tetrahedraMesh(asset_dir + "tetrahedraMesh/bunny.msh", 0.5, Vector3d(0, -0.5, 0));
+    if (!mesh3d.load_tetrahedraMesh(asset_dir + "tetrahedraMesh/bunny.msh", 0.5, Vector3d(0, -0.5, 0))) {
+        std::cerr << "Failed to load tetrahedra mesh in case2" << std::endl;
+        return false;
+    }
 
+    return true;
 }
 
 bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
@@ -289,7 +300,9 @@ bool FEMSimulator::buildModels(unsigned int buildType, unsigned int sceneType) {
     mesh3d.maxCorner = Vector3d(-1e32, -1e32, -1e32);
     mesh3d.minCorner = Vector3d(1e32, 1e32, 1e32);
 
-	case2(mesh3d, asset_dir);
+	if (!case2(mesh3d, asset_dir)) {
+		return false;
+	}
 
     mesh3d.vertexNum = mesh3d.vertexes.size();
     mesh3d.tetrahedraNum = mesh3d.tetrahedras.size();

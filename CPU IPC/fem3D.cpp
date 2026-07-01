@@ -1037,6 +1037,15 @@ void initMesh3D(mesh3D &mesh, int type, double scale) {
 
     mesh.meanMass = massSum / mesh.vertexNum;
     printf("meanMass: %f\n", mesh.meanMass);
+
+    mesh.tetPFPX.resize(mesh.DM_tetrahedra_inverse.size());
+    for (size_t i = 0; i < mesh.DM_tetrahedra_inverse.size(); ++i) {
+        mesh.tetPFPX[i] = computePFPX3D_double(mesh.DM_tetrahedra_inverse[i]);
+    }
+    mesh.triPFPX.resize(mesh.DM_triangle_inverse.size());
+    for (size_t i = 0; i < mesh.DM_triangle_inverse.size(); ++i) {
+        mesh.triPFPX[i] = computePFPX32D_double(mesh.DM_triangle_inverse[i]);
+    }
 }
 
 

@@ -545,13 +545,13 @@ void computeEGradient(const mesh3D& mesh, vector<Vector3d>& gradient) {
 
     vector<tbb::spin_mutex> countMutex(mesh.vertexNum);
     tbb::parallel_for(0, mesh.tetrahedraNum, 1, [&](int ii) {
-        MatrixXd PFPX = computePFPX3D_double(mesh.DM_tetrahedra_inverse[ii]);
+        const Eigen::Matrix<double, 9, 12>& PFPX = mesh.tetPFPX[ii];
         MatrixXd F = calculateDms3D_double(mesh.vertexes, mesh.tetrahedras[ii], 0) * mesh.DM_tetrahedra_inverse[ii];
 
         Matrix3d PEPF = computePEPF_StableNHK3D_2_double(F, mesh.lengthRate, mesh.volumeRate);
 
-        MatrixXd pepf = vec_double(PEPF);
-        MatrixXd f = mesh.volum[ii] * PFPX.transpose() * pepf;
+        Eigen::Map<const Eigen::Matrix<double, 9, 1>> pepf(PEPF.data());
+        Eigen::Matrix<double, 12, 1> f = mesh.volum[ii] * PFPX.transpose() * pepf;
 
 
         for (int i = 0; i < 12; i++) {
@@ -585,13 +585,13 @@ static void addInertiaAndDragGradient(mesh3D& mesh, vector<Vector3d>& gradient) 
 static void addTetrahedralElasticityGradientHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessian& BH) {
     vector<tbb::spin_mutex> countMutex(mesh.vertexNum);
     tbb::parallel_for(0, mesh.tetrahedraNum, 1, [&](int ii) {
-        MatrixXd PFPX = computePFPX3D_double(mesh.DM_tetrahedra_inverse[ii]);
+        const Eigen::Matrix<double, 9, 12>& PFPX = mesh.tetPFPX[ii];
         MatrixXd F = calculateDms3D_double(mesh.vertexes, mesh.tetrahedras[ii], 0) * mesh.DM_tetrahedra_inverse[ii];
         //cout << mesh.lengthRate << "   " << mesh.volumeRate << endl;
         Matrix3d PEPF = computePEPF_StableNHK3D_2_double(F, mesh.lengthRate, mesh.volumeRate);
 
-        MatrixXd pepf = vec_double(PEPF);
-        VectorXd f = mesh.volum[ii] * PFPX.transpose() * pepf;
+        Eigen::Map<const Eigen::Matrix<double, 9, 1>> pepf(PEPF.data());
+        Eigen::Matrix<double, 12, 1> f = mesh.volum[ii] * PFPX.transpose() * pepf;
 
         for (int i = 0; i < 4; i++) {
             countMutex[mesh.tetrahedras[ii][i]].lock();
@@ -616,15 +616,15 @@ static void addTriangleShellGradientHessian(mesh3D& mesh, vector<Vector3d>& grad
     vector<tbb::spin_mutex> countMutex(mesh.vertexNum);
     BH.H9x9.resize(mesh.triangleNum);
     tbb::parallel_for(0, mesh.triangleNum, 1, [&](int ii) {
-        MatrixXd PFPX = computePFPX32D_double(mesh.DM_triangle_inverse[ii]);
+        const Eigen::Matrix<double, 6, 9>& PFPX = mesh.triPFPX[ii];
         Matrix<double, 3, 2> F =
             calculateDs32D_double(mesh.vertexes, mesh.triangles[ii]) * mesh.DM_triangle_inverse[ii];
         Vector2d anisotropic_a = Vector2d(1, 0), anisotropic_b = Vector2d(0, 1);
         Matrix<double, 3, 2> PEPF = computePEPF_baraffwitkin_double(F, anisotropic_a, anisotropic_b, mesh.stretchStiffness,
             mesh.shearStiffness, mesh.strainRate);
 
-        MatrixXd pepf = vec_double(PEPF);
-        VectorXd f = mesh.IPC_dt * mesh.IPC_dt * mesh.areas[ii] * PFPX.transpose() * pepf;
+        Eigen::Map<const Eigen::Matrix<double, 6, 1>> pepf(PEPF.data());
+        Eigen::Matrix<double, 9, 1> f = mesh.IPC_dt * mesh.IPC_dt * mesh.areas[ii] * PFPX.transpose() * pepf;
 
         for (int i = 0; i < 3; i++) {
             countMutex[mesh.triangles[ii][i]].lock();
@@ -1996,6 +1996,19 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa, float& 
 
         vector<Vector3d> gradient(mesh.vertexNum, Vector3d(0, 0, 0));
         BHessian BH;
+#if defined USE_QUADRATIC_BENDING
+        size_t fem12x12Size = mesh.tetrahedraNum + mesh.quadBendingInfo.size();
+#else
+        size_t fem12x12Size = mesh.tetrahedraNum + mesh.tri_edges.size();
+#endif
+        BH.H3x3.reserve(mesh.Environment_ActiveSet.size() + mesh.Self_ActiveSet.size() * 4);
+        BH.H6x6.reserve(mesh.Self_ActiveSet.size() * 2 + mesh.Self_EE_ActiveSet.size() * 2);
+        BH.H9x9.reserve(mesh.Self_ActiveSet.size() + mesh.Self_EE_ActiveSet.size());
+        BH.H12x12.reserve(fem12x12Size + mesh.Self_ActiveSet.size() + mesh.Self_EE_ActiveSet.size() * 2);
+        BH.D1Index.reserve(mesh.Environment_ActiveSet.size());
+        BH.D2Index.reserve(mesh.Self_EE_ActiveSet.size());
+        BH.D3Index.reserve(mesh.Self_ActiveSet.size());
+        BH.D4Index.reserve(mesh.Self_ActiveSet.size() + mesh.Self_EE_ActiveSet.size());
         timer0.set_start();
         collisionNum += computeGradientAndHessian(mesh, gradient, BH, gd);
 

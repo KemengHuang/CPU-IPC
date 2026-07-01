@@ -174,6 +174,8 @@ public:
 	std::vector<Eigen::Vector3d> velocities;
 	std::vector<Eigen::Matrix3d> DM_tetrahedra_inverse;
 	std::vector<Eigen::Matrix2d> DM_triangle_inverse;
+	std::vector<Eigen::Matrix<double, 9, 12>> tetPFPX;
+	std::vector<Eigen::Matrix<double, 6, 9>> triPFPX;
 	std::vector<Eigen::Vector4i> surface;
 	std::vector<uint64_t> surfVerts;
 	std::vector<std::pair<uint64_t, uint64_t>> surfEdges;

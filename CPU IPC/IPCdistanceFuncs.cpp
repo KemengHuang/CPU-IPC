@@ -3,6 +3,7 @@
 #include <tbb/blocked_range.h>
 #include <tbb/parallel_for.h>
 #include <tbb/spin_mutex.h>
+#include <tbb/task_arena.h>
 #include "ACCD.h"
 #include<iostream>
 using namespace std;
@@ -3032,61 +3033,87 @@ int compute_g_dpt(const mesh3D& mesh,
                   int offset,
                   double coef)
 {
-    int constraintI = offset;
-    int collisonNum = 0;
-    for (const auto& MMCVIDI : activeSet) {
-        if (MMCVIDI[0] >= 0) {
-            // edge-edge
-            Eigen::Matrix<double, 12, 1> g;
-            g_EE(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], g);
-            g *= coef * input[constraintI];
+    int n = static_cast<int>(activeSet.size());
+    if (n == 0) {
+        return 0;
+    }
 
-            output_incremental[MMCVIDI[0]] += g.template segment<3>(0);
-            output_incremental[MMCVIDI[1]] += g.template segment<3>(3);
-            output_incremental[MMCVIDI[2]] += g.template segment<3>(6);
-            output_incremental[MMCVIDI[3]] += g.template segment<3>(9);
-            collisonNum++;
-        }
-        else {
+    int num_chunks = tbb::this_task_arena::max_concurrency();
+    if (num_chunks < 1) num_chunks = 1;
+    if (num_chunks > n) num_chunks = n;
 
-            int v0I = -MMCVIDI[0] - 1;
-            if (MMCVIDI[2] < 0) {
-                // PP
-                Eigen::Matrix<double, 6, 1> g;
-                g_PP(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], g);
-                g *= coef * -MMCVIDI[3] * input[constraintI];
-                collisonNum+=-MMCVIDI[3];
-                output_incremental[v0I] += g.template segment<3>(0);
-                output_incremental[MMCVIDI[1]] += g.template segment<3>(3);
-            }
-            else if (MMCVIDI[3] < 0) {
-                // PE
-                Eigen::Matrix<double, 9, 1> g;
-                g_PE(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], g);
-                g *= coef * -MMCVIDI[3] * input[constraintI];
-                collisonNum+=-MMCVIDI[3];
-                output_incremental[v0I] += g.template segment<3>(0);
-                output_incremental[MMCVIDI[1]] += g.template segment<3>(3);
-                output_incremental[MMCVIDI[2]] += g.template segment<3>(6);
-            }
-            else {
-                // PT
+    std::vector<std::vector<Vector3d>> local_grads(num_chunks, std::vector<Vector3d>(mesh.vertexNum, Vector3d::Zero()));
+    std::vector<int> local_collisionNums(num_chunks, 0);
+
+    tbb::parallel_for(0, num_chunks, 1, [&](int chunk_id) {
+        int start = chunk_id * n / num_chunks;
+        int end = (chunk_id + 1) * n / num_chunks;
+        auto& grad_local = local_grads[chunk_id];
+        int& collisonNum = local_collisionNums[chunk_id];
+        int constraintI = offset + start;
+        for (int idx = start; idx < end; ++idx) {
+            const auto& MMCVIDI = activeSet[idx];
+            if (MMCVIDI[0] >= 0) {
+                // edge-edge
                 Eigen::Matrix<double, 12, 1> g;
-                g_PT(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], g);
+                g_EE(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], g);
                 g *= coef * input[constraintI];
 
+                grad_local[MMCVIDI[0]] += g.template segment<3>(0);
+                grad_local[MMCVIDI[1]] += g.template segment<3>(3);
+                grad_local[MMCVIDI[2]] += g.template segment<3>(6);
+                grad_local[MMCVIDI[3]] += g.template segment<3>(9);
                 collisonNum++;
-
-                output_incremental[v0I] += g.template segment<3>(0);
-                output_incremental[MMCVIDI[1]] += g.template segment<3>(3);
-                output_incremental[MMCVIDI[2]] += g.template segment<3>(6);
-                output_incremental[MMCVIDI[3]] += g.template segment<3>(9);
             }
-        }
+            else {
 
-        ++constraintI;
+                int v0I = -MMCVIDI[0] - 1;
+                if (MMCVIDI[2] < 0) {
+                    // PP
+                    Eigen::Matrix<double, 6, 1> g;
+                    g_PP(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], g);
+                    g *= coef * -MMCVIDI[3] * input[constraintI];
+                    collisonNum += -MMCVIDI[3];
+                    grad_local[v0I] += g.template segment<3>(0);
+                    grad_local[MMCVIDI[1]] += g.template segment<3>(3);
+                }
+                else if (MMCVIDI[3] < 0) {
+                    // PE
+                    Eigen::Matrix<double, 9, 1> g;
+                    g_PE(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], g);
+                    g *= coef * -MMCVIDI[3] * input[constraintI];
+                    collisonNum += -MMCVIDI[3];
+                    grad_local[v0I] += g.template segment<3>(0);
+                    grad_local[MMCVIDI[1]] += g.template segment<3>(3);
+                    grad_local[MMCVIDI[2]] += g.template segment<3>(6);
+                }
+                else {
+                    // PT
+                    Eigen::Matrix<double, 12, 1> g;
+                    g_PT(mesh.vertexes[v0I], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], g);
+                    g *= coef * input[constraintI];
+
+                    collisonNum++;
+
+                    grad_local[v0I] += g.template segment<3>(0);
+                    grad_local[MMCVIDI[1]] += g.template segment<3>(3);
+                    grad_local[MMCVIDI[2]] += g.template segment<3>(6);
+                    grad_local[MMCVIDI[3]] += g.template segment<3>(9);
+                }
+            }
+
+            ++constraintI;
+        }
+    });
+
+    int collisionNum = 0;
+    for (int chunk_id = 0; chunk_id < num_chunks; ++chunk_id) {
+        collisionNum += local_collisionNums[chunk_id];
+        for (int vI = 0; vI < mesh.vertexNum; ++vI) {
+            output_incremental[vI] += local_grads[chunk_id][vI];
+        }
     }
-    return collisonNum;
+    return collisionNum;
 }
 
 void compute_g_dee(const mesh3D& mesh,
@@ -3095,42 +3122,65 @@ void compute_g_dee(const mesh3D& mesh,
     Eigen::VectorXd e_db_div_dd;
     Evaluate_SelfEEConstraintVals(mesh, e_db_div_dd, 0);
     //SelfCollisionHandler<dim>::evaluateConstraints(mesh, paraEEMMCVIDSet, e_db_div_dd);
-    for (int cI = 0; cI < e_db_div_dd.size(); ++cI) {
-        double b;
-        compute_b(e_db_div_dd[cI], dHat, b);
-        compute_g_b(e_db_div_dd[cI], dHat, e_db_div_dd[cI]);
 
-        const MMCVID& MMCVIDI = mesh.Self_EE_ActiveSet[cI];
-        double eps_x, e;
-        double coef_b = coef * b;
-        if (MMCVIDI[3] >= 0) {
-            // EE
-            compute_eps_x(mesh, MMCVIDI[0], MMCVIDI[1], MMCVIDI[2], MMCVIDI[3], eps_x);
-            compute_e(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], eps_x, e);
+    int n = static_cast<int>(e_db_div_dd.size());
+    if (n == 0) {
+        return;
+    }
 
-            Eigen::Matrix<double, 12, 1> e_g;
-            compute_e_g(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], eps_x, e_g);
-            grad_inc[MMCVIDI[0]] += coef_b * e_g.template segment<3>(0);
-            grad_inc[MMCVIDI[1]] += coef_b * e_g.template segment<3>(3);
-            grad_inc[MMCVIDI[2]] += coef_b * e_g.template segment<3>(6);
-            grad_inc[MMCVIDI[3]] += coef_b * e_g.template segment<3>(9);
+    int num_chunks = tbb::this_task_arena::max_concurrency();
+    if (num_chunks < 1) num_chunks = 1;
+    if (num_chunks > n) num_chunks = n;
+
+    std::vector<std::vector<Vector3d>> local_grads(num_chunks, std::vector<Vector3d>(mesh.vertexNum, Vector3d::Zero()));
+
+    tbb::parallel_for(0, num_chunks, 1, [&](int chunk_id) {
+        int start = chunk_id * n / num_chunks;
+        int end = (chunk_id + 1) * n / num_chunks;
+        auto& grad_local = local_grads[chunk_id];
+        for (int cI = start; cI < end; ++cI) {
+            double b;
+            compute_b(e_db_div_dd[cI], dHat, b);
+            compute_g_b(e_db_div_dd[cI], dHat, e_db_div_dd[cI]);
+
+            const MMCVID& MMCVIDI = mesh.Self_EE_ActiveSet[cI];
+            double eps_x, e;
+            double coef_b = coef * b;
+            if (MMCVIDI[3] >= 0) {
+                // EE
+                compute_eps_x(mesh, MMCVIDI[0], MMCVIDI[1], MMCVIDI[2], MMCVIDI[3], eps_x);
+                compute_e(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], eps_x, e);
+
+                Eigen::Matrix<double, 12, 1> e_g;
+                compute_e_g(mesh.vertexes[MMCVIDI[0]], mesh.vertexes[MMCVIDI[1]], mesh.vertexes[MMCVIDI[2]], mesh.vertexes[MMCVIDI[3]], eps_x, e_g);
+                grad_local[MMCVIDI[0]] += coef_b * e_g.template segment<3>(0);
+                grad_local[MMCVIDI[1]] += coef_b * e_g.template segment<3>(3);
+                grad_local[MMCVIDI[2]] += coef_b * e_g.template segment<3>(6);
+                grad_local[MMCVIDI[3]] += coef_b * e_g.template segment<3>(9);
+            }
+            else {
+                // PP or PE
+                const std::pair<int, int>& eIeJ = mesh.Self_EEeIe_ActiveSet[cI];//paraEEeIeJSet[cI];
+                const std::pair<int, int>& eI = mesh.surfEdges[eIeJ.first];
+                const std::pair<int, int>& eJ = mesh.surfEdges[eIeJ.second];
+                compute_eps_x(mesh, eI.first, eI.second, eJ.first, eJ.second, eps_x);
+                compute_e(mesh.vertexes[eI.first], mesh.vertexes[eI.second], mesh.vertexes[eJ.first], mesh.vertexes[eJ.second], eps_x, e);
+
+                Eigen::Matrix<double, 12, 1> e_g;
+                compute_e_g(mesh.vertexes[eI.first], mesh.vertexes[eI.second], mesh.vertexes[eJ.first], mesh.vertexes[eJ.second], eps_x, e_g);
+                grad_local[eI.first] += coef_b * e_g.template segment<3>(0);
+                grad_local[eI.second] += coef_b * e_g.template segment<3>(3);
+                grad_local[eJ.first] += coef_b * e_g.template segment<3>(6);
+                grad_local[eJ.second] += coef_b * e_g.template segment<3>(9);
+            }
+            e_db_div_dd[cI] *= e;
         }
-        else {
-            // PP or PE
-            const std::pair<int, int>& eIeJ = mesh.Self_EEeIe_ActiveSet[cI];//paraEEeIeJSet[cI];
-            const std::pair<int, int>& eI = mesh.surfEdges[eIeJ.first];
-            const std::pair<int, int>& eJ = mesh.surfEdges[eIeJ.second];
-            compute_eps_x(mesh, eI.first, eI.second, eJ.first, eJ.second, eps_x);
-            compute_e(mesh.vertexes[eI.first], mesh.vertexes[eI.second], mesh.vertexes[eJ.first], mesh.vertexes[eJ.second], eps_x, e);
+    });
 
-            Eigen::Matrix<double, 12, 1> e_g;
-            compute_e_g(mesh.vertexes[eI.first], mesh.vertexes[eI.second], mesh.vertexes[eJ.first], mesh.vertexes[eJ.second], eps_x, e_g);
-            grad_inc[eI.first] += coef_b * e_g.template segment<3>(0);
-            grad_inc[eI.second] += coef_b * e_g.template segment<3>(3);
-            grad_inc[eJ.first] += coef_b * e_g.template segment<3>(6);
-            grad_inc[eJ.second] += coef_b * e_g.template segment<3>(9);
+    for (int chunk_id = 0; chunk_id < num_chunks; ++chunk_id) {
+        for (int vI = 0; vI < mesh.vertexNum; ++vI) {
+            grad_inc[vI] += local_grads[chunk_id][vI];
         }
-        e_db_div_dd[cI] *= e;
     }
     //printf("%d\n", 3);
     compute_g_dpt(mesh, mesh.Self_EE_ActiveSet, e_db_div_dd, grad_inc, 0, coef);

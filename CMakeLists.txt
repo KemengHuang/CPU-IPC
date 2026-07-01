@@ -38,6 +38,7 @@ option(CIPC_USE_SNK "Use Stable Neo-Hookean (SNK) elasticity model" ON)
 option(CIPC_USE_FRICTION "Enable friction support" ON)
 option(CIPC_USE_QUADRATIC_BENDING "Enable quadratic bending energy" ON)
 option(CIPC_USE_NEWBARRIER "Use the new log-barrier formulation (NEWB)" OFF)
+option(CIPC_BUILD_TESTS "Build optional unit/verification tests" OFF)
 
 # ------------------------------------------------------------------------------
 # Custom find modules
@@ -65,6 +66,7 @@ file(GLOB_RECURSE CIPC_SOURCES
     CONFIGURE_DEPENDS
     "${CIPC_SOURCE_DIR}/*.cpp"
 )
+list(FILTER CIPC_SOURCES EXCLUDE REGEX "_test\\.cpp$")
 
 file(GLOB_RECURSE CIPC_HEADERS
     CONFIGURE_DEPENDS
@@ -168,4 +170,22 @@ message(STATUS "  - USE_SNK: ${CIPC_USE_SNK}")
 message(STATUS "  - USE_FRICTION: ${CIPC_USE_FRICTION}")
 message(STATUS "  - USE_QUADRATIC_BENDING: ${CIPC_USE_QUADRATIC_BENDING}")
 message(STATUS "  - USE_NEWBARRIER: ${CIPC_USE_NEWBARRIER}")
+message(STATUS "  - BUILD_TESTS: ${CIPC_BUILD_TESTS}")
 message(STATUS "===============================================================")
+
+# ------------------------------------------------------------------------------
+# Optional verification tests
+# ------------------------------------------------------------------------------
+if(CIPC_BUILD_TESTS)
+    add_executable(bvh_test src/collision/BVH_test.cpp)
+    set_target_properties(bvh_test PROPERTIES
+        CXX_STANDARD 14
+        CXX_STANDARD_REQUIRED ON
+        CXX_EXTENSIONS OFF
+    )
+    target_include_directories(bvh_test PRIVATE
+        "${CIPC_SOURCE_DIR}"
+        "${CMAKE_CURRENT_SOURCE_DIR}"
+    )
+    target_link_libraries(bvh_test PRIVATE Eigen3::Eigen)
+endif()

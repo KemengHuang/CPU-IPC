@@ -1,4 +1,5 @@
 #include "IPCtimeStepFuns.h"
+#include "SimulationParameters.h"
 #include <complex>
 #include <tbb/parallel_for.h>
 using namespace std;
@@ -126,7 +127,7 @@ void computeInjectiveStepSize_3d(const std::vector<Vector4i>& F,
 
 void filterStepSize(const mesh3D& mesh, const std::vector<Eigen::Vector3d>& searchDir, double& stepSize) {
     Eigen::VectorXd output(mesh.tetrahedraNum);
-    computeInjectiveStepSize_3d(mesh.tetrahedras, mesh.vertexes, searchDir, 1.0e-6, 0.2, output.data());
+    computeInjectiveStepSize_3d(mesh.tetrahedras, mesh.vertexes, searchDir, 1.0e-6, SimulationParameters::CCDDistRatio, output.data());
     double tentativeStepSize = output.minCoeff();
     if ((tentativeStepSize > 0.0) && (tentativeStepSize < stepSize)) {
         stepSize = tentativeStepSize;

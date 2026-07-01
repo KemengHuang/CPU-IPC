@@ -1,1 +1,9 @@
-build
+build/
+saveSurface/
+saveScreen/
+tempData/
+Output/
+timeCost.txt
+*.user
+*.suo
+.vs/

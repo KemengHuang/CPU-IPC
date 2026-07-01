@@ -2,6 +2,7 @@
 #include "GL/freeglut.h"
 #include <fstream>
 #include <iostream>
+#include <string>
 #include "fem3D.h"
 #include "fem_timer.h"
 #include "Simulator.h"
@@ -451,12 +452,11 @@ void display(void) {
     }
 }
 
-void initScene0() {
+void initScene() {
     simulator.buildModels(0, 3);
 }
 
-
-void init(void)
+void initGL()
 {
     GLenum err = glewInit();
     if (GLEW_OK != err)
@@ -466,8 +466,12 @@ void init(void)
     }
     std::cerr << "Status: Using GLEW " << glewGetString(GLEW_VERSION) << std::endl;
     glClearColor(0.0, 0.0, 0.0, 1.0);
+}
 
-    initScene0();
+void init(void)
+{
+    initGL();
+    initScene();
 
     if (!isSetShader) {
         glViewport(0, 0, window_width, window_height);
@@ -483,6 +487,19 @@ void init(void)
         glGenVertexArrays(1, &VAO);
     }
     //glEnable(GL_DEPTH_TEST);
+}
+
+int runHeadlessSimulation(int frameCount) {
+    initScene();
+    for (int step = 0; step < frameCount; ++step) {
+        int k = simulator.simulateStick(step);
+        if (saveSurface) {
+            saveSurfaceMesh("saveSurface/surf_");
+        }
+        printf("current step:  %d\n", step);
+        newtonIt.push_back(k);
+    }
+    return 0;
 }
 
 
@@ -644,6 +661,24 @@ void motion_func(int x, int y)
 
 int main(int argc, char** argv)
 {
+    int headlessFrames = 0;
+    bool headless = false;
+    for (int i = 1; i < argc; ++i) {
+        if ((string(argv[i]) == "--headless" || string(argv[i]) == "-headless") && i + 1 < argc) {
+            headless = true;
+            headlessFrames = std::atoi(argv[i + 1]);
+            ++i;
+        }
+    }
+
+    if (headless) {
+        // In headless regression mode default to saving surfaces so the run
+        // produces verifiable output. saveSurface can still be toggled if a
+        // future flag is added.
+        saveSurface = true;
+        return runHeadlessSimulation(headlessFrames);
+    }
+
     glutInit(&argc, argv);
 
     glutSetOption(GLUT_MULTISAMPLE, 16);

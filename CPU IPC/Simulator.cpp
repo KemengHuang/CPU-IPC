@@ -1,5 +1,6 @@
 #include "fem_parameters.h"
 #include "Simulator.h"
+#include "SimulationParameters.h"
 #include "iostream"
 #include "Eigen/Eigen"
 #include <fstream>
@@ -93,29 +94,29 @@ void PrepQuadBending(mesh3D& mesh)
 
 void DefaultSettings(mesh3D& mesh3d) {
 
-    mesh3d.density = 1e3;
-    mesh3d.cloth_density = 1e2;
-    mesh3d.clothThicness = 1e-3;
+    mesh3d.density = SimulationParameters::defaultDensity;
+    mesh3d.cloth_density = SimulationParameters::defaultClothDensity;
+    mesh3d.clothThicness = SimulationParameters::defaultClothThickness;
 
     mesh3d.use_barrier = 1;
-    mesh3d.IPC_dt = 1 / 240.; // 240 fps
+    mesh3d.IPC_dt = SimulationParameters::defaultDt; // 240 fps
 
-    mesh3d.drag_coeff = 0.00;
-    mesh3d.Hhat = 9e-8;
+    mesh3d.drag_coeff = SimulationParameters::defaultDragCoefficient;
+    mesh3d.Hhat = SimulationParameters::defaultHhat;
 
-    mesh3d.Fhat = 1e-6;
-    mesh3d.Kappa = 0;
-    mesh3d.dTol = 1e-18;
+    mesh3d.Fhat = SimulationParameters::defaultFhat;
+    mesh3d.Kappa = SimulationParameters::defaultKappa;
+    mesh3d.dTol = SimulationParameters::defaultDTol;
 
-    mesh3d.YoungModulus = 1e4;
-    mesh3d.PoissonRate = 0.49;
-    mesh3d.friction = 0.5;
+    mesh3d.YoungModulus = SimulationParameters::defaultYoungModulus;
+    mesh3d.PoissonRate = SimulationParameters::defaultPoissonRate;
+    mesh3d.friction = SimulationParameters::defaultFrictionCoefficient;
 
-    mesh3d.clothYoungModulus = 1e4;
-    mesh3d.bendYoungModulus = 1e6;
-    mesh3d.strainRate = 1e2;
+    mesh3d.clothYoungModulus = SimulationParameters::defaultClothYoungModulus;
+    mesh3d.bendYoungModulus = SimulationParameters::defaultBendYoungModulus;
+    mesh3d.strainRate = SimulationParameters::defaultStrainRate;
 
-    mesh3d.Newton_Solver_Threshold = 1e-2;
+    mesh3d.Newton_Solver_Threshold = SimulationParameters::defaultNewtonSolverThreshold;
 
     mesh3d.lengthRateLame = mesh3d.YoungModulus / (2 * (1 + mesh3d.PoissonRate));
     mesh3d.volumeRateLame = mesh3d.YoungModulus * mesh3d.PoissonRate / ((1 + mesh3d.PoissonRate) * (1 - 2 * mesh3d.PoissonRate));
@@ -141,9 +142,9 @@ void LoadSettings(mesh3D& mesh3d) {
     if (successfulRead = infile.is_open())
     {
         char ignoreToken[256];
-        mesh3d.Fhat = 1e-6;
-        mesh3d.Kappa = 0;
-        mesh3d.dTol = 1e-18;
+        mesh3d.Fhat = SimulationParameters::defaultFhat;
+        mesh3d.Kappa = SimulationParameters::defaultKappa;
+        mesh3d.dTol = SimulationParameters::defaultDTol;
 
         // global settings:
         infile >> ignoreToken >> mesh3d.density;

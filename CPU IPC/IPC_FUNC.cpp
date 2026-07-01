@@ -12,6 +12,7 @@
 #include <chrono>
 #include "FrictionUtils.hpp"
 #include "Solver.h"
+#include "SimulationParameters.h"
 #include <assert.h>
 
 
@@ -513,7 +514,7 @@ void compute_fiction_hessian(mesh3D& mesh, const Ground& grd, BHessian& BH, doub
 
 void computeXTilta(mesh3D& mesh) {
     mesh.xTilta.resize(mesh.vertexes.size());
-	double gravity = -9.8;
+	double gravity = SimulationParameters::gravityMagnitude;
     if(!mesh.apply_gravity) {
         gravity = 0;
 	}
@@ -565,11 +566,10 @@ void computeEGradient(const mesh3D& mesh, vector<Vector3d>& gradient) {
     );
 }
 
-int computeGradientAndHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessian& BH, const Ground& grd) {
+static void addInertiaAndDragGradient(mesh3D& mesh, vector<Vector3d>& gradient) {
     //calculate inertial gradient
     Matrix3d massM;
     massM.setIdentity();
-    int collisionNum = 0;
     tbb::parallel_for(0, mesh.vertexNum, 1, [&](int vI) {
         gradient[vI] = (mesh.masses[vI] * massM * (mesh.vertexes[vI] - mesh.xTilta[vI]));
         }
@@ -580,14 +580,9 @@ int computeGradientAndHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessian
         }
 
     );
+}
 
-#if defined USE_QUADRATIC_BENDING
-    BH.H12x12.resize(mesh.tetrahedraNum + mesh.quadBendingInfo.size());
-#else
-    BH.H12x12.resize(mesh.tetrahedraNum + mesh.tri_edges.size());
-#endif
-
-    //calculate FEM gradient and hessian for tetrahedra mesh
+static void addTetrahedralElasticityGradientHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessian& BH) {
     vector<tbb::spin_mutex> countMutex(mesh.vertexNum);
     tbb::parallel_for(0, mesh.tetrahedraNum, 1, [&](int ii) {
         MatrixXd PFPX = computePFPX3D_double(mesh.DM_tetrahedra_inverse[ii]);
@@ -615,7 +610,10 @@ int computeGradientAndHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessian
 
     );
     BH.D4Index = mesh.tetrahedras;
-    //calculate FEM gradient and hessian for triangle mesh
+}
+
+static void addTriangleShellGradientHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessian& BH) {
+    vector<tbb::spin_mutex> countMutex(mesh.vertexNum);
     BH.H9x9.resize(mesh.triangleNum);
     tbb::parallel_for(0, mesh.triangleNum, 1, [&](int ii) {
         MatrixXd PFPX = computePFPX32D_double(mesh.DM_triangle_inverse[ii]);
@@ -645,7 +643,10 @@ int computeGradientAndHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessian
 
     );
     BH.D3Index = mesh.triangles;
-    int offset = mesh.tetrahedraNum;
+}
+
+static void addBendingGradientHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessian& BH) {
+    vector<tbb::spin_mutex> countMutex(mesh.vertexNum);
 
 #if defined USE_QUADRATIC_BENDING
     size_t bendingInfoSize = mesh.quadBendingInfo.size();
@@ -708,6 +709,7 @@ int computeGradientAndHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessian
 
     BH.D4Index.insert(BH.D4Index.end(), bendIndexes.begin(), bendIndexes.end());
 #else
+    int offset = mesh.tetrahedraNum;
     vector<Vector4i> bendIndexes(mesh.tri_edges.size());
     //bending
     //for (int idx = 0;idx < mesh.tri_edges.size();idx++)
@@ -770,11 +772,12 @@ int computeGradientAndHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessian
 
     BH.D4Index.insert(BH.D4Index.end(), bendIndexes.begin(), bendIndexes.end());
 #endif
+}
 
-
+static void addGroundBarrierGradientHessian(mesh3D& mesh, const Ground& grd, vector<Vector3d>& gradient, BHessian& BH) {
     //calculate barrier gradient and hessian for the ground plane collision
     VectorXd constraintVals;
-    offset = 0;
+    int offset = 0;
     Evaluate_GroundConstraintVals(grd, mesh, constraintVals, offset);
     Matrix3d nnT = grd.normal * grd.normal.transpose();
 
@@ -796,22 +799,24 @@ int computeGradientAndHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessian
         }
         }
     );
+}
 
-    offset = constraintVals.size();
-    //cout << "self c num:";
-    //cout << constraintVals.size() << endl;
-    Evaluate_SelfPTConstraintVals(mesh, constraintVals, offset);
+static int addSelfContactGradientHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessian& BH) {
+    int collisionNum = 0;
 
-    tbb::parallel_for(offset, (int)constraintVals.size(), 1, [&](int cI)
+    VectorXd constraintVals;
+    Evaluate_SelfPTConstraintVals(mesh, constraintVals, 0);
+
+    tbb::parallel_for(0, (int)constraintVals.size(), 1, [&](int cI)
         //for (int cI = offset; cI < constraintVals.size(); ++cI)
         {
             compute_g_b(constraintVals[cI], mesh.Hhat, constraintVals[cI]);
         }
     );
 #ifndef NEWB
-    collisionNum += compute_g_dpt(mesh, mesh.Self_ActiveSet, constraintVals, gradient, offset, mesh.Kappa);
+    collisionNum += compute_g_dpt(mesh, mesh.Self_ActiveSet, constraintVals, gradient, 0, mesh.Kappa);
 #else
-    compute_g_dpt_new(mesh, mesh.Self_ActiveSet, constraintVals, gradient, offset, mesh.Kappa, mesh.Hhat);
+    compute_g_dpt_new(mesh, mesh.Self_ActiveSet, constraintVals, gradient, 0, mesh.Kappa, mesh.Hhat);
 #endif
 
     compute_g_dee(mesh, gradient, mesh.Hhat, mesh.Kappa);
@@ -823,10 +828,32 @@ int computeGradientAndHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessian
 #endif
     compute_H_dee(mesh, BH, mesh.Hhat, mesh.Kappa);
 
+    return collisionNum;
+}
+
+static void addFrictionGradientHessian(mesh3D& mesh, const Ground& grd, vector<Vector3d>& gradient, BHessian& BH) {
 #ifdef USE_FRICTION
     compute_fiction_gradient(mesh, grd, gradient, mesh.Fhat * mesh.IPC_dt * mesh.IPC_dt, mesh.friction);
     compute_fiction_hessian(mesh, grd, BH, mesh.Fhat * mesh.IPC_dt * mesh.IPC_dt, mesh.friction);
 #endif
+}
+
+int computeGradientAndHessian(mesh3D& mesh, vector<Vector3d>& gradient, BHessian& BH, const Ground& grd) {
+    addInertiaAndDragGradient(mesh, gradient);
+
+#if defined USE_QUADRATIC_BENDING
+    BH.H12x12.resize(mesh.tetrahedraNum + mesh.quadBendingInfo.size());
+#else
+    BH.H12x12.resize(mesh.tetrahedraNum + mesh.tri_edges.size());
+#endif
+
+    addTetrahedralElasticityGradientHessian(mesh, gradient, BH);
+    addTriangleShellGradientHessian(mesh, gradient, BH);
+    addBendingGradientHessian(mesh, gradient, BH);
+    addGroundBarrierGradientHessian(mesh, grd, gradient, BH);
+    int collisionNum = addSelfContactGradientHessian(mesh, gradient, BH);
+    addFrictionGradientHessian(mesh, grd, gradient, BH);
+
     return collisionNum;
 }
 
@@ -1667,7 +1694,7 @@ bool lineSearch(mesh3D& mesh,
 
     int numOfLineSearch = 0;
     double LFStepSize = stepSize;
-    while ((testingE > lastEnergyVal + stepSize * c1m) && (stepSize > 1e-3 *
+    while ((testingE > lastEnergyVal + stepSize * c1m) && (stepSize > SimulationParameters::lineSearchMinFraction *
         LFStepSize)) {
 
         printf("ls iteration id:  %d,  testingE:  %f       lastEnergyVal:   %f\n", numOfLineSearch, testingE, lastEnergyVal);
@@ -1713,14 +1740,14 @@ bool lineSearch(mesh3D& mesh,
 void suggestKappa(double& kappa, const double& Hhat, const double& bboxDiagSize2, const double& meanMass) {
     double H_b;
     compute_H_b(1.0e-16 * bboxDiagSize2, Hhat, H_b);
-    kappa = 1e13 * meanMass / (4.0e-16 * bboxDiagSize2 * H_b);
+    kappa = SimulationParameters::kappaMaxMassFactor * meanMass / (4.0e-16 * bboxDiagSize2 * H_b);
 }
 
 void upperBoundKappa(double& kappa, const double& Hhat, const double& bboxDiagSize2, const double& meanMass) {
     double H_b;
     //double bboxDiagSize2 = (maxCorner - minCorner).squaredNorm();
     compute_H_b(1.0e-16 * bboxDiagSize2, Hhat, H_b);
-    double kappaMax = 100 * 1e13 * meanMass / (4.0e-16 * bboxDiagSize2 * H_b);
+    double kappaMax = SimulationParameters::kappaUpperBoundFactor * SimulationParameters::kappaMaxMassFactor * meanMass / (4.0e-16 * bboxDiagSize2 * H_b);
     if (kappa > kappaMax) {
         kappa = kappaMax;
     }
@@ -1893,8 +1920,72 @@ double calculate_distToOpt_PN(const vector<Vector3d>& moveDir) {
     return distToOpt_PN;
 }
 
+static bool hasConverged(const mesh3D& mesh, const vector<Vector3d>& moveDir) {
+    double distToOpt_PN = calculate_distToOpt_PN(moveDir);
+    bool gradVanish = (distToOpt_PN < sqrt(SimulationParameters::newtonConvergenceTolFactor * mesh.bboxDiagSize2 * mesh.IPC_dt * mesh.IPC_dt));
+    return gradVanish;
+}
+
+static bool computeNewtonDirection(mesh3D& mesh, BHessian& BH, vector<Vector3d>& gradient, vector<Vector3d>& moveDir) {
+    calculateMovingDirection(mesh, BH, gradient, moveDir);
+    return true;
+}
+
+static double computeFeasibleStepSize(mesh3D& mesh, SpatialHash& sh, Ground& gd, vector<Vector3d>& moveDir) {
+    double alpha = 1.0;
+    double slackness_a = SimulationParameters::environmentSlackness;
+    double slackness_m = SimulationParameters::selfContactSlackness;
+
+    //filterStepSize(mesh, moveDir, alpha);
+
+    Environment_largestFeasibleStepSize(mesh, gd, moveDir, slackness_a, alpha);
+
+    if (alpha <= 0) {
+        alpha = 1;
+    }
+    std::vector<std::pair<int, int>> newCandidates;
+
+    if (mesh.use_barrier) {
+
+        Self_largestFeasibleStepSize(mesh, sh, moveDir, slackness_m, newCandidates, alpha);
+
+        double partialCCD_alpha = alpha;
+
+        Eigen::VectorXd pMag(mesh.surfVerts.size());
+        for (int i = 0; i < pMag.size(); ++i) {
+            int surfId = mesh.surfVerts[i];
+            pMag[i] = moveDir[surfId].norm();
+        }
+        double alpha_CFL = std::sqrt(mesh.Hhat) / (pMag.maxCoeff() * 2.0);
+
+        double fullCCD_alpha = alpha;
+        sh.build(mesh, moveDir, fullCCD_alpha, mesh.averageEdgeLength);
+        Self_largestFeasibleStepSize_CCD(mesh, sh, moveDir, slackness_m, fullCCD_alpha);
+
+        alpha = min(alpha, alpha_CFL);
+
+        if (partialCCD_alpha > 2 * alpha_CFL) {
+            alpha = min(partialCCD_alpha, fullCCD_alpha * 1.0);
+            alpha = max(alpha, alpha_CFL);
+        }
+    }
+
+    return alpha;
+}
+
+static bool performLineSearch(mesh3D& mesh, SpatialHash& sh, Ground& gd, vector<Vector3d>& moveDir, vector<Vector3d>& gradient, double& alpha, double Kappa) {
+    double alpha_feasible = alpha;
+
+    bool isStop = lineSearch(mesh, sh, gd, moveDir, gradient, alpha, 0, 0, Kappa);
+    return isStop;
+}
+
+static void finalizeNewtonStep(mesh3D& mesh, double alpha, double& totalTimeStep, vector<Vector3d>& moveDir) {
+    totalTimeStep += alpha;
+}
+
 int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa, float& time0, float& time1, float& time2, float& time3, float& time4, double& collisionNum) {
-    int iterCap = 10000, k = 0;
+    int iterCap = SimulationParameters::newtonIterCap, k = 0;
 
     vector<Vector3d> moveDir(mesh.vertexNum, Vector3d(0, 0, 0));
 
@@ -1911,62 +2002,21 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa, float& 
         timer0.set_end();
         timer1.set_start();
 
-        double distToOpt_PN = 0;
-
-        distToOpt_PN = calculate_distToOpt_PN(moveDir);
-
-        bool gradVanish = (distToOpt_PN < sqrt(1e-4 * mesh.bboxDiagSize2 * mesh.IPC_dt * mesh.IPC_dt));
-        if (k && gradVanish/* && totalTimeStep > 1 - 1e-3*/) {
+        if (k && hasConverged(mesh, moveDir)/* && totalTimeStep > 1 - 1e-3*/) {
             break;
         }
 
-        calculateMovingDirection(mesh, BH, gradient, moveDir);
+        computeNewtonDirection(mesh, BH, gradient, moveDir);
 
         timer1.set_end();
         timer2.set_start();
 
-        double alpha = 1.0, slackness_a = 0.8, slackness_m = 0.8;
-
-        //filterStepSize(mesh, moveDir, alpha);
-
-        Environment_largestFeasibleStepSize(mesh, gd, moveDir, slackness_a, alpha);
-
-        if (alpha <= 0) {
-            alpha = 1;
-        }
-        std::vector<std::pair<int, int>> newCandidates;
-
-        if (mesh.use_barrier) {
-
-            Self_largestFeasibleStepSize(mesh, sh, moveDir, slackness_m, newCandidates, alpha);
-
-            double partialCCD_alpha = alpha;
-
-            Eigen::VectorXd pMag(mesh.surfVerts.size());
-            for (int i = 0; i < pMag.size(); ++i) {
-                int surfId = mesh.surfVerts[i];
-                pMag[i] = moveDir[surfId].norm();
-            }
-            double alpha_CFL = std::sqrt(mesh.Hhat) / (pMag.maxCoeff() * 2.0);
-
-            double fullCCD_alpha = alpha;
-            sh.build(mesh, moveDir, fullCCD_alpha, mesh.averageEdgeLength);
-            Self_largestFeasibleStepSize_CCD(mesh, sh, moveDir, slackness_m, fullCCD_alpha);
-
-            alpha = min(alpha, alpha_CFL);
-
-            if (partialCCD_alpha > 2 * alpha_CFL) {
-                alpha = min(partialCCD_alpha, fullCCD_alpha * 1.0);
-                alpha = max(alpha, alpha_CFL);
-            }
-        }
+        double alpha = computeFeasibleStepSize(mesh, sh, gd, moveDir);
 
         timer2.set_end();
         timer3.set_start();
 
-        double alpha_feasible = alpha;
-
-        bool isStop = lineSearch(mesh, sh, gd, moveDir, gradient, alpha, 0, 0, Kappa);
+        bool isStop = performLineSearch(mesh, sh, gd, moveDir, gradient, alpha, Kappa);
         timer3.set_end();
         timer4.set_start();
         postLineSearch(mesh, gd, alpha, Kappa);
@@ -1984,7 +2034,7 @@ int solve_subIP(mesh3D& mesh, SpatialHash& sh, Ground& gd, double Kappa, float& 
         time2 += time22;
         time3 += time33;
         time4 += time44;
-        totalTimeStep += alpha;
+        finalizeNewtonStep(mesh, alpha, totalTimeStep, moveDir);
         //printf("time0 = %f,  time1 = %f,  time2 = %f,  time3 = %f,  time4 = %f\n", time00, time11, time22, time33, time44);
     }
     printf("newton iteration:  %d    and    Kappa:  %f\n", k, mesh.Kappa);

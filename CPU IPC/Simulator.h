@@ -5,7 +5,8 @@
 
 enum class SimulationScene {
     TwistingMat,
-    ClothOverBunny
+    ClothOverBunny,
+    Bunny2
 };
 
 struct SimulationOptions {

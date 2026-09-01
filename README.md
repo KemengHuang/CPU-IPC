@@ -14,6 +14,7 @@ The benchmark path is fully headless and records solver-stage timing together wi
 - Reused Newton, energy, sparse-matrix, RHS, and solver workspaces.
 - Block-aware SuiteSparse LDL with reusable symbolic data and a pre-permuted upper CSC numeric path; this is the default CPU solver.
 - Optional CHOLMOD with symbolic-factorization reuse and a verified, cost-aware METIS nested-dissection fallback.
+- Optional oneMKL PARDISO SPD backend with parallel factorization, cross-time-step symbolic reuse, adaptive METIS-permutation refresh, and per-phase metrics.
 - Optional Eigen-CG backend using the same assembled system and boundary handling.
 - Strict energy-decreasing line search, Additive CCD, and the original IPC CFL strategy.
 
@@ -21,6 +22,8 @@ The benchmark path is fully headless and records solver-stage timing together wi
 Windows:
 ```bash
 vcpkg install eigen3 freeglut tbb openblas suitesparse metis
+# Optional parallel PARDISO backend:
+vcpkg install intel-mkl:x64-windows
 ```
 
 Ubuntu:
@@ -51,8 +54,11 @@ The build intentionally contains no test targets or CTest registration.
 | `CIPC_ENABLE_FRICTION` | `ON` | Enable lagged IPC friction. |
 | `CIPC_ENABLE_QUADRATIC_BENDING` | `ON` | Use quadratic isometric bending; set `OFF` for the complete dihedral-hinge model. |
 | `CIPC_ENABLE_METIS_ORDERING` | `ON` | Require CHOLMOD Partition/METIS support and allow CHOLMOD's fill/work heuristic to select METIS after AMD; set `OFF` for AMD-only ordering. |
+| `CIPC_ENABLE_PARDISO` | `ON` | Build the oneMKL PARDISO backend when an MKL CMake package is available; otherwise keep the other solvers available. |
 
 With METIS ordering enabled, configuration fails early unless the installed CHOLMOD exports the Partition functionality and `cholmod_metis` is linkable. The local SuiteSparse finder accepts `METIS::METIS`, `METIS::metis`, vcpkg's un-namespaced `metis` target, conventional `metis.h + libmetis` installations, and CHOLMOD builds with embedded Partition support. It also selects matching Debug/Release SuiteSparse libraries for multi-configuration builds.
+
+PARDISO uses oneMKL's static LP64/TBB threading layer in Release-family configurations. If oneMKL is absent, configuration succeeds but selecting `--linear-solver pardiso` reports that the backend is unavailable. The Windows oneMKL static package uses the Release CRT, so MSVC Debug builds deliberately exclude only PARDISO while retaining the rest of the project; use Release or RelWithDebInfo for PARDISO benchmarking. Static oneMKL also increases the headless executable to about 74.0 MB (70.6 MiB) on the measured setup.
 
 Headless-only non-quadratic build:
 
@@ -82,6 +88,7 @@ Headless:
 build/Release/cipc_headless --scene cloth-bunny --steps 20 --broad-phase lbvh --output Output/run
 build/Release/cipc_headless --scene cloth-bunny --steps 20 --linear-solver cholmod --no-output
 build/Release/cipc_headless --scene twisting-mat --steps 1 --linear-solver eigen-cg --no-output
+build/Release/cipc_headless --scene bunny2 --steps 1 --linear-solver pardiso --pardiso-threads 16 --no-output
 python scripts/benchmark.py --exe build/Release/cipc_headless.exe --repeats 5 --steps 20
 ```
 
@@ -91,9 +98,11 @@ Scene construction is fresh by default. Checkpoint loading and writing are opt-i
 
 The CPU LBVH broad phase is the default; use `--broad-phase spatial-hash` for the optimized legacy backend.
 
-SuiteSparse LDL is the default Newton linear solver. It orders the matrix on the mesh's natural 3-DOF vertex blocks, explicitly permutes and caches an upper-triangular CSC pattern, and updates only numeric values while that pattern is unchanged. CHOLMOD remains available through `--linear-solver cholmod`, including its cost-aware AMD/METIS policy. Eigen conjugate gradient with incomplete-Cholesky preconditioning remains available through `--linear-solver eigen-cg`. All three backends share the same lower-triangular Hessian assembly and boundary handling.
+SuiteSparse LDL is the default Newton linear solver. It orders the matrix on the mesh's natural 3-DOF vertex blocks, explicitly permutes and caches an upper-triangular CSC pattern, and updates only numeric values while that pattern is unchanged. CHOLMOD remains available through `--linear-solver cholmod`, including its cost-aware AMD/METIS policy. When oneMKL is found, `--linear-solver pardiso` provides a parallel SPD direct solver; `--pardiso-threads N` caps its TBB parallelism and 0 uses the oneMKL default. Eigen conjugate gradient with incomplete-Cholesky preconditioning remains available through `--linear-solver eigen-cg`. All four backends share the same lower-triangular Hessian assembly and boundary handling.
 
 On the development machine, alternating paired Release runs reduced five-step wall time by about 5.9% on cloth-bunny and 8.6% on twisting-mat versus the installed non-supernodal CHOLMOD build. These numbers are machine/dependency specific; use `scripts/benchmark.py` to compare locally.
+
+For the larger two-`bunny2` scene (38,386 vertices, 115,158 DOF), one complete time step with three Newton solves had a three-run median of 1.284 s with 16-thread PARDISO, versus 8.253 s with CHOLMOD and 12.568 s with SuiteSparse LDL on the development machine. Here one `--steps 1` means one complete simulation time step/frame, not one Newton iteration. See [`agent_docs/10_pardiso_report.md`](agent_docs/10_pardiso_report.md) for the thread sweep, phase timings, memory, 50-step contact validation, and limitations.
 
 The project deliberately does not require CHOLMOD's GPL supernodal module. If your SuiteSparse build includes it, benchmark `cholmod` separately; its relative performance can differ from the default non-supernodal vcpkg build.
 
@@ -109,18 +118,19 @@ cmake --build build/benchmark --config Release --parallel
 
 python scripts/benchmark.py \
   --exe build/benchmark/Release/cipc_headless.exe \
-  --scene cloth-bunny \
+  --scene bunny2 \
   --broad-phase lbvh \
-  --linear-solver suitesparse-ldl \
-  --steps 20 \
-  --repeats 5
+  --linear-solver pardiso \
+  --pardiso-threads 16 \
+  --steps 1 \
+  --repeats 3
 ```
 
-The benchmark launches independent processes, stores each run under `Output/benchmark/run_NN`, sums per-frame `step_ms`, and reports median/min/max. `metrics.csv` also separates assembly, linear solve, CCD, line search, and post-line-search time while recording Newton iterations, backtracks, accepted step sizes, contact counts, matrix nonzeros, and direct-solver symbolic-analysis/numeric-factorization counts.
+The benchmark launches independent processes, stores each run under `Output/benchmark/run_NN`, sums per-frame `step_ms`, and reports median/min/max. `metrics.csv` also separates assembly, linear solve, CCD, line search, and post-line-search time while recording Newton iterations, backtracks, accepted step sizes, contact counts, matrix nonzeros, and direct-solver symbolic-analysis/numeric-factorization counts. PARDISO runs additionally record phase-11 analysis, phase-22 factorization, phase-33 solve time, effective thread count, and factor nonzeros.
 
 For fair comparisons:
 
-- use the same scene, material file, timestep, bending mode, broad-phase semantics, linear-solver backend, tolerance, METIS-ordering setting, and number of steps;
+- use the same scene, material file, timestep, bending mode, broad-phase semantics, linear-solver backend, tolerance, METIS-ordering setting, PARDISO thread count, and number of time steps;
 - disable checkpoint resume and avoid viewer/rendering work;
 - compare `RESULT` and physical/iteration metrics in addition to wall time;
 - report the median of multiple independent runs, not only the fastest sample;
@@ -146,7 +156,7 @@ D = E * thickness^3 / (12 * (1 - poisson_ratio^2)).
 | `CPU IPC/ContactMechanics.*` | Contact distances, barriers, derivatives, and feasible self-contact steps. |
 | `CPU IPC/CollisionBroadPhase.*`, `LBVH.*` | SpatialHash and Linear BVH broad phases. |
 | `CPU IPC/Elasticity.*`, `HingeBending.*` | Solid/cloth elasticity and bending models. |
-| `CPU IPC/NewtonLinearSystem.*`, `SuiteSparseLDLSolver.*`, `CholmodSolver.*` | Shared sparse assembly and SuiteSparse LDL/CHOLMOD/Eigen-CG backends. |
+| `CPU IPC/NewtonLinearSystem.*`, `SuiteSparseLDLSolver.*`, `CholmodSolver.*`, `PardisoSolver.*` | Shared sparse assembly and SuiteSparse LDL/CHOLMOD/PARDISO/Eigen-CG backends. |
 | `CPU IPC/SimulationMesh.*`, `Simulator.*` | Mesh state, IO, scene construction, and simulation ownership. |
 | `CPU IPC/ViewerMain.cpp` | Fixed-function GLUT viewer. |
 | `apps/cipc_headless.cpp` | Headless executable. |
@@ -161,5 +171,6 @@ build/Release/cipc_headless --scene cloth-bunny --steps 1 --no-output --broad-ph
 build/Release/cipc_headless --scene cloth-bunny --steps 1 --no-output --broad-phase spatial-hash
 build/Release/cipc_headless --scene cloth-bunny --steps 1 --no-output --linear-solver cholmod
 build/Release/cipc_headless --scene twisting-mat --steps 1 --no-output --linear-solver eigen-cg
+build/Release/cipc_headless --scene bunny2 --steps 1 --no-output --linear-solver pardiso --pardiso-threads 16
 build/nonquadratic/Release/cipc_headless --scene cloth-bunny --steps 1 --no-output
 ```

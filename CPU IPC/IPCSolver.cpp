@@ -19,17 +19,17 @@
 namespace {
 
 struct NewtonWorkspace {
-    explicit NewtonWorkspace(int vertexCount)
+    NewtonWorkspace(int vertexCount, NewtonLinearSystem& sharedLinearSystem)
         : gradient(static_cast<size_t>(vertexCount), Vector3d::Zero()),
           vertexMutex(static_cast<size_t>(vertexCount)),
-          linearSystem(vertexCount)
+          linearSystem(sharedLinearSystem)
     {
     }
 
     vector<Vector3d> gradient;
     BHessian hessian;
     vector<tbb::spin_mutex> vertexMutex;
-    NewtonLinearSystem linearSystem;
+    NewtonLinearSystem& linearSystem;
 };
 
 struct EnergyWorkspace {
@@ -887,12 +887,18 @@ int solveBarrierSubproblem(
     IPCStepStats& stats,
     bool verbose,
     bool diagnoseLineSearch,
-    const LinearSolverOptions& linearSolverOptions) {
+    const LinearSolverOptions& linearSolverOptions,
+    NewtonLinearSystem& linearSystem) {
     constexpr int iterationLimit = 10000;
     int k = 0;
 
     vector<Vector3d> moveDir(mesh.vertexNum, Vector3d(0, 0, 0));
-    NewtonWorkspace workspace(mesh.vertexNum);
+    const std::size_t analysesBefore = linearSystem.symbolicAnalysisCount();
+    const std::size_t factorizationsBefore = linearSystem.numericFactorizationCount();
+    const double pardisoAnalysisBefore = linearSystem.pardisoAnalysisMilliseconds();
+    const double pardisoFactorizationBefore = linearSystem.pardisoFactorizationMilliseconds();
+    const double pardisoSolveBefore = linearSystem.pardisoSolveMilliseconds();
+    NewtonWorkspace workspace(mesh.vertexNum, linearSystem);
     double beta = 1;
 	int semi_implicit_kmin = 6;
     for (; k < iterationLimit; ++k) {
@@ -1021,8 +1027,23 @@ int solveBarrierSubproblem(
     if (verbose) {
         printf("newton iteration:  %d    and    Kappa:  %f\n", k, mesh.Kappa);
     }
-    stats.symbolicAnalyses += workspace.linearSystem.symbolicAnalysisCount();
-    stats.numericFactorizations += workspace.linearSystem.numericFactorizationCount();
+    stats.symbolicAnalyses += workspace.linearSystem.symbolicAnalysisCount() - analysesBefore;
+    stats.numericFactorizations +=
+        workspace.linearSystem.numericFactorizationCount() - factorizationsBefore;
+    stats.pardisoAnalysisMilliseconds +=
+        workspace.linearSystem.pardisoAnalysisMilliseconds() - pardisoAnalysisBefore;
+    stats.pardisoFactorizationMilliseconds +=
+        workspace.linearSystem.pardisoFactorizationMilliseconds() - pardisoFactorizationBefore;
+    stats.pardisoSolveMilliseconds +=
+        workspace.linearSystem.pardisoSolveMilliseconds() - pardisoSolveBefore;
+    stats.linearSolverThreads = (std::max)(
+        stats.linearSolverThreads, workspace.linearSystem.pardisoThreadCount());
+    const int pardisoFactorNonZeros = workspace.linearSystem.pardisoFactorNonZeros();
+    if (pardisoFactorNonZeros > 0) {
+        stats.factorNonZeros = (std::max)(
+            stats.factorNonZeros,
+            static_cast<std::size_t>(pardisoFactorNonZeros));
+    }
     stats.newtonIterations += k;
     return k;
 }
@@ -1124,6 +1145,10 @@ int solveIPCStep(
         buildCollisionSets(mesh, sh, gd, false);
     }
     int k = 0;
+    if (!context.linearSystem
+        || context.linearSystem->vertexCount() != mesh.vertexNum) {
+        context.linearSystem = std::make_shared<NewtonLinearSystem>(mesh.vertexNum);
+    }
     constexpr int maxKappaIterations = 64;
     for (; stats.kappaIterations < maxKappaIterations; ++stats.kappaIterations) {
         mesh.closeConstraintID.resize(0);
@@ -1132,7 +1157,8 @@ int solveIPCStep(
         mesh.closeMConstraintVal.resize(0);
         k = solveBarrierSubproblem(
             mesh, sh, gd, mesh.Kappa, stats,
-            context.verbose, context.diagnoseLineSearch, context.linearSolver);
+            context.verbose, context.diagnoseLineSearch, context.linearSolver,
+            *context.linearSystem);
 
         VectorXd constraintVals;
         int offset = 0;
@@ -1207,6 +1233,13 @@ int solveIPCStep(
         std::cout << "totalCollision=" << context.totalCollisions
             << ", averageCollision=" << averageCollision
             << ", total=" << context.cumulativeStepMilliseconds << " ms" << std::endl;
+        if (stats.linearSolverThreads > 0) {
+            std::cout << "PARDISO phase ms: analyze=" << stats.pardisoAnalysisMilliseconds
+                << ", factorize=" << stats.pardisoFactorizationMilliseconds
+                << ", solve=" << stats.pardisoSolveMilliseconds
+                << ", threads=" << stats.linearSolverThreads
+                << ", factor nnz=" << stats.factorNonZeros << std::endl;
+        }
     }
 
     ++context.stepIndex;
@@ -1241,7 +1274,9 @@ int solveIPCStep(
                 "max_energy_backtracks_per_newton,newton_steps_over_two_backtracks,"
                 "mean_alpha,min_alpha,max_alpha,collisions,kappa,min_distance2,"
                 "ground_contacts,self_contacts,mollified_contacts,matrix_nnz,"
-                "symbolic_analyses,numeric_factorizations\n";
+                "symbolic_analyses,numeric_factorizations,pardiso_analysis_ms,"
+                "pardiso_factorization_ms,pardiso_solve_ms,linear_solver_threads,"
+                "factor_nnz\n";
         }
         metrics << std::setprecision(17)
             << stats.frame << ',' << stats.stepMilliseconds << ','
@@ -1259,7 +1294,11 @@ int solveIPCStep(
             << stats.collisions << ',' << stats.kappa << ',' << stats.minConstraintDistance2 << ','
             << stats.groundContacts << ',' << stats.selfContacts << ','
             << stats.mollifiedContacts << ',' << stats.matrixNonZeros << ','
-            << stats.symbolicAnalyses << ',' << stats.numericFactorizations << '\n';
+            << stats.symbolicAnalyses << ',' << stats.numericFactorizations << ','
+            << stats.pardisoAnalysisMilliseconds << ','
+            << stats.pardisoFactorizationMilliseconds << ','
+            << stats.pardisoSolveMilliseconds << ','
+            << stats.linearSolverThreads << ',' << stats.factorNonZeros << '\n';
         context.metricsInitialized = true;
 
         if (context.writeCheckpoints && context.stepIndex % 10 == 0) {

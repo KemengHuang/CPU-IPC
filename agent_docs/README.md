@@ -9,7 +9,7 @@
 - **Stable Neo-Hookean（SNK）** 四面体弹性模型（Smith et al. 2018）
 - **Baraff-Witkin** 布料拉伸/剪切 + 二次弯曲（Bergou/Bridson 风格）
 - 经典 IPC 对数障碍接触（PT/EE/PP/PE）+ 近平行 EE mollifier + 滞后摩擦
-- Newton 迭代 + 默认块感知 SuiteSparse LDL / 可选 CHOLMOD（cost-aware AMD→METIS）与 Eigen-CG + 回溯线搜索 + Additive CCD
+- Newton 迭代 + 默认块感知 SuiteSparse LDL / 可选 CHOLMOD（cost-aware AMD→METIS）、oneMKL PARDISO 与 Eigen-CG + 回溯线搜索 + Additive CCD
 - TBB 并行；GLUT/OpenGL 固定管线可视化
 
 ## 文档索引
@@ -25,14 +25,15 @@
 | `07_gotchas.md` | **必读**：已知 bug、死代码清单、易踩的坑 |
 | `08_optimization_roadmap.md` | 结构与性能优化路线、优先级、收益/风险和验证要求 |
 | `09_optimization_report.md` | 已实施优化、实测结果、回归与仍保留的高风险事项 |
+| `10_pardiso_report.md` | oneMKL PARDISO 实现、bunny2 大场景、线程/阶段/内存基准与 50 步正确性验证 |
 
 ## 30 秒上手
 
 1. 装依赖（见 `01_overview.md`），`cmake -B build && cmake --build build --config Release`，得到 `cipc` viewer、`cipc_headless` 和 `cipc_core`。项目不再生成测试 target。
 2. 运行 `cipc`：打开 1000×1000 GLUT 窗口，**空格键**开始/暂停仿真；每显示一帧 = 一个 IPC 时间步。资产和输出均使用编译期绝对路径，不再依赖当前工作目录。
-3. `SimulationScene` 已接通两个场景：默认 `ClothOverBunny`（布料 + 四面体 bunny 合并进同一个 `mesh3D`），也可选 `TwistingMat`。场景参数在 `Assets/scene/parameterSetting.txt`，现按键名解析并校验未知、重复、缺失及越界值。
+3. `SimulationScene` 已接通三个场景：默认 `ClothOverBunny`、`TwistingMat`，以及参考 GPU_IPC 的双 `bunny2` 大场景（每只 scale=0.2）。场景参数在 `Assets/scene/parameterSetting.txt`，现按键名解析并校验未知、重复、缺失及越界值。
 4. 时间步/Newton/线搜索编排在 `CPU IPC/IPCSolver.cpp`（`solveIPCStep` / `solveBarrierSubproblem`）；接触导数在 `ContactMechanics.cpp`，摩擦在 `Friction.cpp`，线性后端在 `NewtonLinearSystem.cpp`。
-5. 无窗口运行：`cipc_headless --steps 20 --output Output/run`；批量基准：`python scripts/benchmark.py --exe <cipc_headless> --repeats 5 --steps 1`。
+5. 无窗口运行：`cipc_headless --steps 20 --output Output/run`；PARDISO 大场景：`cipc_headless --scene bunny2 --steps 1 --linear-solver pardiso --pardiso-threads 16 --no-output`；批量基准：`python scripts/benchmark.py --exe <cipc_headless> --repeats 5 --steps 1`。这里一个 step 是完整仿真时间步，不是单次 Newton。
 
 ## 给 agent 的忠告
 

@@ -3,6 +3,9 @@
 #include "LinearSolverOptions.h"
 #include "CholmodSolver.h"
 #include "SuiteSparseLDLSolver.h"
+#ifdef CIPC_HAS_PARDISO
+#include "PardisoSolver.h"
+#endif
 
 #include <Eigen/Core>
 #include <Eigen/SparseCore>
@@ -27,6 +30,12 @@ public:
 
     std::size_t symbolicAnalysisCount() const;
     std::size_t numericFactorizationCount() const;
+    double pardisoAnalysisMilliseconds() const;
+    double pardisoFactorizationMilliseconds() const;
+    double pardisoSolveMilliseconds() const;
+    int pardisoThreadCount() const;
+    int pardisoFactorNonZeros() const;
+    int vertexCount() const { return static_cast<int>(matrix_.rows() / 3); }
 
 private:
     void assemble(
@@ -36,6 +45,7 @@ private:
         std::size_t& matrixNonZeros);
     void solveWithCholmod();
     void solveWithSuiteSparseLDL();
+    void solveWithPardiso(const LinearSolverOptions& options);
     void solveWithEigenConjugateGradient(const LinearSolverOptions& options);
     void scatter(std::vector<Eigen::Vector3d>& direction) const;
 
@@ -45,4 +55,7 @@ private:
     Eigen::VectorXd solution_;
     CholmodSolver cholmodSolver_;
     SuiteSparseLDLSolver suiteSparseLDLSolver_;
+#ifdef CIPC_HAS_PARDISO
+    PardisoSolver pardisoSolver_;
+#endif
 };

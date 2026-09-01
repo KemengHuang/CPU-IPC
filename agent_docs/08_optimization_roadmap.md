@@ -8,16 +8,17 @@
 - P1 已完成：下三角无占位零装配、固定尺寸活跃 FEM、PFPX 预计算、二次弯曲常量 Hessian、Newton/Energy workspace。
 - P2 已完成安全部分：SpatialHash bucket/occupancy 复用、排序 vector scratch、GPU 风格 CPU LBVH；梯度去锁和彻底 CSR SpatialHash 尚未实施，因为当前 assembly 已不是主瓶颈。
 - P3 部分完成：运行状态、构建 target、摩擦、线性系统、viewer 与核心文件职责均已分层；旧 PCG/特效/无调用文件已清理。`MMCVID` 已改名 `EncodedContact`，但负数槽位协议尚未类型化；`mesh3D` 其余职责仍待拆分。
-- P4 完成低风险接口：块感知 SuiteSparse LDL 成为默认 CPU 直接法；CHOLMOD 保留经过依赖校验的 cost-aware METIS fallback，Eigen-CG 继续作为共享装配后的可选后端并有 smoke；未改 Hessian scale/近似或 Newton 算法。
+- P4 完成低风险接口：块感知 SuiteSparse LDL 成为默认 CPU 直接法；CHOLMOD 保留经过依赖校验的 cost-aware METIS fallback；oneMKL PARDISO 已作为并行 SPD 直接法接入并完成 bunny2/线程/50 步验证；Eigen-CG 继续作为共享装配后的可选后端并有 smoke。未改 Hessian scale/近似或 Newton 算法。
 
-实测详见 `09_optimization_report.md`。
+整体实测详见 `09_optimization_report.md`，PARDISO 专项见 `10_pardiso_report.md`。
 
 ## 0. 当前基线
 
 - 默认场景：`ClothOverBunny`，当前布料 `plane1024.obj` 为 1024 顶点 / 1922 三角形，bunny 为 7356 四面体。
-- 当前构建只生成产品 target，不注册 CTest。维护验证采用 quadratic ON/OFF Release 构建、cloth-bunny/twisting-mat headless smoke、双 broad-phase 对照和 benchmark。
-- `metrics.csv` 逐帧记录五阶段、nnz、活动集、回退与 CHOLMOD analyze/factorize 次数。
-- CHOLMOD 已在每个 `solveBarrierSubproblem` 的 `NewtonLinearSystem` 内复用；同一 CSC 模式会复用符号分析。
+- 大规模 solver 场景：双 `bunny2`，38,386 顶点 / 159,870 tet / 115,158 DOF，用于避免小场景掩盖并行直接法收益。
+- 当前构建只生成产品 target，不注册 CTest。维护验证采用 quadratic ON/OFF Release、普通 Debug、PARDISO ON/OFF 构建，cloth-bunny/twisting-mat/bunny2 headless smoke、双 broad-phase 对照和 benchmark。
+- `metrics.csv` 逐帧记录五阶段、nnz、活动集、回退、direct solver analyze/factorize；PARDISO 另有 phase 11/22/33、线程数与 factor nnz。
+- 三个直接法的 solver 状态随 `IPCSolverContext::linearSystem` 跨 Newton、κ 子问题与时间步复用；同一 CSC 模式跳过符号分析。
 - 已有无窗口多步入口与容差回归；并行结果仍非 bitwise 确定。
 
 ## P0 — 先建立可测、可回归的核心（最高优先级）
@@ -40,7 +41,7 @@ cipc_headless --scene cloth-bunny --steps 20 --broad-phase lbvh --output <dir>
 
 ### 2. 建立数值回归
 
-为两个场景保存短轨迹基线，至少比较：
+为代表场景保存短轨迹基线（cloth-bunny/twisting-mat，并用 bunny2 覆盖大系统），至少比较：
 
 - 最终与逐帧顶点位置（绝对/相对容差）；
 - 速度、总能量、最小约束距离、是否穿透；
@@ -92,7 +93,7 @@ cipc_headless --scene cloth-bunny --steps 20 --broad-phase lbvh --output <dir>
 
 ### 5. 复用 Newton 工作区
 
-**状态：已完成主要部分。** `NewtonWorkspace` 跨迭代持有 gradient、BHessian 和顶点 mutex；`NewtonLinearSystem` 持有 triplet、SparseMatrix、RHS/result 与后端缓存；`EnergyWorkspace`/`Friction::EnergyWorkspace` 复用线搜索约束向量。容器以 clear/resize 保留 high-water capacity，未改变公式。
+**状态：已完成主要部分。** `NewtonWorkspace` 在 barrier 子问题内持有 gradient、BHessian 和顶点 mutex；`IPCSolverContext` 持有的 `NewtonLinearSystem` 跨 Newton/κ/时间步保存 triplet、SparseMatrix、RHS/result 与后端缓存；`EnergyWorkspace`/`Friction::EnergyWorkspace` 复用线搜索约束向量。容器以 clear/resize 保留 high-water capacity，未改变公式。
 
 ## P2 — 碰撞与并行热点
 
@@ -183,6 +184,7 @@ cipc_headless  benchmark/regression CLI
 
 - Modified Newton / lagged Hessian：若多轮 Hessian 变化小，可少做装配或分解，但会改变收敛行为。
 - Eigen-CG + Incomplete Cholesky 已作为可选后端接通；大网格上是否胜过 SuiteSparse LDL/CHOLMOD、接触刚度下是否足够鲁棒仍需专门 benchmark。
+- oneMKL PARDISO 已接入：bunny2 单时间步相对 LDL/CHOLMOD 有 9.79×/6.43× wall-time speedup，当前剩余线性瓶颈转为 Eigen `setFromTriplets`/CSC 构造和 phase 11；直接 CSC 数值装配值得单独 A/B，但不能改变矩阵模式语义。
 - 固定 superset sparsity pattern：可长期复用符号分解，但可能显著增加 fill-in 和内存。
 - 接触 Hessian 的解析 PSD/Gauss-Newton 近似：可减少逐接触特征分解，但属于算法变更，必须核对 IPC 收敛与无穿透性质。
 - LBVH 已完成并默认启用；更高风险的增量 refit 或 SAH rebuild 仍需更大场景 profile。
@@ -191,10 +193,11 @@ cipc_headless  benchmark/regression CLI
 
 1. 已完成：headless/回归/benchmark、下三角、workspace、固定尺寸 FEM、PFPX/弯曲静态化。
 2. 已完成：SpatialHash 复用与 GPU 风格 CPU LBVH；继续按场景 A/B，默认 LBVH。
-3. 下一步：细分 `linear_ms`（triplet / setFromTriplets / analyze / factorize / solve）并评估直接 CSC 数值装配。
-4. 下一步：拆 `mesh3D`、把 `EncodedContact` 改为 tagged contact、保存 checkpoint 拓扑/参数 hash，逐步清理仍嵌在活跃大文件中的实验函数。
-5. profile 证明 assembly 锁争用成为瓶颈时，再比较 graph coloring / TLS / gather。
-6. 更大场景需继续比较 SuiteSparse LDL、带 supernodal 的 CHOLMOD 与 Eigen-CG；启用 vcpkg GPL supernodal 前必须单独评估许可与分发要求。lagged Hessian 仍作为独立高风险实验。
+3. 已完成：PARDISO phase 11/22/33 细分、1/2/4/8/16/32 线程 sweep、双 bunny2 单步/50 步与 permutation 策略 A/B；默认仍保留 SuiteSparse LDL，PARDISO 是可选性能后端。
+4. 下一步：继续细分 PARDISO 之外的 `linear_ms`（triplet / setFromTriplets），评估直接 CSC 数值装配和 phase 11 前的结构构造成本。
+5. 下一步：拆 `mesh3D`、把 `EncodedContact` 改为 tagged contact、保存 checkpoint 拓扑/参数 hash，逐步清理仍嵌在活跃大文件中的实验函数。
+6. profile 证明 assembly 锁争用成为瓶颈时，再比较 graph coloring / TLS / gather。
+7. 更大/更强接触场景需继续比较 PARDISO、SuiteSparse LDL、带 supernodal 的 CHOLMOD 与 Eigen-CG；启用 vcpkg GPL supernodal 前必须单独评估许可与分发要求。lagged Hessian 仍作为独立高风险实验。
 
 ## 每项优化的完成标准
 

@@ -5,6 +5,9 @@
 #include "Elasticity.h"
 #include "LinearSolverOptions.h"
 #include <cstddef>
+#include <memory>
+
+class NewtonLinearSystem;
 
 struct IPCStepStats {
     int frame = 0;
@@ -21,6 +24,9 @@ struct IPCStepStats {
     double ccdMilliseconds = 0.0;
     double lineSearchMilliseconds = 0.0;
     double postLineSearchMilliseconds = 0.0;
+    double pardisoAnalysisMilliseconds = 0.0;
+    double pardisoFactorizationMilliseconds = 0.0;
+    double pardisoSolveMilliseconds = 0.0;
     double collisions = 0.0;
     double kappa = 0.0;
     double minConstraintDistance2 = -1.0;
@@ -33,6 +39,8 @@ struct IPCStepStats {
     std::size_t matrixNonZeros = 0;
     std::size_t symbolicAnalyses = 0;
     std::size_t numericFactorizations = 0;
+    std::size_t factorNonZeros = 0;
+    int linearSolverThreads = 0;
 };
 
 struct IPCSolverContext {
@@ -42,6 +50,7 @@ struct IPCSolverContext {
     bool verbose = true;
     bool diagnoseLineSearch = false;
     LinearSolverOptions linearSolver;
+    std::shared_ptr<NewtonLinearSystem> linearSystem;
     bool metricsInitialized = false;
     int stepIndex = 0;
     int totalNewtonIterations = 0;

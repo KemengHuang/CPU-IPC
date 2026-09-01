@@ -48,6 +48,7 @@
 
 - **`ClothOverBunny` / `buildClothOverBunnyScene`（默认）**：布料盖 bunny。当前载入 `Assets/triangleMesh/planes/plane1024.obj`（1024 顶点、1922 个三角形，scale 1），绕 X 转 π/2；按编译选项预计算 quadratic 或 hinge bending；再载入 `Assets/tetrahedraMesh/bunny.msh`（scale 0.5，offset (0,−0.5,0)）追加进同一 `mesh3D`。
 - **`TwistingMat` / `buildTwistingMatScene`**：扭转垫（准静态，`is_quasi_static=true`，无重力），`ipcmesh/mat40x40.msh`，两侧顶点 `boundaryTypes=1` + `update_hard_constraint_functor` 旋转驱动。通过 `SimulationScene` 的 switch 可选；回调的 `alpha` 是 double。
+- **`Bunny2` / `buildBunny2Scene`**：参考 `GPU_IPC/GPU_IPC/gl_main.cpp` 的 `initScene1`，两次追加 `Assets/tetrahedraMesh/bunny2.msh`，两只都取 scale=0.2，offset 分别为 `(0,0.65,0)` 与 `(0,0,0)`，`YoungModulus=1e5`。合并后是 38,386 顶点、159,870 tet、41,664 表面三角形；用于大稀疏系统/碰撞压力基准，不替换默认场景。
 
 ### `buildModels`（`:283-336`）全流程
 
@@ -69,23 +70,27 @@
 ```bash
 cipc_headless --scene cloth-bunny --steps 20 --broad-phase lbvh --output Output/run
 cipc_headless --scene twisting-mat --steps 1 --linear-solver eigen-cg --no-output
+cipc_headless --scene bunny2 --steps 1 --linear-solver pardiso --pardiso-threads 16 --no-output
 ```
 
+- `--steps N` 的单位是完整仿真时间步/帧；一个 step 内可能有多次 Newton 迭代和数值分解。
 - 默认不恢复、不写 checkpoint、使用 LBVH；可用 `--resume`、`--write-checkpoints` 显式开启。viewer 同样默认 fresh，不会让 `Output/tempData` 覆盖 cloth+bunny 初态。
-- `--broad-phase lbvh|spatial-hash` 用于碰撞宽阶段 A/B；`--linear-solver suitesparse-ldl|cholmod|eigen-cg` 选择线性后端，默认 SuiteSparse LDL；`--verbose` 打印 Newton/线搜索细节。
+- `--broad-phase lbvh|spatial-hash` 用于碰撞宽阶段 A/B；`--linear-solver suitesparse-ldl|cholmod|pardiso|eigen-cg` 选择线性后端，默认 SuiteSparse LDL；`--pardiso-threads N` 只控制 PARDISO，0 使用 oneMKL 默认；`--verbose` 打印 Newton/线搜索和 PARDISO phase 细节。
 - 诊断选项：`--diagnose-line-search` 输出方向一阶/二阶 Taylor 对比；`--disable-barrier` 仅用于无接触隔离。临时的 `--friction-scale` 已删除，正式接口不能绕过场景材料参数改变摩擦。
-- 每帧 `metrics.csv` 字段包括五阶段耗时、Newton/κ、总/能量/穿透回退、单 Newton 最大回退与 `Newton>2` 数、mean/min/max α、碰撞、最小平方距离、活动集、nnz、symbolic analyze 与 numeric factorize 次数。
+- 每帧 `metrics.csv` 字段包括五阶段耗时、Newton/κ、总/能量/穿透回退、单 Newton 最大回退与 `Newton>2` 数、mean/min/max α、碰撞、最小平方距离、活动集、nnz、symbolic analyze 与 numeric factorize 次数；末尾的 `pardiso_analysis_ms/pardiso_factorization_ms/pardiso_solve_ms/linear_solver_threads/factor_nnz` 用于 PARDISO 细分，其他后端为 0。
 - 最终 `RESULT` 输出位置和、平方范数和及最后一帧关键指标，供脚本/CI 解析。
-- `scripts/benchmark.py` 执行多次独立运行并报告总 step time 的 median/min/max；支持 `--scene`、`--broad-phase`、`--linear-solver`、`--steps`、`--repeats` 和 `--output`。
+- `scripts/benchmark.py` 执行多次独立运行并报告总 time-step time 的 median/min/max；支持 `--scene`（含 bunny2）、`--broad-phase`、`--linear-solver`、`--pardiso-threads`、`--steps`、`--repeats` 和 `--output`。
 
 ## 4. NewtonLinearSystem 与 Solver
 
 `NewtonLinearSystem.cpp/.h` 是 Newton 线性系统的唯一入口：
 
 - `assemble` 从 `BHessian` 生成下三角 triplet，加入质量/阻尼对角并按 `boundaryTypes` 将固定顶点 RHS 清零。
-- SuiteSparse LDL、CHOLMOD 与 Eigen-CG 共用同一 `Eigen::SparseMatrix`、RHS 和解向量，再统一 scatter 回每顶点方向；这保证切换后端不会改变约束或装配语义。
+- SuiteSparse LDL、CHOLMOD、PARDISO 与 Eigen-CG 共用同一 `Eigen::SparseMatrix`、RHS 和解向量，再统一 scatter 回每顶点方向；这保证切换后端不会改变约束或装配语义。
 - 默认 SuiteSparse LDL；可选 Eigen-CG 使用 `Eigen::ConjugateGradient<SparseMatrix, Lower, IncompleteCholesky>`，容差 `1e-6`、最大 10000 次，可由 `LinearSolverOptions` 设置。
 - CHOLMOD 后端随默认构建开启 `CIPC_ENABLE_METIS_ORDERING`：配置阶段要求 SuiteSparse `Partition` 并链接验证 `cholmod_metis`；运行时保持 `nmethods=0`、指定 `default_nesdis=0` 和 weighted postorder，即先由 AMD 估计 fill/work，仅在代价较高时再尝试 METIS。关闭选项时设置 `nmethods=1 + CHOLMOD_AMD`，形成真正的 AMD-only A/B。
+- PARDISO 后端由 `CIPC_ENABLE_PARDISO` 控制；oneMKL 不存在时 CMake 只关闭该后端，不影响默认 LDL。`PardisoSolver` 直接调用 phase 11/22/33，使用 SPD `mtype=2`、LP64/zero-based 索引、TBB threading 和 in-core factorization。lower CSC 与 upper CSR 的等价布局避免额外矩阵转置；RHS 使用自有副本。符号分析、METIS permutation、factor 与 phase workspace 随 `IPCSolverContext::linearSystem` 跨时间步复用，稀疏模式变化才重新分析，并用 1.2× fill 阈值自适应触发 fresh ordering。
+- Windows vcpkg oneMKL 静态链接会使 Release headless 约 74.0 MB（70.6 MiB）；其静态包不兼容 `/MDd`，所以 MSVC Debug 自动不定义 PARDISO，选择该后端会报告 unavailable。Release/RelWithDebInfo 是正式 benchmark 配置。
 - Eigen-CG 可用 `cipc_headless --scene twisting-mat --steps 1 --no-output --linear-solver eigen-cg` 做手工 smoke；它不要求与直接法 bitwise 相同。
 
 `SuiteSparseLDLSolver.cpp/.h` 实现默认 CPU 直接法：
@@ -100,7 +105,7 @@ cipc_headless --scene twisting-mat --steps 1 --linear-solver eigen-cg --no-outpu
 - 类已改为 RAII、不可复制：构造时检查 `cholmod_start`，析构释放当前 factor 并 `cholmod_finish`；不再持有被重绑定的 CHOLMOD-owned sparse/dense 缓冲区。
 - `set_pattern(SparseMatrix)` 把压缩 Eigen CSC 的 outer/inner/value 数组复制到稳定的自有缓冲，并用非 owning `cholmod_sparse` view 传给 CHOLMOD。
 - 每次都刷新数值；仅当矩阵维度或 outer/inner 索引变化时释放 factor。`solve` 在 factor 不存在时执行 `cholmod_analyze`，随后每轮执行数值 `cholmod_factorize + cholmod_solve2`；solution/Y/E dense workspace 跨 Newton 复用。
-- `solveBarrierSubproblem` 生命周期内复用同一 `NewtonLinearSystem/CholmodSolver`，因此接触拓扑不变的相邻 Newton 轮可以跳过符号分析；接触导致稀疏模式变化时自动重分析。
+- `IPCSolverContext` 生命周期内复用同一 `NewtonLinearSystem` 及其直接求解器，因此接触拓扑不变的相邻 Newton、κ 子问题和时间步都可以跳过符号分析；接触导致稀疏模式变化时自动重分析。
 - 暴露 analyze/factorize 计数给 `IPCStepStats`；当前首帧为 2 次 analyze / 9 次 factorize，说明大部分 Newton 已复用 symbolic 数据。
 - `preFactorize / solve_with_preFactorize` 保留给多 RHS；所有入口都有矩阵形状、RHS 尺寸和 CHOLMOD 失败检查。
 - 已移除未定义的三元组 `set_pattern`、`IJ2aI` 和无用 dense/sparse 指针成员。
@@ -110,7 +115,7 @@ cipc_headless --scene twisting-mat --steps 1 --linear-solver eigen-cg --no-outpu
 ### 加载
 
 - `load_tetrahedraMesh`：按行触发解析并取节点/单元行尾部 token，支持 append 多网格。文件不存在会返回 false，由场景构建抛出可捕获异常，不再 `exit(-1)`。
-  - 资产：`bunny.msh`（Gmsh 2.2，1869 节点 7356 单元）；`ipcmesh/mat40x40.msh` 自称 4.1 但体是简化格式（靠“取尾部 token”侥幸解析成功）。`ipcmesh/` 下还有 Armadillo13K、rod、sphere5K、torus 等可用场景网格。
+  - 资产：`bunny.msh`（Gmsh 2.2，1869 节点 7356 单元）；`bunny2.msh` 单份为 19,193 节点、79,935 tet；`ipcmesh/mat40x40.msh` 自称 4.1 但体是简化格式（靠“取尾部 token”侥幸解析成功）。`ipcmesh/` 下还有 Armadillo13K、rod、sphere5K、torus 等可用场景网格。
 - `load_triangleMesh`（OBJ）：`v` 行 scale+offset；`f` 行扇形三角化（支持 `f a/b/c` 与 `f a b c`）；`type==2` 全顶点 `boundaryType=2`，`type==3` 面直接进 `surface`，默认进 `triangles`；末尾建 `tri_edges/_adj_points`（仅 2 三角共享边）。旧 PCG 的逐顶点 3×3 `Constraints` 已删除。资产：`CMU/plane{9,100,1024,200000}.obj`、`cloth7.obj`、`tricloth.obj`、`newtubing.obj`。
 - `getSurface`（`:349-431`）：tet 4 面×6 排列哈希去重找边界面；按对顶点法线测试定向**朝外**；存 `Vector4i(v0,v1,v2,tetId)`；布料面 tetId=0 追加；`surfVerts` 按首现序唯一化；`surfEdges` 用 `std::set` 去重无向边。
 - `mesh3D::InitMesh / load_test(1/2)`：程序化立方体，当前产品场景不调用。

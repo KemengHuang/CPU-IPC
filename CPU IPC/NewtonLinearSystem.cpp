@@ -45,6 +45,9 @@ void NewtonLinearSystem::solve(
     case LinearSolverBackend::SuiteSparseLDL:
         solveWithSuiteSparseLDL();
         break;
+    case LinearSolverBackend::Pardiso:
+        solveWithPardiso(options);
+        break;
     case LinearSolverBackend::EigenConjugateGradient:
         solveWithEigenConjugateGradient(options);
         break;
@@ -57,14 +60,67 @@ void NewtonLinearSystem::solve(
 
 std::size_t NewtonLinearSystem::symbolicAnalysisCount() const
 {
-    return cholmodSolver_.symbolicAnalysisCount()
+    std::size_t count = cholmodSolver_.symbolicAnalysisCount()
         + suiteSparseLDLSolver_.symbolicAnalysisCount();
+#ifdef CIPC_HAS_PARDISO
+    count += pardisoSolver_.symbolicAnalysisCount();
+#endif
+    return count;
 }
 
 std::size_t NewtonLinearSystem::numericFactorizationCount() const
 {
-    return cholmodSolver_.numericFactorizationCount()
+    std::size_t count = cholmodSolver_.numericFactorizationCount()
         + suiteSparseLDLSolver_.numericFactorizationCount();
+#ifdef CIPC_HAS_PARDISO
+    count += pardisoSolver_.numericFactorizationCount();
+#endif
+    return count;
+}
+
+double NewtonLinearSystem::pardisoAnalysisMilliseconds() const
+{
+#ifdef CIPC_HAS_PARDISO
+    return pardisoSolver_.analysisMilliseconds();
+#else
+    return 0.0;
+#endif
+}
+
+double NewtonLinearSystem::pardisoFactorizationMilliseconds() const
+{
+#ifdef CIPC_HAS_PARDISO
+    return pardisoSolver_.factorizationMilliseconds();
+#else
+    return 0.0;
+#endif
+}
+
+double NewtonLinearSystem::pardisoSolveMilliseconds() const
+{
+#ifdef CIPC_HAS_PARDISO
+    return pardisoSolver_.solveMilliseconds();
+#else
+    return 0.0;
+#endif
+}
+
+int NewtonLinearSystem::pardisoThreadCount() const
+{
+#ifdef CIPC_HAS_PARDISO
+    return pardisoSolver_.activeThreadCount();
+#else
+    return 0;
+#endif
+}
+
+int NewtonLinearSystem::pardisoFactorNonZeros() const
+{
+#ifdef CIPC_HAS_PARDISO
+    return pardisoSolver_.factorNonZeros();
+#else
+    return 0;
+#endif
 }
 
 void NewtonLinearSystem::assemble(
@@ -106,6 +162,19 @@ void NewtonLinearSystem::solveWithCholmod()
 void NewtonLinearSystem::solveWithSuiteSparseLDL()
 {
     suiteSparseLDLSolver_.solve(matrix_, rightHandSide_, solution_);
+}
+
+void NewtonLinearSystem::solveWithPardiso(const LinearSolverOptions& options)
+{
+#ifdef CIPC_HAS_PARDISO
+    pardisoSolver_.solve(
+        matrix_, rightHandSide_, solution_, options.pardisoThreadCount);
+#else
+    (void)options;
+    throw std::runtime_error(
+        "PARDISO backend is unavailable in this build; enable oneMKL "
+        "(MSVC also requires a non-Debug configuration)");
+#endif
 }
 
 void NewtonLinearSystem::solveWithEigenConjugateGradient(

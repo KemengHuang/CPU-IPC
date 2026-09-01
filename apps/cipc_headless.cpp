@@ -22,6 +22,7 @@ struct CommandLineOptions {
     bool disableBarrier = false;
     BroadPhaseBackend broadPhase = BroadPhaseBackend::LinearBVH;
     LinearSolverBackend linearSolver = LinearSolverOptions{}.backend;
+    int pardisoThreadCount = 0;
     std::string outputDirectory;
 };
 
@@ -29,11 +30,12 @@ void printUsage(const char* executable)
 {
     std::cout
         << "Usage: " << executable << " [options]\n"
-        << "  --scene cloth-bunny|twisting-mat\n"
+        << "  --scene cloth-bunny|twisting-mat|bunny2\n"
         << "  --steps N\n"
         << "  --output DIRECTORY\n"
         << "  --broad-phase spatial-hash|lbvh\n"
-        << "  --linear-solver cholmod|suitesparse-ldl|eigen-cg\n"
+        << "  --linear-solver cholmod|suitesparse-ldl|pardiso|eigen-cg\n"
+        << "  --pardiso-threads N (0 uses the oneMKL default)\n"
         << "  --disable-barrier\n"
         << "  --diagnose-line-search\n"
         << "  --resume\n"
@@ -73,6 +75,9 @@ CommandLineOptions parseCommandLine(int argc, char** argv)
             else if (value == "twisting-mat") {
                 options.scene = SimulationScene::TwistingMat;
             }
+            else if (value == "bunny2") {
+                options.scene = SimulationScene::Bunny2;
+            }
             else {
                 throw std::invalid_argument("unknown scene: " + value);
             }
@@ -103,12 +108,19 @@ CommandLineOptions parseCommandLine(int argc, char** argv)
             else if (value == "suitesparse-ldl") {
                 options.linearSolver = LinearSolverBackend::SuiteSparseLDL;
             }
+            else if (value == "pardiso") {
+                options.linearSolver = LinearSolverBackend::Pardiso;
+            }
             else if (value == "eigen-cg") {
                 options.linearSolver = LinearSolverBackend::EigenConjugateGradient;
             }
             else {
                 throw std::invalid_argument("unknown linear solver: " + value);
             }
+        }
+        else if (argument == "--pardiso-threads") {
+            options.pardisoThreadCount = parseNonNegativeInt(
+                requireValue("--pardiso-threads"), "--pardiso-threads");
         }
         else if (argument == "--disable-barrier") {
             options.disableBarrier = true;
@@ -194,6 +206,7 @@ int main(int argc, char** argv)
         simulationOptions.verbose = commandLine.verbose;
         simulationOptions.broadPhaseBackend = commandLine.broadPhase;
         simulationOptions.linearSolver.backend = commandLine.linearSolver;
+        simulationOptions.linearSolver.pardisoThreadCount = commandLine.pardisoThreadCount;
         simulationOptions.diagnoseLineSearch = commandLine.diagnoseLineSearch;
         simulationOptions.disableBarrier = commandLine.disableBarrier;
 

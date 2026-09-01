@@ -332,6 +332,25 @@ void buildClothOverBunnyScene(mesh3D& mesh3d, const std::string& assetDirectory)
 
 }
 
+void buildBunny2Scene(mesh3D& mesh3d, const std::string& assetDirectory)
+{
+    mesh3d.YoungModulus = 1e5;
+    updateMaterial(mesh3d);
+    mesh3d.objMaxConer = Vector3d::Zero();
+    mesh3d.objMinConer = Vector3d::Zero();
+
+    constexpr double scale = 0.2;
+    const std::string meshPath = assetDirectory + "tetrahedraMesh/bunny2.msh";
+    if (!mesh3d.load_tetrahedraMesh(
+            meshPath, scale, Vector3d(0.0, 0.65, 0.0))) {
+        throw std::runtime_error("failed to load upper bunny2 mesh");
+    }
+    if (!mesh3d.load_tetrahedraMesh(
+            meshPath, scale, Vector3d::Zero())) {
+        throw std::runtime_error("failed to load lower bunny2 mesh");
+    }
+}
+
 } // namespace
 
 bool FEMSimulator::buildModels(SimulationScene scene) {
@@ -350,8 +369,9 @@ bool FEMSimulator::buildModels(const SimulationOptions& options) {
 
     if (!std::isfinite(options.linearSolver.relativeTolerance)
         || options.linearSolver.relativeTolerance <= 0.0
-        || options.linearSolver.maximumIterations <= 0) {
-        throw std::invalid_argument("linear solver tolerances must be positive");
+        || options.linearSolver.maximumIterations <= 0
+        || options.linearSolver.pardisoThreadCount < 0) {
+        throw std::invalid_argument("linear solver options are invalid");
     }
 
     mesh3D mesh3d;
@@ -369,6 +389,9 @@ bool FEMSimulator::buildModels(const SimulationOptions& options) {
         break;
     case SimulationScene::ClothOverBunny:
         buildClothOverBunnyScene(mesh3d, assetDirectory);
+        break;
+    case SimulationScene::Bunny2:
+        buildBunny2Scene(mesh3d, assetDirectory);
         break;
     }
 

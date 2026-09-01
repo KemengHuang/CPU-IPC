@@ -1,6 +1,6 @@
 # 02 — 仿真主流程（每个时间步）
 
-入口链：viewer `display()` 或 headless loop → `FEMSimulator::simulateStep` → `solveIPCStep`。viewer 每显示一帧 = 一个时间步，headless 按 `--steps` 显式循环。
+入口链：viewer `display()` 或 headless loop → `FEMSimulator::simulateStep` → `solveIPCStep`。viewer 每显示一帧 = 一个时间步，headless 按 `--steps` 显式循环。因此命令行的“一步”是完整 IPC 时间步/帧，不是一个 Newton step；一次时间步通常执行多轮 Newton、CCD、线搜索和线性分解。
 
 ## 1. `solveIPCStep(stepId, mesh, broadPhase, ground)` — 时间步驱动（`IPCSolver.cpp`）
 
@@ -12,17 +12,17 @@
 4. **动画硬约束**（2120-2159）：若 `update_hard_constraint_functor != nullptr`，对 `boundary_vertexes_indices` 算位移 `moveDir`，用 `Self_largestFeasibleStepSize_CCD(moveDir, slackness=0.8)` 求 `new_alpha`，施加 `stepForward(..., boundary_update=true)`，再 `new_alpha /= 2` 直到无穿透；重建碰撞集。
 5. **κ 外层循环**：反复 `solveBarrierSubproblem`；每轮后评估全部地面 + 自碰撞 PT 约束值，当 `minCoeff < mesh.dTol` **或** `maxCoeff < mesh.Hhat`（或无约束）时跳出。外层现有 64 轮硬上限，超限抛出带语义的异常。
 6. **速度更新**：`v = (x − V_prev)/dt`（`is_quasi_static` 则 v=0）；`V_prev = vertexes`；`updateInertialTarget`。
-7. **日志/指标**：`IPCStepStats` 记录逐帧 stage ms、Newton/κ、总/能量/穿透回退、单 Newton 最大回退、超过 2 次的 Newton 数、mean/min/max α、碰撞、活动集、nnz、analyze/factorize；写 `<output>/metrics.csv`。
+7. **日志/指标**：`IPCStepStats` 记录逐帧 stage ms、Newton/κ、总/能量/穿透回退、单 Newton 最大回退、超过 2 次的 Newton 数、mean/min/max α、碰撞、活动集、nnz、analyze/factorize；PARDISO 还记录 phase 11/22/33 累计时间、有效线程数与 factor nnz；写 `<output>/metrics.csv`。
 
 ## 2. `solveBarrierSubproblem` — Newton 循环
 
-`iterationLimit = 10000`。每个 barrier 子问题创建一次 `NewtonWorkspace`，复用 gradient、BHessian、mutex 和独立的 `NewtonLinearSystem`；后者持有 triplet、SparseMatrix、RHS/result 与三个线性后端的缓存。每次迭代严格按序：
+`iterationLimit = 10000`。每个 barrier 子问题创建一次 `NewtonWorkspace`，复用 gradient、BHessian 和 mutex；它引用 `IPCSolverContext` 持有的共享 `NewtonLinearSystem`。后者持有 triplet、SparseMatrix、RHS/result 与四个线性后端的缓存，并跨 κ 子问题和时间步存活；网格顶点数变化时才重建。每次迭代严格按序：
 
 | 顺序 | 步骤 | 位置 | 计时器 |
 |---|---|---|---|
 | 1 | `computeGradientAndHessian(mesh, gradient, BH, gd)`，返回碰撞数 | `:1971` | time0 |
 | 2 | 收敛检查（用上一轮方向）：`directionInfinityNorm(moveDir)`；阈值 = `Newton_Solver_Threshold·sqrt(bboxDiagSize2)·dt`；`k>0 && directionVanished` 则 break | `solveBarrierSubproblem` | — |
-| 3 | `NewtonLinearSystem::solve`：统一装配后按配置调用 SuiteSparse LDL、CHOLMOD 或 Eigen-CG；两个直接法在稀疏结构不变时复用符号分析 | `NewtonLinearSystem.cpp` | time1 |
+| 3 | `NewtonLinearSystem::solve`：统一装配后按配置调用 SuiteSparse LDL、CHOLMOD、PARDISO 或 Eigen-CG；三个直接法在稀疏结构不变时复用符号分析 | `NewtonLinearSystem.cpp` | time1 |
 | 4 | 可行步长上限（见 §3） | `:1990-2024` | time2 |
 | 5 | `lineSearch(...)` 回溯 | `:2031` | time3 |
 | 6 | `postLineSearch(mesh, gd, Kappa)` κ 自适应 + 近约束簿记 | `IPCSolver.cpp` | time4 |
@@ -77,10 +77,12 @@ E = dt²·(E_SNH(四面体) + E_BaraffWitkin(布料) + E_bend)
 
 ## 7. 线性求解（`NewtonLinearSystem.cpp/.h`）
 
-- 三个后端共用完全相同的 `BHessian` 下三角 triplet、质量对角和固定顶点 RHS 清零逻辑，避免后端间装配语义分叉。
+- 四个后端共用完全相同的 `BHessian` 下三角 triplet、质量对角和固定顶点 RHS 清零逻辑，避免后端间装配语义分叉。
 - 默认 `LinearSolverBackend::SuiteSparseLDL`：将标量稀疏图折叠到每顶点 3-DOF block 做 AMD，展开 permutation 后只构建一次 `PAPᵀ` 上三角 CSC；同结构 Newton 只按缓存映射刷新 14.5 万个数值，再复用 symbolic 数据做 LDLᵀ numeric factorization。
 - 可选 `LinearSolverBackend::Cholmod`：只有 CSC 结构变化才重新 analyze，保留 cost-aware AMD→METIS；使用 `cholmod_solve2` 复用 dense solution/workspace。
+- 可选 `LinearSolverBackend::Pardiso`：要求构建时找到 oneMKL，使用 `mtype=2` 的实对称正定模式。Eigen 的 lower CSC 对称地解释为 upper CSR，避免转置/复制矩阵；phase 11 分析、22 数值分解、33 求解分别计时。同模式跨 Newton/κ/时间步跳过 phase 11；模式变化时优先复用已有 METIS permutation，若 factor nnz 超过最近 fresh ordering 的 1.2 倍则下一轮重新排序。`--pardiso-threads 0` 使用 oneMKL 默认，正数通过 `tbb::global_control` 限制每个 phase。
 - 可选 `LinearSolverBackend::EigenConjugateGradient`：Eigen CG + `IncompleteCholesky<Lower>`，容差/最大迭代来自 `LinearSolverOptions`。CLI 用 `--linear-solver eigen-cg`；可通过 twisting-mat 单步手工 smoke。它是正式可选项，不是死代码。
+- MSVC + vcpkg oneMKL 的静态库使用 Release CRT，因此 PARDISO 只在非 Debug 配置定义 `CIPC_HAS_PARDISO`；普通 Debug 构建仍可使用其余后端，显式选 PARDISO 会抛出清晰错误。
 - 旧的自定义 PCG、多 RHS `cholmod_solver_EPF` 与其 `mesh3D::Constraints` 投影状态已删除。
 
 ## 8. 每步结束

@@ -5,6 +5,7 @@ option(CIPC_BUILD_VIEWER "Build the GLUT/OpenGL viewer" ON)
 option(CIPC_ENABLE_FRICTION "Enable lagged IPC friction" ON)
 option(CIPC_ENABLE_QUADRATIC_BENDING "Enable quadratic cloth bending" ON)
 option(CIPC_ENABLE_METIS_ORDERING "Enable CHOLMOD's cost-aware METIS ordering fallback" ON)
+option(CIPC_ENABLE_PARDISO "Build the optional oneMKL PARDISO backend when available" ON)
 
 # Select a default build type for single-configuration generators.
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -26,6 +27,23 @@ list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 # Find dependencies
 find_package(Eigen3 REQUIRED)
 find_package(TBB REQUIRED)
+set(CIPC_HAS_PARDISO OFF)
+if(CIPC_ENABLE_PARDISO)
+    set(MKL_LINK static)
+    set(MKL_THREADING tbb_thread)
+    set(MKL_INTERFACE lp64)
+    # oneMKL's config checks this component variable, while recent vcpkg TBB
+    # configs provide TBB::tbb without defining it.
+    if(TARGET TBB::tbb)
+        set(TBB_tbb_FOUND TRUE)
+    endif()
+    find_package(MKL CONFIG QUIET)
+    if(MKL_FOUND AND TARGET MKL::MKL)
+        set(CIPC_HAS_PARDISO ON)
+    else()
+        message(STATUS "oneMKL was not found; PARDISO backend will be unavailable")
+    endif()
+endif()
 set(CIPC_SUITESPARSE_COMPONENTS CHOLMOD LDL)
 if(CIPC_ENABLE_METIS_ORDERING)
     list(APPEND CIPC_SUITESPARSE_COMPONENTS Partition)
@@ -64,6 +82,17 @@ set(CIPC_CORE_SOURCES
     "${IPC_SOURCE_DIR}/SuiteSparseLDLSolver.cpp"
     "${IPC_SOURCE_DIR}/TetInversionGuard.cpp"
 )
+if(CIPC_HAS_PARDISO)
+    if(MSVC)
+        # The Windows vcpkg oneMKL package ships a Release CRT static runtime.
+        # Keep ordinary /MDd Debug builds usable by excluding this optional
+        # backend there; Release/RelWithDebInfo remain enabled.
+        list(APPEND CIPC_CORE_SOURCES
+            "$<$<NOT:$<CONFIG:Debug>>:${IPC_SOURCE_DIR}/PardisoSolver.cpp>")
+    else()
+        list(APPEND CIPC_CORE_SOURCES "${IPC_SOURCE_DIR}/PardisoSolver.cpp")
+    endif()
+endif()
 
 file(GLOB_RECURSE CIPC_HEADERS
     CONFIGURE_DEPENDS
@@ -117,6 +146,14 @@ endif()
 if(CIPC_ENABLE_METIS_ORDERING)
     target_compile_definitions(cipc_core PRIVATE CIPC_CHOLMOD_USE_METIS)
 endif()
+if(CIPC_HAS_PARDISO)
+    if(MSVC)
+        target_compile_definitions(cipc_core PUBLIC
+            "$<$<NOT:$<CONFIG:Debug>>:CIPC_HAS_PARDISO>")
+    else()
+        target_compile_definitions(cipc_core PUBLIC CIPC_HAS_PARDISO)
+    endif()
+endif()
 
 # Include directories
 target_include_directories(cipc_core PUBLIC
@@ -134,6 +171,14 @@ target_link_libraries(cipc_core PUBLIC
 )
 if(CIPC_ENABLE_METIS_ORDERING)
     target_link_libraries(cipc_core PUBLIC SuiteSparse::Partition)
+endif()
+if(CIPC_HAS_PARDISO)
+    if(MSVC)
+        target_link_libraries(cipc_core PRIVATE
+            "$<$<NOT:$<CONFIG:Debug>>:MKL::MKL>")
+    else()
+        target_link_libraries(cipc_core PRIVATE MKL::MKL)
+    endif()
 endif()
 
 if(CIPC_BUILD_VIEWER)
@@ -160,6 +205,11 @@ message(STATUS "  - Headless runner: cipc_headless")
 message(STATUS "  - Friction: ${CIPC_ENABLE_FRICTION}")
 message(STATUS "  - Quadratic bending: ${CIPC_ENABLE_QUADRATIC_BENDING}")
 message(STATUS "  - Default linear solver: SuiteSparse LDL")
+if(CIPC_HAS_PARDISO AND MSVC)
+    message(STATUS "  - oneMKL PARDISO backend: ON (non-Debug configurations)")
+else()
+    message(STATUS "  - oneMKL PARDISO backend: ${CIPC_HAS_PARDISO}")
+endif()
 message(STATUS "  - CHOLMOD METIS ordering: ${CIPC_ENABLE_METIS_ORDERING}")
 message(STATUS "  - C++ Standard: 14")
 message(STATUS "  - Eigen3: ${Eigen3_FOUND}")

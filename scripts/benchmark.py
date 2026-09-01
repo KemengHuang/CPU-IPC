@@ -13,16 +13,19 @@ def parse_args():
     parser.add_argument("--repeats", type=int, default=5)
     parser.add_argument("--steps", type=int, default=1)
     parser.add_argument(
-        "--scene", choices=("cloth-bunny", "twisting-mat"), default="cloth-bunny"
+        "--scene",
+        choices=("cloth-bunny", "twisting-mat", "bunny2"),
+        default="cloth-bunny",
     )
     parser.add_argument(
         "--broad-phase", choices=("spatial-hash", "lbvh"), default="lbvh"
     )
     parser.add_argument(
         "--linear-solver",
-        choices=("cholmod", "suitesparse-ldl", "eigen-cg"),
+        choices=("cholmod", "suitesparse-ldl", "pardiso", "eigen-cg"),
         default="suitesparse-ldl",
     )
+    parser.add_argument("--pardiso-threads", type=int, default=0)
     parser.add_argument("--output", type=Path, default=Path("Output/benchmark"))
     return parser.parse_args()
 
@@ -37,8 +40,8 @@ def read_metrics(path):
 
 def main():
     args = parse_args()
-    if args.repeats <= 0 or args.steps <= 0:
-        raise SystemExit("--repeats and --steps must be positive")
+    if args.repeats <= 0 or args.steps <= 0 or args.pardiso_threads < 0:
+        raise SystemExit("--repeats/--steps must be positive and --pardiso-threads non-negative")
 
     executable = args.exe.resolve()
     samples = []
@@ -57,6 +60,8 @@ def main():
             "--output",
             str(run_output),
         ]
+        if args.pardiso_threads > 0:
+            command.extend(("--pardiso-threads", str(args.pardiso_threads)))
         completed = subprocess.run(command, check=True, text=True, capture_output=True)
         result_lines = [line for line in completed.stdout.splitlines() if line.startswith("RESULT ")]
         if len(result_lines) != 1:

@@ -22,7 +22,7 @@ struct CommandLineOptions {
     bool disableBarrier = false;
     BroadPhaseBackend broadPhase = BroadPhaseBackend::LinearBVH;
     LinearSolverBackend linearSolver = LinearSolverOptions{}.backend;
-    int pardisoThreadCount = 0;
+    int pardisoThreadCount = LinearSolverOptions{}.pardisoThreadCount;
     std::string outputDirectory;
 };
 
@@ -35,7 +35,7 @@ void printUsage(const char* executable)
         << "  --output DIRECTORY\n"
         << "  --broad-phase spatial-hash|lbvh\n"
         << "  --linear-solver cholmod|suitesparse-ldl|pardiso|eigen-cg\n"
-        << "  --pardiso-threads N (0 uses the oneMKL default)\n"
+        << "  --pardiso-threads N (default 16; 0 uses the oneMKL default)\n"
         << "  --disable-barrier\n"
         << "  --diagnose-line-search\n"
         << "  --resume\n"

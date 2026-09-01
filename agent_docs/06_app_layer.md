@@ -75,7 +75,7 @@ cipc_headless --scene bunny2 --steps 1 --linear-solver pardiso --pardiso-threads
 
 - `--steps N` 的单位是完整仿真时间步/帧；一个 step 内可能有多次 Newton 迭代和数值分解。
 - 默认不恢复、不写 checkpoint、使用 LBVH；可用 `--resume`、`--write-checkpoints` 显式开启。viewer 同样默认 fresh，不会让 `Output/tempData` 覆盖 cloth+bunny 初态。
-- `--broad-phase lbvh|spatial-hash` 用于碰撞宽阶段 A/B；`--linear-solver suitesparse-ldl|cholmod|pardiso|eigen-cg` 选择线性后端，默认 SuiteSparse LDL；`--pardiso-threads N` 只控制 PARDISO，0 使用 oneMKL 默认；`--verbose` 打印 Newton/线搜索和 PARDISO phase 细节。
+- `--broad-phase lbvh|spatial-hash` 用于碰撞宽阶段 A/B；`--linear-solver suitesparse-ldl|cholmod|pardiso|eigen-cg` 选择线性后端，默认 SuiteSparse LDL；PARDISO 线程上限默认 16，`--pardiso-threads 0` 使用 oneMKL 默认；`--verbose` 打印 Newton/线搜索和 PARDISO phase 细节。
 - 诊断选项：`--diagnose-line-search` 输出方向一阶/二阶 Taylor 对比；`--disable-barrier` 仅用于无接触隔离。临时的 `--friction-scale` 已删除，正式接口不能绕过场景材料参数改变摩擦。
 - 每帧 `metrics.csv` 字段包括五阶段耗时、Newton/κ、总/能量/穿透回退、单 Newton 最大回退与 `Newton>2` 数、mean/min/max α、碰撞、最小平方距离、活动集、nnz、symbolic analyze 与 numeric factorize 次数；末尾的 `pardiso_analysis_ms/pardiso_factorization_ms/pardiso_solve_ms/linear_solver_threads/factor_nnz` 用于 PARDISO 细分，其他后端为 0。
 - 最终 `RESULT` 输出位置和、平方范数和及最后一帧关键指标，供脚本/CI 解析。

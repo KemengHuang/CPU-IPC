@@ -43,7 +43,7 @@
 - LDL 的 numeric 输入是预排列后的上三角 `PAPᵀ`，原下三角 CSC value slot 到该矩阵的映射只在结构相同时有效；任何改变稀疏结构的代码都必须保留完整 outer/inner pattern 比较。
 - PARDISO 使用 `mtype=2` 且读取 upper CSR；Eigen column-major lower CSC 的 outer/inner/value 内存正好等价于同一对称矩阵的 upper CSR。不要再做一次转置，也不能把 `iparm[34]=1` 的零基索引改回一基。LP64 构建要求 `MKL_INT` 与 Eigen `StorageIndex` 都是 32-bit int。
 - PARDISO 的 phase 11/22/33 状态随 `IPCSolverContext::linearSystem` 跨帧保存。模式变化时可输入上一份 METIS permutation；factor nnz 超过最近 fresh ordering 的 1.2 倍会在下一次求解强制重排。维护这一逻辑时要同时检查结果、`symbolic_analyses`、phase 时间和 fill，不能只减少 phase 11 次数。
-- oneMKL 的 TBB threading layer 不由简单的 `mkl_set_num_threads` 可靠限制；当前每个 phase 用 `tbb::global_control`，`--pardiso-threads 16` 在本机 16C/32T 最优，32 线程无收益。线程数属于 benchmark 配置，必须随结果报告。
+- oneMKL 的 TBB threading layer 不由简单的 `mkl_set_num_threads` 可靠限制；当前每个 phase 用 `tbb::global_control`，运行时默认 16 线程（本机 16C/32T 最优），32 线程无收益；显式 0 才使用 oneMKL 默认。线程数属于 benchmark 配置，必须随结果报告。
 - vcpkg 默认 CHOLMOD 不含 supernodal；`suitesparse[gpl]` 才加入该模块并带来额外 GPL 许可要求。当前项目不默认要求它，不能把仅在 GPL 依赖构建上的性能数字写成通用基线。
 
 ## E. 已修复记录（保留用于理解历史代码与旧文档）

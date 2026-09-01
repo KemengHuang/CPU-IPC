@@ -80,7 +80,7 @@ E = dt²·(E_SNH(四面体) + E_BaraffWitkin(布料) + E_bend)
 - 四个后端共用完全相同的 `BHessian` 下三角 triplet、质量对角和固定顶点 RHS 清零逻辑，避免后端间装配语义分叉。
 - 默认 `LinearSolverBackend::SuiteSparseLDL`：将标量稀疏图折叠到每顶点 3-DOF block 做 AMD，展开 permutation 后只构建一次 `PAPᵀ` 上三角 CSC；同结构 Newton 只按缓存映射刷新 14.5 万个数值，再复用 symbolic 数据做 LDLᵀ numeric factorization。
 - 可选 `LinearSolverBackend::Cholmod`：只有 CSC 结构变化才重新 analyze，保留 cost-aware AMD→METIS；使用 `cholmod_solve2` 复用 dense solution/workspace。
-- 可选 `LinearSolverBackend::Pardiso`：要求构建时找到 oneMKL，使用 `mtype=2` 的实对称正定模式。Eigen 的 lower CSC 对称地解释为 upper CSR，避免转置/复制矩阵；phase 11 分析、22 数值分解、33 求解分别计时。同模式跨 Newton/κ/时间步跳过 phase 11；模式变化时优先复用已有 METIS permutation，若 factor nnz 超过最近 fresh ordering 的 1.2 倍则下一轮重新排序。`--pardiso-threads 0` 使用 oneMKL 默认，正数通过 `tbb::global_control` 限制每个 phase。
+- 可选 `LinearSolverBackend::Pardiso`：要求构建时找到 oneMKL，使用 `mtype=2` 的实对称正定模式。Eigen 的 lower CSC 对称地解释为 upper CSR，避免转置/复制矩阵；phase 11 分析、22 数值分解、33 求解分别计时。同模式跨 Newton/κ/时间步跳过 phase 11；模式变化时优先复用已有 METIS permutation，若 factor nnz 超过最近 fresh ordering 的 1.2 倍则下一轮重新排序。默认限制为 16 线程；`--pardiso-threads 0` 使用 oneMKL 默认，其他正数通过 `tbb::global_control` 限制每个 phase。
 - 可选 `LinearSolverBackend::EigenConjugateGradient`：Eigen CG + `IncompleteCholesky<Lower>`，容差/最大迭代来自 `LinearSolverOptions`。CLI 用 `--linear-solver eigen-cg`；可通过 twisting-mat 单步手工 smoke。它是正式可选项，不是死代码。
 - MSVC + vcpkg oneMKL 的静态库使用 Release CRT，因此 PARDISO 只在非 Debug 配置定义 `CIPC_HAS_PARDISO`；普通 Debug 构建仍可使用其余后端，显式选 PARDISO 会抛出清晰错误。
 - 旧的自定义 PCG、多 RHS `cholmod_solver_EPF` 与其 `mesh3D::Constraints` 投影状态已删除。

@@ -25,7 +25,12 @@ def parse_args():
         choices=("cholmod", "suitesparse-ldl", "pardiso", "eigen-cg"),
         default="suitesparse-ldl",
     )
-    parser.add_argument("--pardiso-threads", type=int, default=0)
+    parser.add_argument(
+        "--pardiso-threads",
+        type=int,
+        default=16,
+        help="PARDISO thread limit (default: 16; 0 uses the oneMKL default)",
+    )
     parser.add_argument("--output", type=Path, default=Path("Output/benchmark"))
     return parser.parse_args()
 
@@ -60,7 +65,7 @@ def main():
             "--output",
             str(run_output),
         ]
-        if args.pardiso_threads > 0:
+        if args.linear_solver == "pardiso":
             command.extend(("--pardiso-threads", str(args.pardiso_threads)))
         completed = subprocess.run(command, check=True, text=True, capture_output=True)
         result_lines = [line for line in completed.stdout.splitlines() if line.startswith("RESULT ")]

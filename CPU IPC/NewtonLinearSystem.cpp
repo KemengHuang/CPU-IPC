@@ -42,6 +42,9 @@ void NewtonLinearSystem::solve(
     case LinearSolverBackend::Cholmod:
         solveWithCholmod();
         break;
+    case LinearSolverBackend::SuiteSparseLDL:
+        solveWithSuiteSparseLDL();
+        break;
     case LinearSolverBackend::EigenConjugateGradient:
         solveWithEigenConjugateGradient(options);
         break;
@@ -54,12 +57,14 @@ void NewtonLinearSystem::solve(
 
 std::size_t NewtonLinearSystem::symbolicAnalysisCount() const
 {
-    return cholmodSolver_.symbolicAnalysisCount();
+    return cholmodSolver_.symbolicAnalysisCount()
+        + suiteSparseLDLSolver_.symbolicAnalysisCount();
 }
 
 std::size_t NewtonLinearSystem::numericFactorizationCount() const
 {
-    return cholmodSolver_.numericFactorizationCount();
+    return cholmodSolver_.numericFactorizationCount()
+        + suiteSparseLDLSolver_.numericFactorizationCount();
 }
 
 void NewtonLinearSystem::assemble(
@@ -96,6 +101,11 @@ void NewtonLinearSystem::solveWithCholmod()
 {
     cholmodSolver_.set_pattern(matrix_);
     cholmodSolver_.solve(rightHandSide_, solution_);
+}
+
+void NewtonLinearSystem::solveWithSuiteSparseLDL()
+{
+    suiteSparseLDLSolver_.solve(matrix_, rightHandSide_, solution_);
 }
 
 void NewtonLinearSystem::solveWithEigenConjugateGradient(

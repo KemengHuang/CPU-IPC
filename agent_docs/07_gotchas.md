@@ -37,7 +37,10 @@
 - `BHessian::toTriplets` 会按 `boundaryTypes` 过滤固定/驱动顶点；若改硬约束机制，矩阵和 RHS 必须一起改。
 - 并行累加共享状态必须有明确的数据竞争策略；替换 spin mutex 时要做数值回归。
 - 产品入口为 `ViewerMain.cpp` 和 `apps/cipc_headless.cpp`；核心源文件由 CMake 显式列出。项目当前不保留测试源码或 CTest target。
-- CHOLMOD 的排序策略会影响 symbolic 时间、fill-in 和 factorization 时间；正式 benchmark 必须记录并保持 `CIPC_ENABLE_METIS_ORDERING` 一致。ON 是 cost-aware AMD→METIS，不是无条件强制 METIS；OFF 是 AMD-only。
+- CHOLMOD 的排序策略会影响 symbolic 时间、fill-in 和 factorization 时间；比较 CHOLMOD 时必须记录并保持 `CIPC_ENABLE_METIS_ORDERING` 一致。ON 是 cost-aware AMD→METIS，不是无条件强制 METIS；OFF 是 AMD-only。SuiteSparse LDL 使用独立的 3-DOF block AMD。
+- 默认 SuiteSparse LDL 假设 Newton 矩阵为 SPD：`ldl_numeric` 成功后还会逐项要求 `Dᵢ>0` 且有限。不得为了“继续运行”删除该检查；若触发，应查 Hessian PSD、质量对角或装配错误。
+- LDL 的 numeric 输入是预排列后的上三角 `PAPᵀ`，原下三角 CSC value slot 到该矩阵的映射只在结构相同时有效；任何改变稀疏结构的代码都必须保留完整 outer/inner pattern 比较。
+- vcpkg 默认 CHOLMOD 不含 supernodal；`suitesparse[gpl]` 才加入该模块并带来额外 GPL 许可要求。当前项目不默认要求它，不能把仅在 GPL 依赖构建上的性能数字写成通用基线。
 
 ## E. 已修复记录（保留用于理解历史代码与旧文档）
 
@@ -56,7 +59,7 @@
 - **宽阶段影响物理步长**：原 `Self_CCD_ActiveSet` 直接保存后端候选，体素假阳性会改变 partial/CFL 分支；现由统一静态 AABB+dHat 生成 partial pair，Full CCD 也在 ACCD 前统一扫掠 AABB 过滤。PT 使用入口 α，EE 使用 PT 更新后的 α；两个后端应用相同的精确区间过滤。原 CFL 合并公式保留。
 - **无界循环**：ACCD、κ 外层、动画边界和穿透 safeguard 均加入上限、非有限/underflow 处理与异常诊断。
 - **全局运行状态**：帧号、累计计时、碰撞和 checkpoint 状态已移入每个 Simulator 的 `IPCSolverContext`。
-- **线性求解器结构**：矩阵装配、RHS、解向量和后端分派已移入 `NewtonLinearSystem`；CHOLMOD 为默认，Eigen-CG 通过 `LinearSolverOptions`/`--linear-solver eigen-cg` 正式保留并有 smoke test。旧自定义 PCG、多 RHS 实验入口及 `mesh3D::Constraints` 已删除。
+- **线性求解器结构**：矩阵装配、RHS、解向量和后端分派已移入 `NewtonLinearSystem`；块感知 SuiteSparse LDL 为默认，CHOLMOD/METIS 与 Eigen-CG 通过 `LinearSolverOptions`/`--linear-solver` 正式保留并有 smoke。旧自定义 PCG、多 RHS 实验入口及 `mesh3D::Constraints` 已删除。
 - **稀疏装配/临时分配**：只生成下三角有效 triplet；`NewtonWorkspace` 复用 gradient/BHessian/mutex，`NewtonLinearSystem` 复用 triplet/SparseMatrix/RHS/solver。
 - **重复 FEM/弯曲计算**：PFPX 初始化预计算，活跃 FEM 使用固定尺寸 Eigen；二次弯曲预计算 `Q⊗I₃` 并移除每轮 eigendecomposition。
 - **非 quadratic hinge 不完整**：现以 `plateRigidity=Et³/[12(1−ν²)]` 为统一材料系数，预计算 `θ0` 与 `l0/(h0+h1)`；能量/梯度/Hessian 使用同一公式。维护时必须同时构建 quadratic ON/OFF 并跑 cloth-bunny smoke。

@@ -12,7 +12,8 @@ The benchmark path is fully headless and records solver-stage timing together wi
 - Fixed-size Eigen element kernels, precomputed PFPX operators, and precomputed quadratic/hinge bending geometry.
 - Lower-triangular sparse Hessian assembly without placeholder zeros.
 - Reused Newton, energy, sparse-matrix, RHS, and solver workspaces.
-- CHOLMOD symbolic-factorization reuse plus a verified, cost-aware METIS nested-dissection fallback.
+- Block-aware SuiteSparse LDL with reusable symbolic data and a pre-permuted upper CSC numeric path; this is the default CPU solver.
+- Optional CHOLMOD with symbolic-factorization reuse and a verified, cost-aware METIS nested-dissection fallback.
 - Optional Eigen-CG backend using the same assembled system and boundary handling.
 - Strict energy-decreasing line search, Additive CCD, and the original IPC CFL strategy.
 
@@ -79,6 +80,7 @@ Headless:
 
 ```bash
 build/Release/cipc_headless --scene cloth-bunny --steps 20 --broad-phase lbvh --output Output/run
+build/Release/cipc_headless --scene cloth-bunny --steps 20 --linear-solver cholmod --no-output
 build/Release/cipc_headless --scene twisting-mat --steps 1 --linear-solver eigen-cg --no-output
 python scripts/benchmark.py --exe build/Release/cipc_headless.exe --repeats 5 --steps 20
 ```
@@ -89,7 +91,11 @@ Scene construction is fresh by default. Checkpoint loading and writing are opt-i
 
 The CPU LBVH broad phase is the default; use `--broad-phase spatial-hash` for the optimized legacy backend.
 
-CHOLMOD is the default Newton linear solver. Its default build enables the cost-aware AMD/METIS policy: AMD is retained for small or favorable systems, while METIS nested dissection is available when AMD predicts excessive fill or work. Eigen conjugate gradient with incomplete-Cholesky preconditioning remains available through `--linear-solver eigen-cg`; both backends share the same lower-triangular system assembly and boundary handling.
+SuiteSparse LDL is the default Newton linear solver. It orders the matrix on the mesh's natural 3-DOF vertex blocks, explicitly permutes and caches an upper-triangular CSC pattern, and updates only numeric values while that pattern is unchanged. CHOLMOD remains available through `--linear-solver cholmod`, including its cost-aware AMD/METIS policy. Eigen conjugate gradient with incomplete-Cholesky preconditioning remains available through `--linear-solver eigen-cg`. All three backends share the same lower-triangular Hessian assembly and boundary handling.
+
+On the development machine, alternating paired Release runs reduced five-step wall time by about 5.9% on cloth-bunny and 8.6% on twisting-mat versus the installed non-supernodal CHOLMOD build. These numbers are machine/dependency specific; use `scripts/benchmark.py` to compare locally.
+
+The project deliberately does not require CHOLMOD's GPL supernodal module. If your SuiteSparse build includes it, benchmark `cholmod` separately; its relative performance can differ from the default non-supernodal vcpkg build.
 
 ## CPU IPC benchmark usage
 
@@ -105,16 +111,16 @@ python scripts/benchmark.py \
   --exe build/benchmark/Release/cipc_headless.exe \
   --scene cloth-bunny \
   --broad-phase lbvh \
-  --linear-solver cholmod \
+  --linear-solver suitesparse-ldl \
   --steps 20 \
   --repeats 5
 ```
 
-The benchmark launches independent processes, stores each run under `Output/benchmark/run_NN`, sums per-frame `step_ms`, and reports median/min/max. `metrics.csv` also separates assembly, linear solve, CCD, line search, and post-line-search time while recording Newton iterations, backtracks, accepted step sizes, contact counts, matrix nonzeros, and CHOLMOD analysis/factorization counts.
+The benchmark launches independent processes, stores each run under `Output/benchmark/run_NN`, sums per-frame `step_ms`, and reports median/min/max. `metrics.csv` also separates assembly, linear solve, CCD, line search, and post-line-search time while recording Newton iterations, backtracks, accepted step sizes, contact counts, matrix nonzeros, and direct-solver symbolic-analysis/numeric-factorization counts.
 
 For fair comparisons:
 
-- use the same scene, material file, timestep, bending mode, broad-phase semantics, linear tolerance, METIS-ordering setting, and number of steps;
+- use the same scene, material file, timestep, bending mode, broad-phase semantics, linear-solver backend, tolerance, METIS-ordering setting, and number of steps;
 - disable checkpoint resume and avoid viewer/rendering work;
 - compare `RESULT` and physical/iteration metrics in addition to wall time;
 - report the median of multiple independent runs, not only the fastest sample;
@@ -140,7 +146,7 @@ D = E * thickness^3 / (12 * (1 - poisson_ratio^2)).
 | `CPU IPC/ContactMechanics.*` | Contact distances, barriers, derivatives, and feasible self-contact steps. |
 | `CPU IPC/CollisionBroadPhase.*`, `LBVH.*` | SpatialHash and Linear BVH broad phases. |
 | `CPU IPC/Elasticity.*`, `HingeBending.*` | Solid/cloth elasticity and bending models. |
-| `CPU IPC/NewtonLinearSystem.*`, `CholmodSolver.*` | Sparse assembly and CHOLMOD/Eigen-CG backends. |
+| `CPU IPC/NewtonLinearSystem.*`, `SuiteSparseLDLSolver.*`, `CholmodSolver.*` | Shared sparse assembly and SuiteSparse LDL/CHOLMOD/Eigen-CG backends. |
 | `CPU IPC/SimulationMesh.*`, `Simulator.*` | Mesh state, IO, scene construction, and simulation ownership. |
 | `CPU IPC/ViewerMain.cpp` | Fixed-function GLUT viewer. |
 | `apps/cipc_headless.cpp` | Headless executable. |
@@ -153,6 +159,7 @@ The repository intentionally ships no test suite. After changes, validate the pr
 ```bash
 build/Release/cipc_headless --scene cloth-bunny --steps 1 --no-output --broad-phase lbvh
 build/Release/cipc_headless --scene cloth-bunny --steps 1 --no-output --broad-phase spatial-hash
+build/Release/cipc_headless --scene cloth-bunny --steps 1 --no-output --linear-solver cholmod
 build/Release/cipc_headless --scene twisting-mat --steps 1 --no-output --linear-solver eigen-cg
 build/nonquadratic/Release/cipc_headless --scene cloth-bunny --steps 1 --no-output
 ```

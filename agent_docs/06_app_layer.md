@@ -72,7 +72,7 @@ cipc_headless --scene twisting-mat --steps 1 --linear-solver eigen-cg --no-outpu
 ```
 
 - 默认不恢复、不写 checkpoint、使用 LBVH；可用 `--resume`、`--write-checkpoints` 显式开启。viewer 同样默认 fresh，不会让 `Output/tempData` 覆盖 cloth+bunny 初态。
-- `--broad-phase lbvh|spatial-hash` 用于碰撞宽阶段 A/B；`--linear-solver cholmod|eigen-cg` 选择线性后端，默认 CHOLMOD；`--verbose` 打印 Newton/线搜索细节。
+- `--broad-phase lbvh|spatial-hash` 用于碰撞宽阶段 A/B；`--linear-solver suitesparse-ldl|cholmod|eigen-cg` 选择线性后端，默认 SuiteSparse LDL；`--verbose` 打印 Newton/线搜索细节。
 - 诊断选项：`--diagnose-line-search` 输出方向一阶/二阶 Taylor 对比；`--disable-barrier` 仅用于无接触隔离。临时的 `--friction-scale` 已删除，正式接口不能绕过场景材料参数改变摩擦。
 - 每帧 `metrics.csv` 字段包括五阶段耗时、Newton/κ、总/能量/穿透回退、单 Newton 最大回退与 `Newton>2` 数、mean/min/max α、碰撞、最小平方距离、活动集、nnz、symbolic analyze 与 numeric factorize 次数。
 - 最终 `RESULT` 输出位置和、平方范数和及最后一帧关键指标，供脚本/CI 解析。
@@ -83,18 +83,25 @@ cipc_headless --scene twisting-mat --steps 1 --linear-solver eigen-cg --no-outpu
 `NewtonLinearSystem.cpp/.h` 是 Newton 线性系统的唯一入口：
 
 - `assemble` 从 `BHessian` 生成下三角 triplet，加入质量/阻尼对角并按 `boundaryTypes` 将固定顶点 RHS 清零。
-- CHOLMOD 与 Eigen-CG 共用同一 `Eigen::SparseMatrix`、RHS 和解向量，再统一 scatter 回每顶点方向；这保证切换后端不会改变约束或装配语义。
-- 默认 CHOLMOD；可选 Eigen-CG 使用 `Eigen::ConjugateGradient<SparseMatrix, Lower, IncompleteCholesky>`，容差 `1e-6`、最大 10000 次，可由 `LinearSolverOptions` 设置。
-- 默认构建同时开启 `CIPC_ENABLE_METIS_ORDERING`：配置阶段要求 SuiteSparse `Partition` 并链接验证 `cholmod_metis`；运行时保持 `nmethods=0`、指定 `default_nesdis=0` 和 weighted postorder，即先由 AMD 估计 fill/work，仅在代价较高时再尝试 METIS。关闭选项时设置 `nmethods=1 + CHOLMOD_AMD`，形成真正的 AMD-only A/B。
+- SuiteSparse LDL、CHOLMOD 与 Eigen-CG 共用同一 `Eigen::SparseMatrix`、RHS 和解向量，再统一 scatter 回每顶点方向；这保证切换后端不会改变约束或装配语义。
+- 默认 SuiteSparse LDL；可选 Eigen-CG 使用 `Eigen::ConjugateGradient<SparseMatrix, Lower, IncompleteCholesky>`，容差 `1e-6`、最大 10000 次，可由 `LinearSolverOptions` 设置。
+- CHOLMOD 后端随默认构建开启 `CIPC_ENABLE_METIS_ORDERING`：配置阶段要求 SuiteSparse `Partition` 并链接验证 `cholmod_metis`；运行时保持 `nmethods=0`、指定 `default_nesdis=0` 和 weighted postorder，即先由 AMD 估计 fill/work，仅在代价较高时再尝试 METIS。关闭选项时设置 `nmethods=1 + CHOLMOD_AMD`，形成真正的 AMD-only A/B。
 - Eigen-CG 可用 `cipc_headless --scene twisting-mat --steps 1 --no-output --linear-solver eigen-cg` 做手工 smoke；它不要求与直接法 bitwise 相同。
+
+`SuiteSparseLDLSolver.cpp/.h` 实现默认 CPU 直接法：
+
+- 从共享下三角矩阵提取每顶点 3-DOF block graph，在 block graph 上做 AMD，再将 permutation 展开回标量 DOF，保留 xyz 局部性。
+- 第一次或结构变化时显式生成 `PAPᵀ` 上三角 CSC、建立原 lower CSC value index 到 permuted CSC value index 的一一映射并执行 `ldl_symbolic`；同结构 Newton 只刷新数值。
+- 每轮调用 `ldl_numeric + lsolve + dsolve + ltsolve`；要求所有 D 对角有限且严格为正，失败立即抛错，不把不定方向交给线搜索。
+- analyze/factorize 计数与 CHOLMOD 共用 `IPCStepStats` 字段；20 步 A/B 中两直接法的逐帧整数指标完全一致。
 
 `CholmodSolver.cpp/.h` 只实现 SuiteSparse `CholmodSolver`：
 
 - 类已改为 RAII、不可复制：构造时检查 `cholmod_start`，析构释放当前 factor 并 `cholmod_finish`；不再持有被重绑定的 CHOLMOD-owned sparse/dense 缓冲区。
 - `set_pattern(SparseMatrix)` 把压缩 Eigen CSC 的 outer/inner/value 数组复制到稳定的自有缓冲，并用非 owning `cholmod_sparse` view 传给 CHOLMOD。
-- 每次都刷新数值；仅当矩阵维度或 outer/inner 索引变化时释放 factor。`solve` 在 factor 不存在时执行 `cholmod_analyze`，随后每轮执行数值 `cholmod_factorize + cholmod_solve`。
+- 每次都刷新数值；仅当矩阵维度或 outer/inner 索引变化时释放 factor。`solve` 在 factor 不存在时执行 `cholmod_analyze`，随后每轮执行数值 `cholmod_factorize + cholmod_solve2`；solution/Y/E dense workspace 跨 Newton 复用。
 - `solveBarrierSubproblem` 生命周期内复用同一 `NewtonLinearSystem/CholmodSolver`，因此接触拓扑不变的相邻 Newton 轮可以跳过符号分析；接触导致稀疏模式变化时自动重分析。
-- 暴露 analyze/factorize 计数给 `IPCStepStats`；默认首帧当前约为 3/12，说明大部分 Newton 已复用 symbolic factor。
+- 暴露 analyze/factorize 计数给 `IPCStepStats`；当前首帧为 2 次 analyze / 9 次 factorize，说明大部分 Newton 已复用 symbolic 数据。
 - `preFactorize / solve_with_preFactorize` 保留给多 RHS；所有入口都有矩阵形状、RHS 尺寸和 CHOLMOD 失败检查。
 - 已移除未定义的三元组 `set_pattern`、`IJ2aI` 和无用 dense/sparse 指针成员。
 

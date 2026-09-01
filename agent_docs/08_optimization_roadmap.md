@@ -8,7 +8,7 @@
 - P1 已完成：下三角无占位零装配、固定尺寸活跃 FEM、PFPX 预计算、二次弯曲常量 Hessian、Newton/Energy workspace。
 - P2 已完成安全部分：SpatialHash bucket/occupancy 复用、排序 vector scratch、GPU 风格 CPU LBVH；梯度去锁和彻底 CSR SpatialHash 尚未实施，因为当前 assembly 已不是主瓶颈。
 - P3 部分完成：运行状态、构建 target、摩擦、线性系统、viewer 与核心文件职责均已分层；旧 PCG/特效/无调用文件已清理。`MMCVID` 已改名 `EncodedContact`，但负数槽位协议尚未类型化；`mesh3D` 其余职责仍待拆分。
-- P4 完成低风险接口：CHOLMOD 仍是默认，METIS 以经过依赖校验的 cost-aware fallback 启用，Eigen-CG 作为共享装配后的可选后端保留并有 smoke test；未改 Hessian scale/近似或 Newton 算法，也未宣称 Eigen-CG 性能更优。
+- P4 完成低风险接口：块感知 SuiteSparse LDL 成为默认 CPU 直接法；CHOLMOD 保留经过依赖校验的 cost-aware METIS fallback，Eigen-CG 继续作为共享装配后的可选后端并有 smoke；未改 Hessian scale/近似或 Newton 算法。
 
 实测详见 `09_optimization_report.md`。
 
@@ -62,7 +62,7 @@ cipc_headless --scene cloth-bunny --steps 20 --broad-phase lbvh --output <dir>
 
 ### 1. 只装配 CHOLMOD 使用的下三角
 
-**状态：已完成。** `BHessian::toTriplets` 现在只输出下三角、自由 DOF 和非零数值；CHOLMOD（`stype=-1`）与 Eigen-CG 共用该装配。优化前默认 bunny 的 7356 个 tet 单独会生成：
+**状态：已完成。** `BHessian::toTriplets` 现在只输出下三角、自由 DOF 和非零数值；SuiteSparse LDL、CHOLMOD（`stype=-1`）与 Eigen-CG 共用该装配。优化前默认 bunny 的 7356 个 tet 单独会生成：
 
 ```text
 7356 × 144 = 1,059,264 triplets
@@ -182,7 +182,7 @@ cipc_headless  benchmark/regression CLI
 ## P4 — 高风险算法级优化（最后考虑）
 
 - Modified Newton / lagged Hessian：若多轮 Hessian 变化小，可少做装配或分解，但会改变收敛行为。
-- Eigen-CG + Incomplete Cholesky 已作为可选后端接通；大网格上是否胜过 CHOLMOD、接触刚度下是否足够鲁棒仍需专门 benchmark，默认不变。
+- Eigen-CG + Incomplete Cholesky 已作为可选后端接通；大网格上是否胜过 SuiteSparse LDL/CHOLMOD、接触刚度下是否足够鲁棒仍需专门 benchmark。
 - 固定 superset sparsity pattern：可长期复用符号分解，但可能显著增加 fill-in 和内存。
 - 接触 Hessian 的解析 PSD/Gauss-Newton 近似：可减少逐接触特征分解，但属于算法变更，必须核对 IPC 收敛与无穿透性质。
 - LBVH 已完成并默认启用；更高风险的增量 refit 或 SAH rebuild 仍需更大场景 profile。
@@ -194,7 +194,7 @@ cipc_headless  benchmark/regression CLI
 3. 下一步：细分 `linear_ms`（triplet / setFromTriplets / analyze / factorize / solve）并评估直接 CSC 数值装配。
 4. 下一步：拆 `mesh3D`、把 `EncodedContact` 改为 tagged contact、保存 checkpoint 拓扑/参数 hash，逐步清理仍嵌在活跃大文件中的实验函数。
 5. profile 证明 assembly 锁争用成为瓶颈时，再比较 graph coloring / TLS / gather。
-6. 只有更大场景证明 CHOLMOD 是扩展瓶颈时，系统比较现有 Eigen-CG 的容差/预条件与 CHOLMOD；lagged Hessian 仍作为独立高风险实验。
+6. 更大场景需继续比较 SuiteSparse LDL、带 supernodal 的 CHOLMOD 与 Eigen-CG；启用 vcpkg GPL supernodal 前必须单独评估许可与分发要求。lagged Hessian 仍作为独立高风险实验。
 
 ## 每项优化的完成标准
 

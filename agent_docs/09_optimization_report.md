@@ -12,7 +12,7 @@
 - `IPCStepStats + metrics.csv`：逐帧记录五阶段耗时、Newton/κ、总/能量/穿透回退、mean/min/max α、碰撞、最小平方距离、活动集、nnz、analyze/factorize。
 - `scripts/benchmark.py`：独立进程重复运行，报告 median/min/max，并保留每次 metrics。
 - 摩擦冻结量、能量、梯度和解析 PSD Hessian 拆到 `Friction.cpp/.h`；`IPCSolver.cpp` 只保留调用与总能量编排。
-- Newton 稀疏装配、RHS/scatter 和后端分派拆到 `NewtonLinearSystem.cpp/.h`。CHOLMOD 保持默认；Eigen-CG 通过 `LinearSolverOptions` 与 `--linear-solver eigen-cg` 正式保留，两个后端共用同一矩阵/边界条件装配。
+- Newton 稀疏装配、RHS/scatter 和后端分派拆到 `NewtonLinearSystem.cpp/.h`。块感知 SuiteSparse LDL 为默认；CHOLMOD/METIS 与 Eigen-CG 通过 `LinearSolverOptions` 与 `--linear-solver` 正式保留，三个后端共用同一矩阵/边界条件装配。
 - 删除旧自定义 PCG、多 RHS 实验入口、无用 `mesh3D::Constraints`、`FEMTimeIntegrator` 透传层和未调用的场景辅助函数；`Simulator.cpp` 辅助函数采用用途命名并限制为内部链接。
 - 文件职责整理：`ViewerMain/IPCSolver/ContactMechanics/CollisionBroadPhase/AdditiveCCD/Elasticity/ElasticityMath/CholmodSolver/FeasibleStep/StageTimer` 取代含糊旧名；`EncodedContact` 取代 `MMCVID` 类型名，`SimulationModel` 取代 `model_tet`。
 - 删除 shader/GLEW、无效 viewer 特效开关、`fem_parameters.h`、2D/肌肉/肌腱加载器、空 model loader、EKF 状态、未调用 ACCD broad-phase 备份与无用数学函数；Python 视频工具移入 `scripts/` 并改为参数化入口。
@@ -21,14 +21,30 @@
 
 ## 2. 稀疏求解与装配
 
-- `CholmodSolver` RAII、模式变化检测、同模式 symbolic reuse、失败检查和 analyze/factorize 计数。
+- `SuiteSparseLDLSolver` 使用 3-DOF block AMD、预排列上三角 CSC 和 value-slot 映射；同模式只刷新数值并复用 symbolic，且显式拒绝非有限或非正的 D 对角。
+- `CholmodSolver` RAII、模式变化检测、同模式 symbolic reuse、失败检查和 analyze/factorize 计数；`cholmod_solve2` 复用 solution/Y/E dense workspace。
 - `CIPC_ENABLE_METIS_ORDERING=ON` 成为默认：CMake 要求 CHOLMOD Partition/METIS 并链接检查 `cholmod_metis`；`CholmodSolver` 使用 CHOLMOD cost-aware AMD→METIS 策略与 weighted postorder，OFF 则固定 AMD-only，便于做同机 A/B。
 - 修复 vcpkg 只导出无命名空间 `metis` 导致 METIS 未接入的问题，并兼容 Linux 的 `metis.h + libmetis` 及内嵌 Partition 的 CHOLMOD；SuiteSparse fallback imported targets 现在区分 Debug/Release，BLAS/LAPACK 固定为同一 provider，同时修复 `SuiteSparse_SPQR_FOUND` 拼写。
 - `BHessian::toTriplets` 改为两遍并行 count/prefix/fill：仅自由 DOF、非零数值、全局下三角。
-- triplet、SparseMatrix、RHS/result、CholmodSolver 全部由 `NewtonLinearSystem` 跨迭代复用；`NewtonWorkspace` 只持有 gradient、BHessian、mutex 和该线性系统对象。
-- 默认首帧 12 次 numeric factorization 中约 3 次 symbolic analysis。
+- triplet、SparseMatrix、RHS/result 和三个 solver workspace 全部由 `NewtonLinearSystem` 跨迭代复用；`NewtonWorkspace` 只持有 gradient、BHessian、mutex 和该线性系统对象。
+- 当前默认首帧 9 次 numeric factorization 中 2 次 symbolic analysis；LDL 与 CHOLMOD 计数口径相同。
 
 METIS 接入时做了策略诊断，而不是把“调用 METIS”直接当成加速：当前 cloth-bunny 首步中，单次强制 METIS 约 515 ms、每次同时评估 AMD+METIS 约 506 ms，均慢于 cost-aware 策略。最终策略下各 5 个独立 Release 进程的首步中位数为 METIS-enabled 449.838 ms、AMD-only 449.675 ms，差异处于运行噪声；两者均为 8 Newton、`nnz=145053`、相同接触/线搜索指标，最终状态只差浮点归约舍入。该结果只说明当前规模由 AMD 胜出；METIS 的收益仍需在更大稀疏图上单独 benchmark。
+
+### 块感知 SuiteSparse LDL
+
+线性细分 profile 显示原 5 步基线 `1071.250 ms` 中 `linear_ms=928.107 ms`；单 Newton 典型开销约为 triplet 生成 1 ms、Eigen CSC 归并 6–7 ms、CHOLMOD symbolic 4 ms（多数轮复用）、simplicial numeric factorization 33 ms、solve <1 ms。当前 vcpkg CHOLMOD 未带 GPL supernodal，瓶颈实际是串行 simplicial numeric factorization。
+
+新后端不改变 Hessian：先把标量图折叠为每顶点一个 3-DOF block 做 AMD，展开 permutation 后生成上三角 `PAPᵀ`。结构变化时建立原 lower CSC value slot 到 permuted CSC slot 的一一映射并执行 `ldl_symbolic`；同结构轮只刷新 14.5 万个数值，再运行 `ldl_numeric` 和三角求解。最终 A/B 使用同一 Release 可执行文件并交替运行两个后端，以减弱温度和调度漂移：
+
+| 场景 | 步数/重复 | CHOLMOD 中位数 | SuiteSparse LDL 中位数 | 变化 |
+|---|---:|---:|---:|---:|
+| cloth-bunny | 5 / 7 | 1244.100 ms | 1170.705 ms | −5.90% |
+| cloth-bunny `linear_ms` | 5 / 7 | 1051.621 ms | 993.376 ms | −5.54% |
+| cloth-bunny | 20 / 3 | 4222.478 ms | 4009.640 ms | −5.04% |
+| twisting-mat | 5 / 7 | 861.116 ms | 787.114 ms | −8.59% |
+
+cloth-bunny 20 步的逐帧 Newton、κ、总/能量/穿透回退、碰撞、活动集、nnz、symbolic/numeric 次数全部一致；`mean_alpha` 最大绝对差约 `3.34e−12`，`min_distance2` 最大差约 `1.02e−18`。因此将 SuiteSparse LDL 设为默认，CHOLMOD/METIS 和 Eigen-CG 保留为正式 A/B 后端。
 
 以下矩阵与性能数字是早期 `plane100` 场景的历史基线；当前默认场景已由用户改为 `plane1024`，不可直接横向比较：
 
@@ -126,6 +142,8 @@ cloth-bunny、1 步、独立进程：
 - headless-only（viewer OFF）独立构建：通过。
 - METIS ordering ON/OFF 两套 MSVC Release 构建与 twisting-mat/cloth-bunny CHOLMOD smoke 均通过；ON 下 Eigen-CG smoke 也通过。ON 配置会实际编译/链接检查 `cholmod_metis` 后才提供 `Partition`，不会只根据包名静默假定支持。
 - 多配置映射已在生成的 VS 工程中核对：Debug 链接 `debug/lib`，Release/RelWithDebInfo/MinSizeRel 链接 `lib`；Debug headless 构建和 twisting-mat CHOLMOD smoke 通过。
+- 默认 SuiteSparse LDL 完成 cloth-bunny 100 步：正常结束，末帧 `min_distance2=1.4164226702324649e−5>0`；20 步 LBVH/SpatialHash 终态在浮点归约误差内一致。
+- SuiteSparse LDL/CHOLMOD 的 cloth-bunny 20 步逐帧整数指标完全一致；twisting-mat 5 步和 Eigen-CG 单步 smoke 通过。
 - 当前 quadratic ON/OFF 两种 Release 配置与 cloth-bunny/twisting-mat headless smoke 均通过；项目不再运行 CTest。
 - 默认 LBVH 与 SpatialHash、TwistingMat 三条 1 步轨迹均纳入回归。
 - SpatialHash 与 LBVH 各完成 20 步运行；最小平方距离保持正值。
@@ -175,7 +193,8 @@ cloth-bunny、1 步、独立进程：
 
 ## 9. 未实施或尚未完成评估的高风险项
 
-- Eigen-CG 已可选运行，但尚未在大网格上系统比较容差、预条件、收敛鲁棒性和性能；默认仍为 CHOLMOD。
+- Eigen-CG 已可选运行，但尚未在大网格上系统比较容差、预条件、收敛鲁棒性和性能；默认为 SuiteSparse LDL。
+- CHOLMOD GPL supernodal + 多线程 BLAS 尚未做隔离 benchmark；启用会改变依赖许可边界，不能作为无条件默认优化。
 - lagged/modified Newton、接触 Hessian 近似。
 - 直接 CSC 数值装配与固定 superset sparsity（可能改变 fill-in/内存）。
 - 梯度 graph coloring/TLS/gather（当前 assembly 已降为小占比）。

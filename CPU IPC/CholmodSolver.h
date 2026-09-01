@@ -43,6 +43,9 @@ private:
     cholmod_common common_;
     cholmod_sparse matrix_;
     cholmod_factor* factor_ = nullptr;
+    cholmod_dense* solutionBuffer_ = nullptr;
+    cholmod_dense* solveWorkspaceY_ = nullptr;
+    cholmod_dense* solveWorkspaceE_ = nullptr;
     bool matrixReady_ = false;
     std::size_t symbolicAnalysisCount_ = 0;
     std::size_t numericFactorizationCount_ = 0;

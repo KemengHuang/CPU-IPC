@@ -45,6 +45,15 @@ CholmodSolver::~CholmodSolver()
     if (factor_ != nullptr) {
         cholmod_free_factor(&factor_, &common_);
     }
+    if (solutionBuffer_ != nullptr) {
+        cholmod_free_dense(&solutionBuffer_, &common_);
+    }
+    if (solveWorkspaceY_ != nullptr) {
+        cholmod_free_dense(&solveWorkspaceY_, &common_);
+    }
+    if (solveWorkspaceE_ != nullptr) {
+        cholmod_free_dense(&solveWorkspaceE_, &common_);
+    }
     cholmod_finish(&common_);
 }
 
@@ -168,17 +177,24 @@ void CholmodSolver::solveFactorized(const Eigen::VectorXd& rhs, Eigen::VectorXd&
     rhsView.xtype = CHOLMOD_REAL;
     rhsView.dtype = CHOLMOD_DOUBLE;
 
-    cholmod_dense* solution = cholmod_solve(CHOLMOD_A, factor_, &rhsView, &common_);
-    if (solution == nullptr) {
+    if (!cholmod_solve2(
+            CHOLMOD_A,
+            factor_,
+            &rhsView,
+            nullptr,
+            &solutionBuffer_,
+            nullptr,
+            &solveWorkspaceY_,
+            &solveWorkspaceE_,
+            &common_)) {
         throw std::runtime_error("CHOLMOD solve failed");
     }
 
     result.resize(rhs.size());
     std::memcpy(
         result.data(),
-        solution->x,
+        solutionBuffer_->x,
         static_cast<size_t>(result.size()) * sizeof(result[0]));
-    cholmod_free_dense(&solution, &common_);
 }
 
 void CholmodSolver::solve(const Eigen::VectorXd& rhs, Eigen::VectorXd& result)

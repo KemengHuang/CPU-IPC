@@ -16,13 +16,13 @@
 
 ## 2. `solveBarrierSubproblem` — Newton 循环
 
-`iterationLimit = 10000`。每个 barrier 子问题创建一次 `NewtonWorkspace`，复用 gradient、BHessian、mutex 和独立的 `NewtonLinearSystem`；后者持有 triplet、SparseMatrix、RHS/result 与 CHOLMOD 缓存。每次迭代严格按序：
+`iterationLimit = 10000`。每个 barrier 子问题创建一次 `NewtonWorkspace`，复用 gradient、BHessian、mutex 和独立的 `NewtonLinearSystem`；后者持有 triplet、SparseMatrix、RHS/result 与三个线性后端的缓存。每次迭代严格按序：
 
 | 顺序 | 步骤 | 位置 | 计时器 |
 |---|---|---|---|
 | 1 | `computeGradientAndHessian(mesh, gradient, BH, gd)`，返回碰撞数 | `:1971` | time0 |
 | 2 | 收敛检查（用上一轮方向）：`directionInfinityNorm(moveDir)`；阈值 = `Newton_Solver_Threshold·sqrt(bboxDiagSize2)·dt`；`k>0 && directionVanished` 则 break | `solveBarrierSubproblem` | — |
-| 3 | `NewtonLinearSystem::solve`：统一装配后按配置调用 CHOLMOD 或 Eigen-CG；CHOLMOD 在同一子问题内复用，稀疏结构不变时复用符号分析 | `NewtonLinearSystem.cpp` | time1 |
+| 3 | `NewtonLinearSystem::solve`：统一装配后按配置调用 SuiteSparse LDL、CHOLMOD 或 Eigen-CG；两个直接法在稀疏结构不变时复用符号分析 | `NewtonLinearSystem.cpp` | time1 |
 | 4 | 可行步长上限（见 §3） | `:1990-2024` | time2 |
 | 5 | `lineSearch(...)` 回溯 | `:2031` | time3 |
 | 6 | `postLineSearch(mesh, gd, Kappa)` κ 自适应 + 近约束簿记 | `IPCSolver.cpp` | time4 |
@@ -77,8 +77,9 @@ E = dt²·(E_SNH(四面体) + E_BaraffWitkin(布料) + E_bend)
 
 ## 7. 线性求解（`NewtonLinearSystem.cpp/.h`）
 
-- 两个后端共用完全相同的 `BHessian` 下三角 triplet、质量对角和固定顶点 RHS 清零逻辑，避免后端间装配语义分叉。
-- 默认 `LinearSolverBackend::Cholmod`：只有 CSC 结构变化才重新 analyze；默认首帧实测 12 次 factorize 中约 3 次 analyze。
+- 三个后端共用完全相同的 `BHessian` 下三角 triplet、质量对角和固定顶点 RHS 清零逻辑，避免后端间装配语义分叉。
+- 默认 `LinearSolverBackend::SuiteSparseLDL`：将标量稀疏图折叠到每顶点 3-DOF block 做 AMD，展开 permutation 后只构建一次 `PAPᵀ` 上三角 CSC；同结构 Newton 只按缓存映射刷新 14.5 万个数值，再复用 symbolic 数据做 LDLᵀ numeric factorization。
+- 可选 `LinearSolverBackend::Cholmod`：只有 CSC 结构变化才重新 analyze，保留 cost-aware AMD→METIS；使用 `cholmod_solve2` 复用 dense solution/workspace。
 - 可选 `LinearSolverBackend::EigenConjugateGradient`：Eigen CG + `IncompleteCholesky<Lower>`，容差/最大迭代来自 `LinearSolverOptions`。CLI 用 `--linear-solver eigen-cg`；可通过 twisting-mat 单步手工 smoke。它是正式可选项，不是死代码。
 - 旧的自定义 PCG、多 RHS `cholmod_solver_EPF` 与其 `mesh3D::Constraints` 投影状态已删除。
 

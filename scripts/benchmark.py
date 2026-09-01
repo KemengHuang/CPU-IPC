@@ -19,7 +19,9 @@ def parse_args():
         "--broad-phase", choices=("spatial-hash", "lbvh"), default="lbvh"
     )
     parser.add_argument(
-        "--linear-solver", choices=("cholmod", "eigen-cg"), default="cholmod"
+        "--linear-solver",
+        choices=("cholmod", "suitesparse-ldl", "eigen-cg"),
+        default="suitesparse-ldl",
     )
     parser.add_argument("--output", type=Path, default=Path("Output/benchmark"))
     return parser.parse_args()

@@ -26,7 +26,7 @@ list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 # Find dependencies
 find_package(Eigen3 REQUIRED)
 find_package(TBB REQUIRED)
-set(CIPC_SUITESPARSE_COMPONENTS CHOLMOD)
+set(CIPC_SUITESPARSE_COMPONENTS CHOLMOD LDL)
 if(CIPC_ENABLE_METIS_ORDERING)
     list(APPEND CIPC_SUITESPARSE_COMPONENTS Partition)
 endif()
@@ -61,6 +61,7 @@ set(CIPC_CORE_SOURCES
     "${IPC_SOURCE_DIR}/RuntimePaths.cpp"
     "${IPC_SOURCE_DIR}/SimulationMesh.cpp"
     "${IPC_SOURCE_DIR}/Simulator.cpp"
+    "${IPC_SOURCE_DIR}/SuiteSparseLDLSolver.cpp"
     "${IPC_SOURCE_DIR}/TetInversionGuard.cpp"
 )
 
@@ -127,7 +128,9 @@ target_include_directories(cipc_core PUBLIC
 target_link_libraries(cipc_core PUBLIC
     Eigen3::Eigen
     TBB::tbb
+    SuiteSparse::AMD
     SuiteSparse::CHOLMOD
+    SuiteSparse::LDL
 )
 if(CIPC_ENABLE_METIS_ORDERING)
     target_link_libraries(cipc_core PUBLIC SuiteSparse::Partition)
@@ -156,6 +159,7 @@ message(STATUS "  - Viewer: ${CIPC_BUILD_VIEWER}")
 message(STATUS "  - Headless runner: cipc_headless")
 message(STATUS "  - Friction: ${CIPC_ENABLE_FRICTION}")
 message(STATUS "  - Quadratic bending: ${CIPC_ENABLE_QUADRATIC_BENDING}")
+message(STATUS "  - Default linear solver: SuiteSparse LDL")
 message(STATUS "  - CHOLMOD METIS ordering: ${CIPC_ENABLE_METIS_ORDERING}")
 message(STATUS "  - C++ Standard: 14")
 message(STATUS "  - Eigen3: ${Eigen3_FOUND}")

@@ -1,6 +1,6 @@
 # 01 — 构建、架构与核心数据结构
 
-本版本定位为**高度 CPU 优化的 IPC 实现与 CPU IPC 对比基准**：提供无窗口产品入口、分阶段 metrics、重复进程 benchmark、LBVH/SpatialHash A/B 和 CHOLMOD/Eigen-CG A/B。对比时必须同时核对轨迹、接触、Newton/线搜索和最小距离，不能通过改变物理问题换取表面加速。
+本版本定位为**高度 CPU 优化的 IPC 实现与 CPU IPC 对比基准**：提供无窗口产品入口、分阶段 metrics、重复进程 benchmark、LBVH/SpatialHash A/B 和 SuiteSparse LDL/CHOLMOD/Eigen-CG A/B。对比时必须同时核对轨迹、接触、Newton/线搜索和最小距离，不能通过改变物理问题换取表面加速。
 
 ## 构建与运行
 
@@ -27,7 +27,7 @@ cmake --build build --config Release
 - SuiteSparse 查找器会校验 `cholmod_metis`，兼容 `METIS::METIS`、`METIS::metis`、vcpkg 的 `metis` target、Linux 常规 `metis.h + libmetis` 以及内嵌 Partition 的 CHOLMOD；多配置生成器分别绑定 Release/Debug SuiteSparse 库。BLAS/LAPACK 必须来自同一 provider，优先使用带配置映射的 OpenBLAS target。
 - MSVC 的 `/bigobj` 只施加到 `cipc_core`（`ContactMechanics.cpp` 的生成代码需要），不再污染全局 `CMAKE_CXX_FLAGS`。
 
-运行：`cipc` 打开 GLUT 窗口，空格开始/暂停。`cipc_headless --steps N --broad-phase lbvh --linear-solver cholmod` 无窗口运行并写逐帧 `metrics.csv`；`--linear-solver eigen-cg` 可切到保留的 Eigen-CG 后端。运行时自动创建输出目录且可由 headless `--output` 覆盖；`9` 切换表面 OBJ，`/` 切换截图，两者默认关闭——见 `06_app_layer.md`。
+运行：`cipc` 打开 GLUT 窗口，空格开始/暂停。`cipc_headless --steps N --broad-phase lbvh` 默认用块感知 SuiteSparse LDL 并写逐帧 `metrics.csv`；`--linear-solver suitesparse-ldl|cholmod|eigen-cg` 可显式选择三个后端。运行时自动创建输出目录且可由 headless `--output` 覆盖；`9` 切换表面 OBJ，`/` 切换截图，两者默认关闭——见 `06_app_layer.md`。
 
 ## 整体架构
 
@@ -38,7 +38,7 @@ cipc viewer / cipc_headless
                   ├─ κ 外层循环: solveBarrierSubproblem × N
                   │    └─ Newton 迭代:
                   │         computeGradientAndHessian  (弹性+障碍+摩擦)
-                  │         NewtonLinearSystem::solve  (CHOLMOD / Eigen-CG)
+                  │         NewtonLinearSystem::solve  (SuiteSparse LDL / CHOLMOD / Eigen-CG)
                   │         可行步长 (ACCD / CFL / 地面射线)
                   │         lineSearch (回溯 + 穿透防护)
                   │         postLineSearch (κ 自适应)
@@ -84,7 +84,7 @@ cipc viewer / cipc_headless
 - `H9x9 + D3Index`：3 顶点（PE 接触、布料三角形弹性）
 - `H12x12 + D4Index`：4 顶点（PT/EE 接触、tet 弹性、弯曲）
 
-`toTriplets(boundaryTypes, output)` 用两遍并行 count/prefix/fill，只输出对称求解所需的全局下三角、自由顶点项和非零数值；不会生成占位零。输出 buffer 属于 `NewtonLinearSystem` 并跨 Newton 保留容量，`Eigen::SparseMatrix::setFromTriplets` 负责合并重叠项；CHOLMOD 与 Eigen-CG 共用该矩阵和 RHS。
+`toTriplets(boundaryTypes, output)` 用两遍并行 count/prefix/fill，只输出对称求解所需的全局下三角、自由顶点项和非零数值；不会生成占位零。输出 buffer 属于 `NewtonLinearSystem` 并跨 Newton 保留容量，`Eigen::SparseMatrix::setFromTriplets` 负责合并重叠项；SuiteSparse LDL、CHOLMOD 与 Eigen-CG 共用该矩阵和 RHS。
 
 ### `EncodedContact` 接触编码（`EncodedContact.h`）
 

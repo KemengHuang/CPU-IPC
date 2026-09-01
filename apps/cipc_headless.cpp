@@ -21,7 +21,7 @@ struct CommandLineOptions {
     bool diagnoseLineSearch = false;
     bool disableBarrier = false;
     BroadPhaseBackend broadPhase = BroadPhaseBackend::LinearBVH;
-    LinearSolverBackend linearSolver = LinearSolverBackend::Cholmod;
+    LinearSolverBackend linearSolver = LinearSolverOptions{}.backend;
     std::string outputDirectory;
 };
 
@@ -33,7 +33,7 @@ void printUsage(const char* executable)
         << "  --steps N\n"
         << "  --output DIRECTORY\n"
         << "  --broad-phase spatial-hash|lbvh\n"
-        << "  --linear-solver cholmod|eigen-cg\n"
+        << "  --linear-solver cholmod|suitesparse-ldl|eigen-cg\n"
         << "  --disable-barrier\n"
         << "  --diagnose-line-search\n"
         << "  --resume\n"
@@ -99,6 +99,9 @@ CommandLineOptions parseCommandLine(int argc, char** argv)
             const std::string value = requireValue("--linear-solver");
             if (value == "cholmod") {
                 options.linearSolver = LinearSolverBackend::Cholmod;
+            }
+            else if (value == "suitesparse-ldl") {
+                options.linearSolver = LinearSolverBackend::SuiteSparseLDL;
             }
             else if (value == "eigen-cg") {
                 options.linearSolver = LinearSolverBackend::EigenConjugateGradient;

@@ -11,13 +11,33 @@ bool arraysEqual(const Scalar* lhs, const Scalar* rhs, Eigen::Index count)
     return count == 0 || std::memcmp(lhs, rhs, static_cast<size_t>(count) * sizeof(Scalar)) == 0;
 }
 
+void configureSymbolicOrdering(cholmod_common& common)
+{
+#ifdef CIPC_CHOLMOD_USE_METIS
+    // Keep CHOLMOD's cost-aware automatic policy: evaluate AMD first, then use
+    // METIS when AMD predicts excessive fill or work. Explicitly select METIS
+    // (rather than NESDIS) as the nested-dissection fallback.
+    common.nmethods = 0;
+    common.default_nesdis = 0;
+#else
+    // Make the build option a real A/B switch instead of leaving METIS
+    // reachable through CHOLMOD's default nmethods == 0 policy.
+    common.nmethods = 1;
+    common.method[0].ordering = CHOLMOD_AMD;
+#endif
+    common.postorder = 1;
+}
+
 } // namespace
 
 CholmodSolver::CholmodSolver()
 {
     std::memset(&common_, 0, sizeof(common_));
     std::memset(&matrix_, 0, sizeof(matrix_));
-    cholmod_start(&common_);
+    if (!cholmod_start(&common_)) {
+        throw std::runtime_error("CHOLMOD initialization failed");
+    }
+    configureSymbolicOrdering(common_);
 }
 
 CholmodSolver::~CholmodSolver()

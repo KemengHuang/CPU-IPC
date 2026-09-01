@@ -12,7 +12,7 @@ The benchmark path is fully headless and records solver-stage timing together wi
 - Fixed-size Eigen element kernels, precomputed PFPX operators, and precomputed quadratic/hinge bending geometry.
 - Lower-triangular sparse Hessian assembly without placeholder zeros.
 - Reused Newton, energy, sparse-matrix, RHS, and solver workspaces.
-- CHOLMOD symbolic-factorization reuse when the sparse pattern is unchanged.
+- CHOLMOD symbolic-factorization reuse plus a verified, cost-aware METIS nested-dissection fallback.
 - Optional Eigen-CG backend using the same assembled system and boundary handling.
 - Strict energy-decreasing line search, Additive CCD, and the original IPC CFL strategy.
 
@@ -24,7 +24,7 @@ vcpkg install eigen3 freeglut tbb openblas suitesparse metis
 
 Ubuntu:
 ```bash
-sudo apt install libeigen3-dev freeglut3-dev libtbb-dev libopenblas-dev libsuitesparse-dev metis
+sudo apt install libeigen3-dev freeglut3-dev libtbb-dev libopenblas-dev libsuitesparse-dev libmetis-dev
 ```
 
 ## Build
@@ -49,6 +49,9 @@ The build intentionally contains no test targets or CTest registration.
 | `CIPC_BUILD_VIEWER` | `ON` | Build the GLUT viewer; set `OFF` for a headless-only build. |
 | `CIPC_ENABLE_FRICTION` | `ON` | Enable lagged IPC friction. |
 | `CIPC_ENABLE_QUADRATIC_BENDING` | `ON` | Use quadratic isometric bending; set `OFF` for the complete dihedral-hinge model. |
+| `CIPC_ENABLE_METIS_ORDERING` | `ON` | Require CHOLMOD Partition/METIS support and allow CHOLMOD's fill/work heuristic to select METIS after AMD; set `OFF` for AMD-only ordering. |
+
+With METIS ordering enabled, configuration fails early unless the installed CHOLMOD exports the Partition functionality and `cholmod_metis` is linkable. The local SuiteSparse finder accepts `METIS::METIS`, `METIS::metis`, vcpkg's un-namespaced `metis` target, conventional `metis.h + libmetis` installations, and CHOLMOD builds with embedded Partition support. It also selects matching Debug/Release SuiteSparse libraries for multi-configuration builds.
 
 Headless-only non-quadratic build:
 
@@ -86,7 +89,7 @@ Scene construction is fresh by default. Checkpoint loading and writing are opt-i
 
 The CPU LBVH broad phase is the default; use `--broad-phase spatial-hash` for the optimized legacy backend.
 
-CHOLMOD is the default Newton linear solver. Eigen conjugate gradient with incomplete-Cholesky preconditioning remains available through `--linear-solver eigen-cg`; both backends share the same lower-triangular system assembly and boundary handling.
+CHOLMOD is the default Newton linear solver. Its default build enables the cost-aware AMD/METIS policy: AMD is retained for small or favorable systems, while METIS nested dissection is available when AMD predicts excessive fill or work. Eigen conjugate gradient with incomplete-Cholesky preconditioning remains available through `--linear-solver eigen-cg`; both backends share the same lower-triangular system assembly and boundary handling.
 
 ## CPU IPC benchmark usage
 
@@ -111,7 +114,7 @@ The benchmark launches independent processes, stores each run under `Output/benc
 
 For fair comparisons:
 
-- use the same scene, material file, timestep, bending mode, broad-phase semantics, linear tolerance, and number of steps;
+- use the same scene, material file, timestep, bending mode, broad-phase semantics, linear tolerance, METIS-ordering setting, and number of steps;
 - disable checkpoint resume and avoid viewer/rendering work;
 - compare `RESULT` and physical/iteration metrics in addition to wall time;
 - report the median of multiple independent runs, not only the fastest sample;

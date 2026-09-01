@@ -37,10 +37,13 @@
 - `BHessian::toTriplets` 会按 `boundaryTypes` 过滤固定/驱动顶点；若改硬约束机制，矩阵和 RHS 必须一起改。
 - 并行累加共享状态必须有明确的数据竞争策略；替换 spin mutex 时要做数值回归。
 - 产品入口为 `ViewerMain.cpp` 和 `apps/cipc_headless.cpp`；核心源文件由 CMake 显式列出。项目当前不保留测试源码或 CTest target。
+- CHOLMOD 的排序策略会影响 symbolic 时间、fill-in 和 factorization 时间；正式 benchmark 必须记录并保持 `CIPC_ENABLE_METIS_ORDERING` 一致。ON 是 cost-aware AMD→METIS，不是无条件强制 METIS；OFF 是 AMD-only。
 
 ## E. 已修复记录（保留用于理解历史代码与旧文档）
 
 - **CHOLMOD 生命周期与重复符号分析**：`CholmodSolver` 已改为 RAII；模式变化时释放 factor，同模式刷新只做数值分解；`solveBarrierSubproblem` 内通过 `NewtonLinearSystem` 复用实例。
+- **METIS 看似找到但未生效**：vcpkg 导出 target 名为 `metis`，旧查找器只接受 `METIS::METIS`。现已归一化常见 target 名、链接检查 `cholmod_metis`，默认要求 `SuiteSparse::Partition`，并明确使用 METIS 而非 NESDIS 作为自动 nested-dissection fallback。
+- **多配置依赖混链**：SuiteSparse fallback target 现分别设置 Debug/Release imported location；vcpkg 的 `lib` 与 `debug/lib` 采用隔离查找。BLAS/LAPACK 统一 provider，避免一半来自标准 BLAS、一半来自 OpenBLAS。
 - **假场景参数/空透传层**：已用 `SimulationScene::{TwistingMat,ClothOverBunny}` 接通 switch；删除无第二实现、只转发到 `solveIPCStep` 的 FEMIntegrator 层。
 - **动画约束 alpha 收窄**：`update_hard_constraint_functor` 第二参数已由 `int` 改为 `double`。
 - **CWD 相对输出与硬编码导出**：已由 `RuntimePaths` 统一写到 `<repo>/Output/` 并自动建目录；表面/截图均默认关闭、由按键切换；表面导出只读引用 `SimulationModel`。
@@ -60,7 +63,7 @@
 - **摩擦与场景职责混杂**：摩擦冻结量、能量、梯度和解析 PSD Hessian 已集中到 `Friction.cpp/.h`；场景辅助函数改为用途命名并限制在 `Simulator.cpp` 内部作用域，删除未调用的 `buildSpecialPoints`。
 - **SpatialHash 重建分配**：复用 voxel buckets 与 primitive occupancy，主候选使用线程局部排序 vector。
 - **GPU 风格 CPU LBVH**：已按 `GPU_IPC/mlbvh` 的 Morton/Karras/face+edge/swept AABB 流程实现；现为默认 broad phase，SpatialHash 保留 A/B。
-- **单体构建/GUI 绑定**：拆成 `cipc_core`、可选 viewer、headless 和 tests；headless-only 配置无需 OpenGL。
+- **单体构建/GUI 绑定**：拆成 `cipc_core`、可选 viewer 和 headless；headless-only 配置无需 OpenGL，测试源码与 CTest 已按项目要求移除。
 - **程序化网格索引**：`InitMesh` 已按 local corner 写 tet，`load_test(1/2)` 使用正确的 0/+8 offset，并补 boundaryTypes。
 - **viewer 近裁剪面**：初始化与 resize 均统一为 0.1。
 - **文件与特效遗留**：删除 shader 目录、GLEW、无效 VBO 分支、未消费的 viewer 开关、`fem_parameters.h`、2D/肌肉/肌腱加载器和旧 EKF 状态；viewer 改名 `ViewerMain.cpp`。

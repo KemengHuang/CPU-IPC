@@ -7,7 +7,7 @@
 依赖（`README.md`）：
 
 - Windows: `vcpkg install eigen3 freeglut tbb openblas suitesparse metis`
-- Ubuntu: `sudo apt install libeigen3-dev freeglut3-dev libtbb-dev libopenblas-dev libsuitesparse-dev metis`
+- Ubuntu: `sudo apt install libeigen3-dev freeglut3-dev libtbb-dev libopenblas-dev libsuitesparse-dev libmetis-dev`
 
 构建：
 
@@ -21,9 +21,11 @@ cmake --build build --config Release
   - `CIPC_BUILD_VIEWER=ON` — viewer；关掉后配置阶段无需 OpenGL/GLUT。shader/GLEW 路径已删除。
   - `CIPC_ENABLE_FRICTION=ON` — 定义 `USE_FRICTION`。
   - `CIPC_ENABLE_QUADRATIC_BENDING=ON` — 定义 `USE_QUADRATIC_BENDING`。
+  - `CIPC_ENABLE_METIS_ORDERING=ON` — 要求 CHOLMOD Partition/METIS 可用，采用 CHOLMOD 的 cost-aware AMD→METIS 策略；设为 OFF 则固定为 AMD-only，便于真实 A/B。
   - `CIPC_ASSETS_DIR` = `<repo>/Assets/`（活，`Simulator.cpp` 读参数文件/网格用）
   - `CIPC_OUTPUT_DIR` = `<repo>/Output/`（活，由 `RuntimePaths` 统一管理日志、检查点、表面和截图输出）
-- MSVC 加 `/bigobj`（`ContactMechanics.cpp` 的生成代码需要）。
+- SuiteSparse 查找器会校验 `cholmod_metis`，兼容 `METIS::METIS`、`METIS::metis`、vcpkg 的 `metis` target、Linux 常规 `metis.h + libmetis` 以及内嵌 Partition 的 CHOLMOD；多配置生成器分别绑定 Release/Debug SuiteSparse 库。BLAS/LAPACK 必须来自同一 provider，优先使用带配置映射的 OpenBLAS target。
+- MSVC 的 `/bigobj` 只施加到 `cipc_core`（`ContactMechanics.cpp` 的生成代码需要），不再污染全局 `CMAKE_CXX_FLAGS`。
 
 运行：`cipc` 打开 GLUT 窗口，空格开始/暂停。`cipc_headless --steps N --broad-phase lbvh --linear-solver cholmod` 无窗口运行并写逐帧 `metrics.csv`；`--linear-solver eigen-cg` 可切到保留的 Eigen-CG 后端。运行时自动创建输出目录且可由 headless `--output` 覆盖；`9` 切换表面 OBJ，`/` 切换截图，两者默认关闭——见 `06_app_layer.md`。
 

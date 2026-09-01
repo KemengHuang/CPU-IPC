@@ -94,7 +94,12 @@ Optional SuiteSparse dependencies:
 ]=======================================================================]
 
 if (NOT SuiteSparse_NO_CMAKE)
-  find_package (SuiteSparse NO_MODULE QUIET)
+  if (SuiteSparse_FIND_COMPONENTS)
+    find_package (SuiteSparse NO_MODULE QUIET
+      COMPONENTS ${SuiteSparse_FIND_COMPONENTS})
+  else()
+    find_package (SuiteSparse NO_MODULE QUIET)
+  endif()
 endif (NOT SuiteSparse_NO_CMAKE)
 
 if (SuiteSparse_FOUND)
@@ -129,6 +134,7 @@ set (SuiteSparse_FOUND TRUE)
 include (CheckLibraryExists)
 include (CheckSymbolExists)
 include (CMakePushCheckState)
+include (SelectLibraryConfigurations)
 
 # Config is a base component and thus always required
 set (SuiteSparse_IMPLICIT_COMPONENTS Config)
@@ -241,12 +247,61 @@ macro(suitesparse_find_component COMPONENT)
   endif()
 
   if (SuiteSparse_FIND_COMPONENT_${COMPONENT}_LIBRARIES)
-    find_library(SuiteSparse_${COMPONENT}_LIBRARY
-      NAMES ${SuiteSparse_FIND_COMPONENT_${COMPONENT}_LIBRARIES}
-      PATH_SUFFIXES ${SuiteSparse_CHECK_PATH_SUFFIXES})
+    set(_SuiteSparse_DEBUG_NAMES)
+    foreach(_SuiteSparse_LIBRARY_NAME
+        IN LISTS SuiteSparse_FIND_COMPONENT_${COMPONENT}_LIBRARIES)
+      list(APPEND _SuiteSparse_DEBUG_NAMES
+        "${_SuiteSparse_LIBRARY_NAME}d"
+        "${_SuiteSparse_LIBRARY_NAME}_d"
+        "${_SuiteSparse_LIBRARY_NAME}")
+    endforeach()
+
+    if (VCPKG_INSTALLED_DIR AND VCPKG_TARGET_TRIPLET)
+      # vcpkg puts libraries with identical names in lib and debug/lib. Its
+      # toolchain may prepend debug/lib to the generic search path, so isolate
+      # both searches instead of relying on path priority.
+      set(_SuiteSparse_VCPKG_PREFIX
+        "${VCPKG_INSTALLED_DIR}/${VCPKG_TARGET_TRIPLET}")
+      set(_SuiteSparse_RELEASE_VAR
+        "_SuiteSparse_${COMPONENT}_LIBRARY_RELEASE")
+      set(_SuiteSparse_DEBUG_VAR
+        "_SuiteSparse_${COMPONENT}_LIBRARY_DEBUG")
+      unset(${_SuiteSparse_RELEASE_VAR} CACHE)
+      unset(${_SuiteSparse_DEBUG_VAR} CACHE)
+      find_library(${_SuiteSparse_RELEASE_VAR}
+        NAMES ${SuiteSparse_FIND_COMPONENT_${COMPONENT}_LIBRARIES}
+        PATHS "${_SuiteSparse_VCPKG_PREFIX}/lib"
+        NO_DEFAULT_PATH)
+      find_library(${_SuiteSparse_DEBUG_VAR}
+        NAMES ${_SuiteSparse_DEBUG_NAMES}
+        PATHS "${_SuiteSparse_VCPKG_PREFIX}/debug/lib"
+        NO_DEFAULT_PATH)
+      set(SuiteSparse_${COMPONENT}_LIBRARY_RELEASE
+        "${${_SuiteSparse_RELEASE_VAR}}"
+        CACHE FILEPATH "Release ${COMPONENT} library" FORCE)
+      set(SuiteSparse_${COMPONENT}_LIBRARY_DEBUG
+        "${${_SuiteSparse_DEBUG_VAR}}"
+        CACHE FILEPATH "Debug ${COMPONENT} library" FORCE)
+      unset(${_SuiteSparse_RELEASE_VAR} CACHE)
+      unset(${_SuiteSparse_DEBUG_VAR} CACHE)
+    else()
+      find_library(SuiteSparse_${COMPONENT}_LIBRARY_RELEASE
+        NAMES ${SuiteSparse_FIND_COMPONENT_${COMPONENT}_LIBRARIES}
+        PATH_SUFFIXES ${SuiteSparse_CHECK_PATH_SUFFIXES})
+      find_library(SuiteSparse_${COMPONENT}_LIBRARY_DEBUG
+        NAMES ${_SuiteSparse_DEBUG_NAMES}
+        PATH_SUFFIXES debug/lib Debug ${SuiteSparse_CHECK_PATH_SUFFIXES})
+    endif()
+
+    select_library_configurations(SuiteSparse_${COMPONENT})
     if (SuiteSparse_${COMPONENT}_LIBRARY)
-      message(STATUS "Found ${COMPONENT} library: ${SuiteSparse_${COMPONENT}_LIBRARY}")
-      mark_as_advanced(SuiteSparse_${COMPONENT}_LIBRARY)
+      message(STATUS "Found ${COMPONENT} libraries: "
+        "release=${SuiteSparse_${COMPONENT}_LIBRARY_RELEASE}; "
+        "debug=${SuiteSparse_${COMPONENT}_LIBRARY_DEBUG}")
+      mark_as_advanced(
+        SuiteSparse_${COMPONENT}_LIBRARY
+        SuiteSparse_${COMPONENT}_LIBRARY_RELEASE
+        SuiteSparse_${COMPONENT}_LIBRARY_DEBUG)
     else ()
       # Specified libraries not found.
       set(SuiteSparse_${COMPONENT}_FOUND FALSE)
@@ -278,9 +333,36 @@ macro(suitesparse_find_component COMPONENT)
 
     set_property(TARGET SuiteSparse::${COMPONENT} PROPERTY
       INTERFACE_INCLUDE_DIRECTORIES ${SuiteSparse_${COMPONENT}_INCLUDE_DIR})
-    set_property(TARGET SuiteSparse::${COMPONENT} PROPERTY
-      IMPORTED_LOCATION ${SuiteSparse_${COMPONENT}_LIBRARY})
+
+    if (SuiteSparse_${COMPONENT}_LIBRARY_RELEASE)
+      set_property(TARGET SuiteSparse::${COMPONENT} APPEND PROPERTY
+        IMPORTED_CONFIGURATIONS RELEASE)
+      set_property(TARGET SuiteSparse::${COMPONENT} PROPERTY
+        IMPORTED_LOCATION_RELEASE ${SuiteSparse_${COMPONENT}_LIBRARY_RELEASE})
+      set_property(TARGET SuiteSparse::${COMPONENT} PROPERTY
+        MAP_IMPORTED_CONFIG_RELWITHDEBINFO RELEASE)
+      set_property(TARGET SuiteSparse::${COMPONENT} PROPERTY
+        MAP_IMPORTED_CONFIG_MINSIZEREL RELEASE)
+      set_property(TARGET SuiteSparse::${COMPONENT} PROPERTY
+        IMPORTED_LOCATION ${SuiteSparse_${COMPONENT}_LIBRARY_RELEASE})
+    endif()
+    if (SuiteSparse_${COMPONENT}_LIBRARY_DEBUG)
+      set_property(TARGET SuiteSparse::${COMPONENT} APPEND PROPERTY
+        IMPORTED_CONFIGURATIONS DEBUG)
+      set_property(TARGET SuiteSparse::${COMPONENT} PROPERTY
+        IMPORTED_LOCATION_DEBUG ${SuiteSparse_${COMPONENT}_LIBRARY_DEBUG})
+      if (NOT SuiteSparse_${COMPONENT}_LIBRARY_RELEASE)
+        set_property(TARGET SuiteSparse::${COMPONENT} PROPERTY
+          IMPORTED_LOCATION ${SuiteSparse_${COMPONENT}_LIBRARY_DEBUG})
+      endif()
+    endif()
   endif (SuiteSparse_${COMPONENT}_INCLUDE_DIR AND SuiteSparse_${COMPONENT}_LIBRARY)
+
+  unset(_SuiteSparse_DEBUG_NAMES)
+  unset(_SuiteSparse_LIBRARY_NAME)
+  unset(_SuiteSparse_VCPKG_PREFIX)
+  unset(_SuiteSparse_RELEASE_VAR)
+  unset(_SuiteSparse_DEBUG_VAR)
 endmacro()
 
 # Given the number of components of SuiteSparse, and to ensure that the
@@ -289,37 +371,56 @@ endmacro()
 # of all variables that must be defined for SuiteSparse to be considered found.
 unset(SuiteSparse_REQUIRED_VARS)
 
-# BLAS.
-find_package(BLAS QUIET)
-if (NOT BLAS_FOUND)
+# Keep BLAS and LAPACK on one provider. Prefer OpenBLAS' config package because
+# it supplies correct Debug/Release imported locations; otherwise require a
+# complete provider pair from CMake's standard BLAS/LAPACK finders.
+unset(SuiteSparse_BLAS_LINK_LIBRARIES)
+unset(SuiteSparse_LAPACK_LINK_LIBRARIES)
+set(SuiteSparse_BLAS_FOUND FALSE)
+set(SuiteSparse_LAPACK_FOUND FALSE)
+find_package(OpenBLAS QUIET CONFIG)
+if (OpenBLAS_FOUND)
+  if (TARGET OpenBLAS::OpenBLAS)
+    set(_SuiteSparse_OPENBLAS_LINK OpenBLAS::OpenBLAS)
+  else()
+    set(_SuiteSparse_OPENBLAS_LINK ${OpenBLAS_LIBRARIES})
+  endif()
+  set(SuiteSparse_BLAS_LINK_LIBRARIES ${_SuiteSparse_OPENBLAS_LINK})
+  set(SuiteSparse_LAPACK_LINK_LIBRARIES ${_SuiteSparse_OPENBLAS_LINK})
+  if (SuiteSparse_BLAS_LINK_LIBRARIES)
+    set(SuiteSparse_BLAS_FOUND TRUE)
+    set(SuiteSparse_LAPACK_FOUND TRUE)
+    message(STATUS "Using OpenBLAS as the common BLAS/LAPACK provider.")
+  endif()
+else()
+  find_package(BLAS QUIET)
+  find_package(LAPACK QUIET)
+
+  if (TARGET BLAS::BLAS)
+    set(SuiteSparse_BLAS_LINK_LIBRARIES BLAS::BLAS)
+  else()
+    set(SuiteSparse_BLAS_LINK_LIBRARIES ${BLAS_LIBRARIES})
+  endif()
+  if (TARGET LAPACK::LAPACK)
+    set(SuiteSparse_LAPACK_LINK_LIBRARIES LAPACK::LAPACK)
+  else()
+    set(SuiteSparse_LAPACK_LINK_LIBRARIES ${LAPACK_LIBRARIES})
+  endif()
+  if (BLAS_FOUND AND SuiteSparse_BLAS_LINK_LIBRARIES)
+    set(SuiteSparse_BLAS_FOUND TRUE)
+  endif()
+  if (LAPACK_FOUND AND SuiteSparse_LAPACK_LINK_LIBRARIES)
+    set(SuiteSparse_LAPACK_FOUND TRUE)
+  endif()
+endif()
+
+if (NOT SuiteSparse_BLAS_FOUND)
   suitesparse_report_not_found(
     "Did not find BLAS library (required for SuiteSparse).")
-endif (NOT BLAS_FOUND)
-
-# ------------------------------------------------------------
-# Try to use OpenBLAS as LAPACK provider (it includes LAPACK)
-# ------------------------------------------------------------
-if (NOT LAPACK_FOUND)
-  # 查找 OpenBLAS 包（vcpkg 会提供 OpenBLASConfig.cmake）
-  find_package(OpenBLAS QUIET)
-  if (OpenBLAS_FOUND)
-    set(LAPACK_FOUND TRUE)
-    # 将 LAPACK 库指向 OpenBLAS 的库（可能是 IMPORTED 目标或路径）
-    if (TARGET OpenBLAS::OpenBLAS)
-      set(LAPACK_LIBRARIES OpenBLAS::OpenBLAS)
-    else()
-      set(LAPACK_LIBRARIES ${OpenBLAS_LIBRARIES})
-    endif()
-    message(STATUS "Using OpenBLAS for LAPACK.")
-  else()
-    # 如果没找到 OpenBLAS，再尝试标准 LAPACK 查找
-    find_package(LAPACK QUIET)
-    if (NOT LAPACK_FOUND)
-      suitesparse_report_not_found(
-        "Did not find LAPACK library (required for SuiteSparse). "
-        "Please install openblas or a LAPACK implementation.")
-    endif()
-  endif()
+endif()
+if (NOT SuiteSparse_LAPACK_FOUND)
+  suitesparse_report_not_found(
+    "Did not find LAPACK library (required for SuiteSparse).")
 endif()
 
 foreach (component IN LISTS SuiteSparse_FIND_COMPONENTS)
@@ -363,7 +464,10 @@ if (TARGET SuiteSparse::SPQR)
   endif (TBB_FOUND)
 endif (TARGET SuiteSparse::SPQR)
 
-check_library_exists(rt shm_open "" HAVE_LIBRT)
+set(HAVE_LIBRT FALSE)
+if (UNIX AND NOT APPLE)
+  check_library_exists(rt shm_open "" HAVE_LIBRT)
+endif()
 
 if (TARGET SuiteSparse::Config)
   # SuiteSparse_config (SuiteSparse version >= 4) requires librt library for
@@ -375,32 +479,22 @@ if (TARGET SuiteSparse::Config)
       "SuiteSparse is compiled with timing).")
     set_property (TARGET SuiteSparse::Config APPEND PROPERTY
       INTERFACE_LINK_LIBRARIES $<LINK_ONLY:rt>)
-  else (HAVE_LIBRT)
+  elseif (UNIX AND NOT APPLE)
     message(STATUS "Could not find librt, but found SuiteSparse_config, "
       "assuming that SuiteSparse was compiled without timing.")
-  endif (HAVE_LIBRT)
+  endif()
 
   # Add BLAS and LAPACK as dependencies of SuiteSparse::Config for convenience
   # given that all components depend on it.
-  if (BLAS_FOUND)
-    if (TARGET BLAS::BLAS)
-      set_property (TARGET SuiteSparse::Config APPEND PROPERTY
-        INTERFACE_LINK_LIBRARIES $<LINK_ONLY:BLAS::BLAS>)
-    else (TARGET BLAS::BLAS)
-      set_property (TARGET SuiteSparse::Config APPEND PROPERTY
-        INTERFACE_LINK_LIBRARIES ${BLAS_LIBRARIES})
-    endif (TARGET BLAS::BLAS)
-  endif (BLAS_FOUND)
+  if (SuiteSparse_BLAS_LINK_LIBRARIES)
+    set_property (TARGET SuiteSparse::Config APPEND PROPERTY
+      INTERFACE_LINK_LIBRARIES ${SuiteSparse_BLAS_LINK_LIBRARIES})
+  endif()
 
-  if (LAPACK_FOUND)
-    if (TARGET LAPACK::LAPACK)
-      set_property (TARGET SuiteSparse::Config APPEND PROPERTY
-        INTERFACE_LINK_LIBRARIES $<LINK_ONLY:LAPACK::LAPACK>)
-    else (TARGET LAPACK::LAPACK)
-      set_property (TARGET SuiteSparse::Config APPEND PROPERTY
-        INTERFACE_LINK_LIBRARIES ${LAPACK_LIBRARIES})
-    endif (TARGET LAPACK::LAPACK)
-  endif (LAPACK_FOUND)
+  if (SuiteSparse_LAPACK_LINK_LIBRARIES)
+    set_property (TARGET SuiteSparse::Config APPEND PROPERTY
+      INTERFACE_LINK_LIBRARIES ${SuiteSparse_LAPACK_LINK_LIBRARIES})
+  endif()
 
   # SuiteSparse version >= 4.
   set(SuiteSparse_VERSION_FILE
@@ -466,7 +560,7 @@ if (TARGET SuiteSparse::SPQR)
       INTERFACE_LINK_LIBRARIES SuiteSparse::CHOLMOD)
   else (TARGET SuiteSparse::CHOLMOD)
     # Consider SPQR not found if CHOLMOD cannot be found
-    set (SuiteSparse_SQPR_FOUND FALSE)
+    set (SuiteSparse_SPQR_FOUND FALSE)
   endif (TARGET SuiteSparse::CHOLMOD)
 endif (TARGET SuiteSparse::SPQR)
 
@@ -490,28 +584,71 @@ if (TARGET SuiteSparse::CHOLMOD)
   # NOTE If SuiteSparse was compiled as a static library we'll need to link
   # against METIS already during the check. Otherwise, the check can fail due to
   # undefined references even though SuiteSparse was compiled with METIS.
-  find_package (METIS)
+  find_package (METIS QUIET)
 
+  # Many Linux distribution packages install only metis.h and libmetis, with
+  # no CMake package config or FindMETIS module.
+  if (NOT TARGET METIS::METIS AND
+      NOT TARGET METIS::metis AND
+      NOT TARGET metis AND
+      NOT (METIS_FOUND AND METIS_LIBRARIES) AND
+      NOT (VCPKG_INSTALLED_DIR AND VCPKG_TARGET_TRIPLET))
+    find_path (METIS_INCLUDE_DIR NAMES metis.h)
+    find_library (METIS_LIBRARY NAMES metis)
+    if (METIS_INCLUDE_DIR AND METIS_LIBRARY)
+      set (METIS_FOUND TRUE)
+      set (METIS_INCLUDE_DIRS ${METIS_INCLUDE_DIR})
+      set (METIS_LIBRARIES ${METIS_LIBRARY})
+      mark_as_advanced (METIS_INCLUDE_DIR METIS_LIBRARY)
+    endif()
+  endif()
+
+  # Normalize target names used by common METIS packages. In particular,
+  # vcpkg currently exports the un-namespaced target `metis`.
+  if (NOT TARGET METIS::METIS)
+    if (TARGET METIS::metis)
+      add_library (METIS::METIS IMPORTED INTERFACE)
+      set_property (TARGET METIS::METIS PROPERTY
+        INTERFACE_LINK_LIBRARIES METIS::metis)
+    elseif (TARGET metis)
+      add_library (METIS::METIS IMPORTED INTERFACE)
+      set_property (TARGET METIS::METIS PROPERTY
+        INTERFACE_LINK_LIBRARIES metis)
+    elseif (METIS_FOUND AND METIS_LIBRARIES)
+      add_library (METIS::METIS IMPORTED INTERFACE)
+      set_property (TARGET METIS::METIS PROPERTY
+        INTERFACE_LINK_LIBRARIES "${METIS_LIBRARIES}")
+      if (METIS_INCLUDE_DIRS)
+        set_property (TARGET METIS::METIS PROPERTY
+          INTERFACE_INCLUDE_DIRECTORIES "${METIS_INCLUDE_DIRS}")
+      endif()
+    endif()
+  endif()
+
+  cmake_push_check_state (RESET)
+  set (CMAKE_REQUIRED_LIBRARIES SuiteSparse::CHOLMOD)
   if (TARGET METIS::METIS)
-    cmake_push_check_state (RESET)
-    set (CMAKE_REQUIRED_LIBRARIES SuiteSparse::CHOLMOD METIS::METIS)
-    check_symbol_exists (cholmod_metis cholmod.h SuiteSparse_CHOLMOD_USES_METIS)
-    cmake_pop_check_state ()
+    list (APPEND CMAKE_REQUIRED_LIBRARIES METIS::METIS)
+  endif()
+  unset (SuiteSparse_CHOLMOD_USES_METIS CACHE)
+  check_symbol_exists (cholmod_metis cholmod.h SuiteSparse_CHOLMOD_USES_METIS)
+  cmake_pop_check_state ()
 
-    if (SuiteSparse_CHOLMOD_USES_METIS)
+  if (SuiteSparse_CHOLMOD_USES_METIS)
+    if (TARGET METIS::METIS)
       set_property (TARGET SuiteSparse::CHOLMOD APPEND PROPERTY
         INTERFACE_LINK_LIBRARIES $<LINK_ONLY:METIS::METIS>)
+    endif()
 
-      # Provide the SuiteSparse::Partition component whose availability indicates
-      # that CHOLMOD was compiled with the Partition module.
-      if (NOT TARGET SuiteSparse::Partition)
-        add_library (SuiteSparse::Partition IMPORTED INTERFACE)
-      endif (NOT TARGET SuiteSparse::Partition)
+    # Provide the SuiteSparse::Partition component whose availability indicates
+    # that CHOLMOD was compiled with the Partition module.
+    if (NOT TARGET SuiteSparse::Partition)
+      add_library (SuiteSparse::Partition IMPORTED INTERFACE)
+    endif (NOT TARGET SuiteSparse::Partition)
 
-      set_property (TARGET SuiteSparse::Partition APPEND PROPERTY
-        INTERFACE_LINK_LIBRARIES SuiteSparse::CHOLMOD)
-    endif (SuiteSparse_CHOLMOD_USES_METIS)
-  endif (TARGET METIS::METIS)
+    set_property (TARGET SuiteSparse::Partition APPEND PROPERTY
+      INTERFACE_LINK_LIBRARIES SuiteSparse::CHOLMOD)
+  endif (SuiteSparse_CHOLMOD_USES_METIS)
 endif (TARGET SuiteSparse::CHOLMOD)
 
 # We do not use suitesparse_find_component to find Partition and therefore must

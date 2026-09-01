@@ -8,7 +8,7 @@
 - P1 已完成：下三角无占位零装配、固定尺寸活跃 FEM、PFPX 预计算、二次弯曲常量 Hessian、Newton/Energy workspace。
 - P2 已完成安全部分：SpatialHash bucket/occupancy 复用、排序 vector scratch、GPU 风格 CPU LBVH；梯度去锁和彻底 CSR SpatialHash 尚未实施，因为当前 assembly 已不是主瓶颈。
 - P3 部分完成：运行状态、构建 target、摩擦、线性系统、viewer 与核心文件职责均已分层；旧 PCG/特效/无调用文件已清理。`MMCVID` 已改名 `EncodedContact`，但负数槽位协议尚未类型化；`mesh3D` 其余职责仍待拆分。
-- P4 只完成低风险接口：CHOLMOD 仍是默认，Eigen-CG 作为共享装配后的可选后端保留并有 smoke test；未改 Hessian scale/近似或 Newton 算法，也未宣称 Eigen-CG 性能更优。
+- P4 完成低风险接口：CHOLMOD 仍是默认，METIS 以经过依赖校验的 cost-aware fallback 启用，Eigen-CG 作为共享装配后的可选后端保留并有 smoke test；未改 Hessian scale/近似或 Newton 算法，也未宣称 Eigen-CG 性能更优。
 
 实测详见 `09_optimization_report.md`。
 

@@ -22,9 +22,13 @@
 ## 2. 稀疏求解与装配
 
 - `CholmodSolver` RAII、模式变化检测、同模式 symbolic reuse、失败检查和 analyze/factorize 计数。
+- `CIPC_ENABLE_METIS_ORDERING=ON` 成为默认：CMake 要求 CHOLMOD Partition/METIS 并链接检查 `cholmod_metis`；`CholmodSolver` 使用 CHOLMOD cost-aware AMD→METIS 策略与 weighted postorder，OFF 则固定 AMD-only，便于做同机 A/B。
+- 修复 vcpkg 只导出无命名空间 `metis` 导致 METIS 未接入的问题，并兼容 Linux 的 `metis.h + libmetis` 及内嵌 Partition 的 CHOLMOD；SuiteSparse fallback imported targets 现在区分 Debug/Release，BLAS/LAPACK 固定为同一 provider，同时修复 `SuiteSparse_SPQR_FOUND` 拼写。
 - `BHessian::toTriplets` 改为两遍并行 count/prefix/fill：仅自由 DOF、非零数值、全局下三角。
 - triplet、SparseMatrix、RHS/result、CholmodSolver 全部由 `NewtonLinearSystem` 跨迭代复用；`NewtonWorkspace` 只持有 gradient、BHessian、mutex 和该线性系统对象。
 - 默认首帧 12 次 numeric factorization 中约 3 次 symbolic analysis。
+
+METIS 接入时做了策略诊断，而不是把“调用 METIS”直接当成加速：当前 cloth-bunny 首步中，单次强制 METIS 约 515 ms、每次同时评估 AMD+METIS 约 506 ms，均慢于 cost-aware 策略。最终策略下各 5 个独立 Release 进程的首步中位数为 METIS-enabled 449.838 ms、AMD-only 449.675 ms，差异处于运行噪声；两者均为 8 Newton、`nnz=145053`、相同接触/线搜索指标，最终状态只差浮点归约舍入。该结果只说明当前规模由 AMD 胜出；METIS 的收益仍需在更大稀疏图上单独 benchmark。
 
 以下矩阵与性能数字是早期 `plane100` 场景的历史基线；当前默认场景已由用户改为 `plane1024`，不可直接横向比较：
 
@@ -120,7 +124,9 @@ cloth-bunny、1 步、独立进程：
 
 - MSVC Release `--clean-first` 全量构建：通过，无新增编译警告。
 - headless-only（viewer OFF）独立构建：通过。
-- 移除测试前，quadratic ON/OFF 构建及相关数值检查均通过。当前验证流程为两种配置的 Release 构建与 cloth-bunny/twisting-mat headless smoke，不再运行 CTest。
+- METIS ordering ON/OFF 两套 MSVC Release 构建与 twisting-mat/cloth-bunny CHOLMOD smoke 均通过；ON 下 Eigen-CG smoke 也通过。ON 配置会实际编译/链接检查 `cholmod_metis` 后才提供 `Partition`，不会只根据包名静默假定支持。
+- 多配置映射已在生成的 VS 工程中核对：Debug 链接 `debug/lib`，Release/RelWithDebInfo/MinSizeRel 链接 `lib`；Debug headless 构建和 twisting-mat CHOLMOD smoke 通过。
+- 当前 quadratic ON/OFF 两种 Release 配置与 cloth-bunny/twisting-mat headless smoke 均通过；项目不再运行 CTest。
 - 默认 LBVH 与 SpatialHash、TwistingMat 三条 1 步轨迹均纳入回归。
 - SpatialHash 与 LBVH 各完成 20 步运行；最小平方距离保持正值。
 - viewer 去除 GLEW/shader 后完成隐藏窗口启动冒烟：成功创建并持续运行 3 秒后由验证流程主动关闭。

@@ -85,11 +85,12 @@ cipc_headless --scene twisting-mat --steps 1 --linear-solver eigen-cg --no-outpu
 - `assemble` 从 `BHessian` 生成下三角 triplet，加入质量/阻尼对角并按 `boundaryTypes` 将固定顶点 RHS 清零。
 - CHOLMOD 与 Eigen-CG 共用同一 `Eigen::SparseMatrix`、RHS 和解向量，再统一 scatter 回每顶点方向；这保证切换后端不会改变约束或装配语义。
 - 默认 CHOLMOD；可选 Eigen-CG 使用 `Eigen::ConjugateGradient<SparseMatrix, Lower, IncompleteCholesky>`，容差 `1e-6`、最大 10000 次，可由 `LinearSolverOptions` 设置。
+- 默认构建同时开启 `CIPC_ENABLE_METIS_ORDERING`：配置阶段要求 SuiteSparse `Partition` 并链接验证 `cholmod_metis`；运行时保持 `nmethods=0`、指定 `default_nesdis=0` 和 weighted postorder，即先由 AMD 估计 fill/work，仅在代价较高时再尝试 METIS。关闭选项时设置 `nmethods=1 + CHOLMOD_AMD`，形成真正的 AMD-only A/B。
 - Eigen-CG 可用 `cipc_headless --scene twisting-mat --steps 1 --no-output --linear-solver eigen-cg` 做手工 smoke；它不要求与直接法 bitwise 相同。
 
 `CholmodSolver.cpp/.h` 只实现 SuiteSparse `CholmodSolver`：
 
-- 类已改为 RAII、不可复制：构造 `cholmod_start`，析构释放当前 factor 并 `cholmod_finish`；不再持有被重绑定的 CHOLMOD-owned sparse/dense 缓冲区。
+- 类已改为 RAII、不可复制：构造时检查 `cholmod_start`，析构释放当前 factor 并 `cholmod_finish`；不再持有被重绑定的 CHOLMOD-owned sparse/dense 缓冲区。
 - `set_pattern(SparseMatrix)` 把压缩 Eigen CSC 的 outer/inner/value 数组复制到稳定的自有缓冲，并用非 owning `cholmod_sparse` view 传给 CHOLMOD。
 - 每次都刷新数值；仅当矩阵维度或 outer/inner 索引变化时释放 factor。`solve` 在 factor 不存在时执行 `cholmod_analyze`，随后每轮执行数值 `cholmod_factorize + cholmod_solve`。
 - `solveBarrierSubproblem` 生命周期内复用同一 `NewtonLinearSystem/CholmodSolver`，因此接触拓扑不变的相邻 Newton 轮可以跳过符号分析；接触导致稀疏模式变化时自动重分析。

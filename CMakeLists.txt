@@ -4,6 +4,7 @@ project(cpu_ipc LANGUAGES CXX)
 option(CIPC_BUILD_VIEWER "Build the GLUT/OpenGL viewer" ON)
 option(CIPC_ENABLE_FRICTION "Enable lagged IPC friction" ON)
 option(CIPC_ENABLE_QUADRATIC_BENDING "Enable quadratic cloth bending" ON)
+option(CIPC_ENABLE_METIS_ORDERING "Enable CHOLMOD's cost-aware METIS ordering fallback" ON)
 
 # Select a default build type for single-configuration generators.
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -11,14 +12,11 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set_property(CACHE CMAKE_BUILD_TYPE PROPERTY STRINGS "Debug" "Release" "MinSizeRel" "RelWithDebInfo")
 endif()
 
-# General compiler flags
-if(MSVC)
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} /bigobj")
-elseif(UNIX AND CMAKE_BUILD_TYPE STREQUAL "Release")
-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -O3")
+if(CMAKE_CONFIGURATION_TYPES)
+    message(STATUS "Build configurations: ${CMAKE_CONFIGURATION_TYPES}")
+else()
+    message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 endif()
-
-message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
 message(STATUS "Compiler: ${CMAKE_CXX_COMPILER_ID}")
 message(STATUS "===============================================================")
 
@@ -28,7 +26,16 @@ list(PREPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_LIST_DIR}/cmake")
 # Find dependencies
 find_package(Eigen3 REQUIRED)
 find_package(TBB REQUIRED)
-find_package(SuiteSparse REQUIRED CHOLMOD)
+set(CIPC_SUITESPARSE_COMPONENTS CHOLMOD)
+if(CIPC_ENABLE_METIS_ORDERING)
+    list(APPEND CIPC_SUITESPARSE_COMPONENTS Partition)
+endif()
+find_package(SuiteSparse REQUIRED COMPONENTS ${CIPC_SUITESPARSE_COMPONENTS})
+if(CIPC_ENABLE_METIS_ORDERING AND NOT TARGET SuiteSparse::Partition)
+    message(FATAL_ERROR
+        "CIPC_ENABLE_METIS_ORDERING=ON requires a CHOLMOD build with its "
+        "Partition/METIS module and a linkable cholmod_metis implementation.")
+endif()
 if(CIPC_BUILD_VIEWER)
     find_package(OpenGL REQUIRED)
     find_package(GLUT REQUIRED)
@@ -73,6 +80,11 @@ add_library(cipc_core STATIC
     ${CIPC_HEADERS}
 )
 
+# ContactMechanics.cpp contains large generated fixed-size kernels on MSVC.
+target_compile_options(cipc_core PRIVATE
+    $<$<CXX_COMPILER_ID:MSVC>:/bigobj>
+)
+
 add_executable(cipc_headless apps/cipc_headless.cpp)
 if(CIPC_BUILD_VIEWER)
     add_executable(cipc "${CIPC_VIEWER_SOURCE}")
@@ -101,6 +113,9 @@ endif()
 if(CIPC_ENABLE_QUADRATIC_BENDING)
     target_compile_definitions(cipc_core PUBLIC USE_QUADRATIC_BENDING)
 endif()
+if(CIPC_ENABLE_METIS_ORDERING)
+    target_compile_definitions(cipc_core PRIVATE CIPC_CHOLMOD_USE_METIS)
+endif()
 
 # Include directories
 target_include_directories(cipc_core PUBLIC
@@ -112,14 +127,11 @@ target_include_directories(cipc_core PUBLIC
 target_link_libraries(cipc_core PUBLIC
     Eigen3::Eigen
     TBB::tbb
-    
-    # SuiteSparse components
     SuiteSparse::CHOLMOD
-    #SuiteSparse::AMD
-    #SuiteSparse::CAMD
-    #SuiteSparse::CCOLAMD
-    #SuiteSparse::COLAMD
 )
+if(CIPC_ENABLE_METIS_ORDERING)
+    target_link_libraries(cipc_core PUBLIC SuiteSparse::Partition)
+endif()
 
 if(CIPC_BUILD_VIEWER)
     target_link_libraries(cipc PRIVATE
@@ -144,6 +156,7 @@ message(STATUS "  - Viewer: ${CIPC_BUILD_VIEWER}")
 message(STATUS "  - Headless runner: cipc_headless")
 message(STATUS "  - Friction: ${CIPC_ENABLE_FRICTION}")
 message(STATUS "  - Quadratic bending: ${CIPC_ENABLE_QUADRATIC_BENDING}")
+message(STATUS "  - CHOLMOD METIS ordering: ${CIPC_ENABLE_METIS_ORDERING}")
 message(STATUS "  - C++ Standard: 14")
 message(STATUS "  - Eigen3: ${Eigen3_FOUND}")
 message(STATUS "  - TBB: ${TBB_FOUND}")

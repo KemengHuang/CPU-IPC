@@ -29,7 +29,7 @@ cmake --build build --config Release
 - SuiteSparse 查找器会校验 `cholmod_metis`，兼容 `METIS::METIS`、`METIS::metis`、vcpkg 的 `metis` target、Linux 常规 `metis.h + libmetis` 以及内嵌 Partition 的 CHOLMOD；多配置生成器分别绑定 Release/Debug SuiteSparse 库。BLAS/LAPACK 必须来自同一 provider，优先使用带配置映射的 OpenBLAS target。
 - MSVC 的 `/bigobj` 只施加到 `cipc_core`（`ContactMechanics.cpp` 的生成代码需要），不再污染全局 `CMAKE_CXX_FLAGS`。
 
-运行：`cipc` 打开 GLUT 窗口，空格开始/暂停。`cipc_headless --steps N --broad-phase lbvh` 默认用块感知 SuiteSparse LDL 并写逐帧 `metrics.csv`；`--linear-solver suitesparse-ldl|cholmod|pardiso|eigen-cg` 可显式选择四个后端。PARDISO 默认限制为 16 线程，`--pardiso-threads 0` 可改用 oneMKL 默认。一个 `--steps 1` 是一个完整时间步/帧，内部可能包含多次 Newton 与线性分解。运行时自动创建输出目录且可由 headless `--output` 覆盖；`9` 切换表面 OBJ，`/` 切换截图，两者默认关闭——见 `06_app_layer.md`。
+运行：`cipc` 打开 GLUT 窗口，空格开始/暂停。`cipc_headless --steps N --broad-phase lbvh` 写逐帧 `metrics.csv`；默认后端按当前构建能力选择：定义 `CIPC_HAS_PARDISO` 时用 PARDISO，否则回退块感知 SuiteSparse LDL。`--linear-solver suitesparse-ldl|cholmod|pardiso|eigen-cg` 可显式覆盖。PARDISO 默认限制为 16 线程，`--pardiso-threads 0` 可改用 oneMKL 默认。一个 `--steps 1` 是一个完整时间步/帧，内部可能包含多次 Newton 与线性分解。运行时自动创建输出目录且可由 headless `--output` 覆盖；`9` 切换表面 OBJ，`/` 切换截图，两者默认关闭——见 `06_app_layer.md`。
 
 ## 整体架构
 

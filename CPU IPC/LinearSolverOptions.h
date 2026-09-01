@@ -8,7 +8,11 @@ enum class LinearSolverBackend {
 };
 
 struct LinearSolverOptions {
+#ifdef CIPC_HAS_PARDISO
+    LinearSolverBackend backend = LinearSolverBackend::Pardiso;
+#else
     LinearSolverBackend backend = LinearSolverBackend::SuiteSparseLDL;
+#endif
     double relativeTolerance = 1e-6;
     int maximumIterations = 10000;
     int pardisoThreadCount = 16;

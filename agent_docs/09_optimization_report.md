@@ -12,7 +12,7 @@
 - `IPCStepStats + metrics.csv`：逐帧记录五阶段耗时、Newton/κ、总/能量/穿透回退、mean/min/max α、碰撞、最小平方距离、活动集、nnz、analyze/factorize；PARDISO 追加 phase 11/22/33、线程数和 factor nnz。
 - `scripts/benchmark.py`：独立进程重复运行，报告 median/min/max，并保留每次 metrics。
 - 摩擦冻结量、能量、梯度和解析 PSD Hessian 拆到 `Friction.cpp/.h`；`IPCSolver.cpp` 只保留调用与总能量编排。
-- Newton 稀疏装配、RHS/scatter 和后端分派拆到 `NewtonLinearSystem.cpp/.h`。块感知 SuiteSparse LDL 为默认；CHOLMOD/METIS、oneMKL PARDISO 与 Eigen-CG 通过 `LinearSolverOptions` 与 `--linear-solver` 正式保留，四个后端共用同一矩阵/边界条件装配。
+- Newton 稀疏装配、RHS/scatter 和后端分派拆到 `NewtonLinearSystem.cpp/.h`。当前配置有 oneMKL PARDISO 时默认使用 PARDISO，否则回退块感知 SuiteSparse LDL；CHOLMOD/METIS 与 Eigen-CG 通过 `--linear-solver` 正式保留，四个后端共用同一矩阵/边界条件装配。
 - 删除旧自定义 PCG、多 RHS 实验入口、无用 `mesh3D::Constraints`、`FEMTimeIntegrator` 透传层和未调用的场景辅助函数；`Simulator.cpp` 辅助函数采用用途命名并限制为内部链接。
 - 文件职责整理：`ViewerMain/IPCSolver/ContactMechanics/CollisionBroadPhase/AdditiveCCD/Elasticity/ElasticityMath/CholmodSolver/FeasibleStep/StageTimer` 取代含糊旧名；`EncodedContact` 取代 `MMCVID` 类型名，`SimulationModel` 取代 `model_tet`。
 - 删除 shader/GLEW、无效 viewer 特效开关、`fem_parameters.h`、2D/肌肉/肌腱加载器、空 model loader、EKF 状态、未调用 ACCD broad-phase 备份与无用数学函数；Python 视频工具移入 `scripts/` 并改为参数化入口。
@@ -51,7 +51,7 @@ METIS 接入时做了策略诊断，而不是把“调用 METIS”直接当成�
 | cloth-bunny | 20 / 3 | 4222.478 ms | 4009.640 ms | −5.04% |
 | twisting-mat | 5 / 7 | 861.116 ms | 787.114 ms | −8.59% |
 
-cloth-bunny 20 步的逐帧 Newton、κ、总/能量/穿透回退、碰撞、活动集、nnz、symbolic/numeric 次数全部一致；`mean_alpha` 最大绝对差约 `3.34e−12`，`min_distance2` 最大差约 `1.02e−18`。因此将 SuiteSparse LDL 设为默认，CHOLMOD/METIS 和 Eigen-CG 保留为正式 A/B 后端。
+cloth-bunny 20 步的逐帧 Newton、κ、总/能量/穿透回退、碰撞、活动集、nnz、symbolic/numeric 次数全部一致；`mean_alpha` 最大绝对差约 `3.34e−12`，`min_distance2` 最大差约 `1.02e−18`。该阶段曾将 SuiteSparse LDL 设为默认；PARDISO 大场景验证完成后，现改为 PARDISO 可用时首选、否则回退 LDL，CHOLMOD/METIS 和 Eigen-CG 仍是正式 A/B 后端。
 
 以下矩阵与性能数字是早期 `plane100` 场景的历史基线；当前默认场景已由用户改为 `plane1024`，不可直接横向比较：
 
@@ -149,7 +149,7 @@ cloth-bunny、1 步、独立进程：
 - headless-only（viewer OFF）独立构建：通过。
 - METIS ordering ON/OFF 两套 MSVC Release 构建与 twisting-mat/cloth-bunny CHOLMOD smoke 均通过；ON 下 Eigen-CG smoke 也通过。ON 配置会实际编译/链接检查 `cholmod_metis` 后才提供 `Partition`，不会只根据包名静默假定支持。
 - 多配置映射已在生成的 VS 工程中核对：Debug 链接 `debug/lib`，Release/RelWithDebInfo/MinSizeRel 链接 `lib`；Debug headless 构建和 twisting-mat CHOLMOD smoke 通过。
-- 默认 SuiteSparse LDL 完成 cloth-bunny 100 步：正常结束，末帧 `min_distance2=1.4164226702324649e−5>0`；20 步 LBVH/SpatialHash 终态在浮点归约误差内一致。
+- SuiteSparse LDL 后端完成 cloth-bunny 100 步：正常结束，末帧 `min_distance2=1.4164226702324649e−5>0`；20 步 LBVH/SpatialHash 终态在浮点归约误差内一致。
 - SuiteSparse LDL/CHOLMOD 的 cloth-bunny 20 步逐帧整数指标完全一致；twisting-mat 5 步和 Eigen-CG 单步 smoke 通过。
 - 当前 quadratic ON/OFF 两种 Release 配置与 cloth-bunny/twisting-mat headless smoke 均通过；项目不再运行 CTest。
 - oneMKL PARDISO Release、非 quadratic+PARDISO、`CIPC_ENABLE_PARDISO=OFF` 与普通 MSVC Debug 四条构建路径均通过；Windows 静态 oneMKL 因 CRT 边界在 Debug 自动排除，显式选择时按预期清晰报错。
@@ -202,9 +202,9 @@ cloth-bunny、1 步、独立进程：
 
 ## 9. 未实施或尚未完成评估的高风险项
 
-- Eigen-CG 已可选运行，但尚未在大网格上系统比较容差、预条件、收敛鲁棒性和性能；默认为 SuiteSparse LDL。
+- Eigen-CG 已可选运行，但尚未在大网格上系统比较容差、预条件、收敛鲁棒性和性能；它不会被能力感知逻辑自动选择。
 - CHOLMOD GPL supernodal + 多线程 BLAS 尚未做隔离 benchmark；启用会改变依赖许可边界，不能作为无条件默认优化。
-- PARDISO 已在 bunny2 上确认显著加速，但 oneMKL 是额外重依赖且当前 Windows 静态包只用于非 Debug；因此尚不改默认 solver。下一线性热点是 triplet→Eigen CSC 构造与 phase 11，而不是继续增加 16 以上线程。
+- PARDISO 已在 bunny2 上确认显著加速，因此当前配置可用时成为默认；oneMKL 缺失、显式关闭或 MSVC Debug 时自动回退 SuiteSparse LDL。下一线性热点是 triplet→Eigen CSC 构造与 phase 11，而不是继续增加 16 以上线程。
 - lagged/modified Newton、接触 Hessian 近似。
 - 直接 CSC 数值装配与固定 superset sparsity（可能改变 fill-in/内存）。
 - 梯度 graph coloring/TLS/gather（当前 assembly 已降为小占比）。

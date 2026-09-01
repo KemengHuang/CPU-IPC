@@ -22,8 +22,9 @@ def parse_args():
     )
     parser.add_argument(
         "--linear-solver",
-        choices=("cholmod", "suitesparse-ldl", "pardiso", "eigen-cg"),
-        default="suitesparse-ldl",
+        choices=("auto", "cholmod", "suitesparse-ldl", "pardiso", "eigen-cg"),
+        default="auto",
+        help="solver backend (default: auto, matching the executable)",
     )
     parser.add_argument(
         "--pardiso-threads",
@@ -60,12 +61,12 @@ def main():
             str(args.steps),
             "--broad-phase",
             args.broad_phase,
-            "--linear-solver",
-            args.linear_solver,
             "--output",
             str(run_output),
         ]
-        if args.linear_solver == "pardiso":
+        if args.linear_solver != "auto":
+            command.extend(("--linear-solver", args.linear_solver))
+        if args.linear_solver in ("auto", "pardiso"):
             command.extend(("--pardiso-threads", str(args.pardiso_threads)))
         completed = subprocess.run(command, check=True, text=True, capture_output=True)
         result_lines = [line for line in completed.stdout.splitlines() if line.startswith("RESULT ")]

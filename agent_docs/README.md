@@ -9,7 +9,7 @@
 - **Stable Neo-Hookean（SNK）** 四面体弹性模型（Smith et al. 2018）
 - **Baraff-Witkin** 布料拉伸/剪切 + 二次弯曲（Bergou/Bridson 风格）
 - 经典 IPC 对数障碍接触（PT/EE/PP/PE）+ 近平行 EE mollifier + 滞后摩擦
-- Newton 迭代 + 默认块感知 SuiteSparse LDL / 可选 CHOLMOD（cost-aware AMD→METIS）、oneMKL PARDISO 与 Eigen-CG + 回溯线搜索 + Additive CCD
+- Newton 迭代 + 能力感知默认后端（有 oneMKL 则 PARDISO，否则块感知 SuiteSparse LDL）/ 可选 CHOLMOD 与 Eigen-CG + 回溯线搜索 + Additive CCD
 - TBB 并行；GLUT/OpenGL 固定管线可视化
 
 ## 文档索引

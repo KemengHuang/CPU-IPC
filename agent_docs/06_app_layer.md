@@ -75,11 +75,11 @@ cipc_headless --scene bunny2 --steps 1 --linear-solver pardiso --pardiso-threads
 
 - `--steps N` 的单位是完整仿真时间步/帧；一个 step 内可能有多次 Newton 迭代和数值分解。
 - 默认不恢复、不写 checkpoint、使用 LBVH；可用 `--resume`、`--write-checkpoints` 显式开启。viewer 同样默认 fresh，不会让 `Output/tempData` 覆盖 cloth+bunny 初态。
-- `--broad-phase lbvh|spatial-hash` 用于碰撞宽阶段 A/B；`--linear-solver suitesparse-ldl|cholmod|pardiso|eigen-cg` 选择线性后端，默认 SuiteSparse LDL；PARDISO 线程上限默认 16，`--pardiso-threads 0` 使用 oneMKL 默认；`--verbose` 打印 Newton/线搜索和 PARDISO phase 细节。
+- `--broad-phase lbvh|spatial-hash` 用于碰撞宽阶段 A/B；`--linear-solver suitesparse-ldl|cholmod|pardiso|eigen-cg` 显式选择线性后端。未指定时，有 `CIPC_HAS_PARDISO` 就默认 PARDISO，否则自动回退 SuiteSparse LDL；PARDISO 线程上限默认 16，`--pardiso-threads 0` 使用 oneMKL 默认；`--verbose` 打印 Newton/线搜索和 PARDISO phase 细节。
 - 诊断选项：`--diagnose-line-search` 输出方向一阶/二阶 Taylor 对比；`--disable-barrier` 仅用于无接触隔离。临时的 `--friction-scale` 已删除，正式接口不能绕过场景材料参数改变摩擦。
 - 每帧 `metrics.csv` 字段包括五阶段耗时、Newton/κ、总/能量/穿透回退、单 Newton 最大回退与 `Newton>2` 数、mean/min/max α、碰撞、最小平方距离、活动集、nnz、symbolic analyze 与 numeric factorize 次数；末尾的 `pardiso_analysis_ms/pardiso_factorization_ms/pardiso_solve_ms/linear_solver_threads/factor_nnz` 用于 PARDISO 细分，其他后端为 0。
 - 最终 `RESULT` 输出位置和、平方范数和及最后一帧关键指标，供脚本/CI 解析。
-- `scripts/benchmark.py` 执行多次独立运行并报告总 time-step time 的 median/min/max；支持 `--scene`（含 bunny2）、`--broad-phase`、`--linear-solver`、`--pardiso-threads`、`--steps`、`--repeats` 和 `--output`。
+- `scripts/benchmark.py` 执行多次独立运行并报告总 time-step time 的 median/min/max；`--linear-solver auto` 为脚本默认值，不向 executable 强制后端，因此同样遵循 PARDISO→LDL 能力回退；显式后端用于受控 A/B。脚本还支持 `--scene`（含 bunny2）、`--broad-phase`、`--pardiso-threads`、`--steps`、`--repeats` 和 `--output`。
 
 ## 4. NewtonLinearSystem 与 Solver
 
@@ -87,7 +87,7 @@ cipc_headless --scene bunny2 --steps 1 --linear-solver pardiso --pardiso-threads
 
 - `assemble` 从 `BHessian` 生成下三角 triplet，加入质量/阻尼对角并按 `boundaryTypes` 将固定顶点 RHS 清零。
 - SuiteSparse LDL、CHOLMOD、PARDISO 与 Eigen-CG 共用同一 `Eigen::SparseMatrix`、RHS 和解向量，再统一 scatter 回每顶点方向；这保证切换后端不会改变约束或装配语义。
-- 默认 SuiteSparse LDL；可选 Eigen-CG 使用 `Eigen::ConjugateGradient<SparseMatrix, Lower, IncompleteCholesky>`，容差 `1e-6`、最大 10000 次，可由 `LinearSolverOptions` 设置。
+- 能力感知默认值在 `LinearSolverOptions` 中由 `CIPC_HAS_PARDISO` 决定；没有 PARDISO 时为 SuiteSparse LDL。Eigen-CG 使用 `Eigen::ConjugateGradient<SparseMatrix, Lower, IncompleteCholesky>`，容差 `1e-6`、最大 10000 次，可由 `LinearSolverOptions` 设置。
 - CHOLMOD 后端随默认构建开启 `CIPC_ENABLE_METIS_ORDERING`：配置阶段要求 SuiteSparse `Partition` 并链接验证 `cholmod_metis`；运行时保持 `nmethods=0`、指定 `default_nesdis=0` 和 weighted postorder，即先由 AMD 估计 fill/work，仅在代价较高时再尝试 METIS。关闭选项时设置 `nmethods=1 + CHOLMOD_AMD`，形成真正的 AMD-only A/B。
 - PARDISO 后端由 `CIPC_ENABLE_PARDISO` 控制；oneMKL 不存在时 CMake 只关闭该后端，不影响默认 LDL。`PardisoSolver` 直接调用 phase 11/22/33，使用 SPD `mtype=2`、LP64/zero-based 索引、TBB threading 和 in-core factorization。lower CSC 与 upper CSR 的等价布局避免额外矩阵转置；RHS 使用自有副本。符号分析、METIS permutation、factor 与 phase workspace 随 `IPCSolverContext::linearSystem` 跨时间步复用，稀疏模式变化才重新分析，并用 1.2× fill 阈值自适应触发 fresh ordering。
 - Windows vcpkg oneMKL 静态链接会使 Release headless 约 74.0 MB（70.6 MiB）；其静态包不兼容 `/MDd`，所以 MSVC Debug 自动不定义 PARDISO，选择该后端会报告 unavailable。Release/RelWithDebInfo 是正式 benchmark 配置。

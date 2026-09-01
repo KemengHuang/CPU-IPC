@@ -35,6 +35,7 @@ void printUsage(const char* executable)
         << "  --output DIRECTORY\n"
         << "  --broad-phase spatial-hash|lbvh\n"
         << "  --linear-solver cholmod|suitesparse-ldl|pardiso|eigen-cg\n"
+        << "    default: pardiso when available, otherwise suitesparse-ldl\n"
         << "  --pardiso-threads N (default 16; 0 uses the oneMKL default)\n"
         << "  --disable-barrier\n"
         << "  --diagnose-line-search\n"

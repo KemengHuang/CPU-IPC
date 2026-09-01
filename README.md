@@ -12,7 +12,7 @@ The benchmark path is fully headless and records solver-stage timing together wi
 - Fixed-size Eigen element kernels, precomputed PFPX operators, and precomputed quadratic/hinge bending geometry.
 - Lower-triangular sparse Hessian assembly without placeholder zeros.
 - Reused Newton, energy, sparse-matrix, RHS, and solver workspaces.
-- Block-aware SuiteSparse LDL with reusable symbolic data and a pre-permuted upper CSC numeric path; this is the default CPU solver.
+- Block-aware SuiteSparse LDL with reusable symbolic data and a pre-permuted upper CSC numeric path; this is the automatic fallback when PARDISO is unavailable.
 - Optional CHOLMOD with symbolic-factorization reuse and a verified, cost-aware METIS nested-dissection fallback.
 - Optional oneMKL PARDISO SPD backend with parallel factorization, cross-time-step symbolic reuse, adaptive METIS-permutation refresh, and per-phase metrics.
 - Optional Eigen-CG backend using the same assembled system and boundary handling.
@@ -98,7 +98,7 @@ Scene construction is fresh by default. Checkpoint loading and writing are opt-i
 
 The CPU LBVH broad phase is the default; use `--broad-phase spatial-hash` for the optimized legacy backend.
 
-SuiteSparse LDL is the default Newton linear solver. It orders the matrix on the mesh's natural 3-DOF vertex blocks, explicitly permutes and caches an upper-triangular CSC pattern, and updates only numeric values while that pattern is unchanged. CHOLMOD remains available through `--linear-solver cholmod`, including its cost-aware AMD/METIS policy. When oneMKL is found, `--linear-solver pardiso` provides a parallel SPD direct solver; its default limit is 16 threads, while `--pardiso-threads 0` explicitly requests the oneMKL default. Eigen conjugate gradient with incomplete-Cholesky preconditioning remains available through `--linear-solver eigen-cg`. All four backends share the same lower-triangular Hessian assembly and boundary handling.
+The default Newton solver is selected from build capabilities: PARDISO when oneMKL is available in the current configuration, otherwise SuiteSparse LDL. PARDISO defaults to 16 threads, while `--pardiso-threads 0` explicitly requests the oneMKL default. Use `--linear-solver suitesparse-ldl` to force the portable block-aware LDL backend, `--linear-solver cholmod` for CHOLMOD's cost-aware AMD/METIS policy, or `--linear-solver eigen-cg` for Eigen conjugate gradient with incomplete-Cholesky preconditioning. All four backends share the same lower-triangular Hessian assembly and boundary handling.
 
 On the development machine, alternating paired Release runs reduced five-step wall time by about 5.9% on cloth-bunny and 8.6% on twisting-mat versus the installed non-supernodal CHOLMOD build. These numbers are machine/dependency specific; use `scripts/benchmark.py` to compare locally.
 
@@ -126,7 +126,7 @@ python scripts/benchmark.py \
   --repeats 3
 ```
 
-The benchmark launches independent processes, stores each run under `Output/benchmark/run_NN`, sums per-frame `step_ms`, and reports median/min/max. `metrics.csv` also separates assembly, linear solve, CCD, line search, and post-line-search time while recording Newton iterations, backtracks, accepted step sizes, contact counts, matrix nonzeros, and direct-solver symbolic-analysis/numeric-factorization counts. PARDISO runs additionally record phase-11 analysis, phase-22 factorization, phase-33 solve time, effective thread count, and factor nonzeros.
+The benchmark launches independent processes, stores each run under `Output/benchmark/run_NN`, sums per-frame `step_ms`, and reports median/min/max. Its default `--linear-solver auto` leaves backend selection to the executable, so it follows the same PARDISO→SuiteSparse-LDL capability fallback; pass a concrete backend for controlled A/B runs. `metrics.csv` also separates assembly, linear solve, CCD, line search, and post-line-search time while recording Newton iterations, backtracks, accepted step sizes, contact counts, matrix nonzeros, and direct-solver symbolic-analysis/numeric-factorization counts. PARDISO runs additionally record phase-11 analysis, phase-22 factorization, phase-33 solve time, effective thread count, and factor nonzeros.
 
 For fair comparisons:
 

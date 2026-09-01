@@ -14,7 +14,7 @@ bunny2 首时间步为 3 次 Newton，因此 PARDISO phase 22 与 phase 33 各�
 - Windows/vcpkg：`vcpkg install intel-mkl:x64-windows`。当前接入固定 `MKL_LINK=static`、`MKL_INTERFACE=lp64`、`MKL_THREADING=tbb_thread`。
 - 当前 vcpkg oneMKL 2025.2 静态包使用 Release CRT。为避免 `/MD` 与 `/MDd` 的 `LNK2038`，MSVC Debug 配置自动只排除 PARDISO；Release、RelWithDebInfo 和其余 Debug 产品仍正常。静态链接后的 Release `cipc_headless.exe` 在本机为 74,003,968 bytes（约 74.0 MB / 70.6 MiB）。
 - CLI：`--linear-solver pardiso --pardiso-threads N`。运行时默认 `N=16`，显式 `N=0` 才采用 oneMKL 默认；正数通过每个 phase 外层的 `tbb::global_control(max_allowed_parallelism)` 生效。直接调用 `mkl_set_num_threads` 对 TBB threading layer 的实测限制无效，因此未采用。
-- `scripts/benchmark.py` 已支持 `--scene bunny2`、`--linear-solver pardiso` 和 `--pardiso-threads`，脚本默认同样为 16。
+- `scripts/benchmark.py` 已支持 `--scene bunny2`、`--linear-solver auto|pardiso|...` 和 `--pardiso-threads`；solver 默认 `auto` 以继承 executable 的能力选择，PARDISO 线程默认同样为 16。
 
 官方语义参考：oneMKL 的 [PARDISO 接口与并行直接法说明](https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2026-0/onemkl-pardiso-parallel-direct-sparse-solver-iface.html)、[phase 参数](https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2026-0/pardiso.html) 与 [iparm/permutation 参数](https://www.intel.com/content/www/us/en/docs/onemkl/developer-reference-c/2026-0/pardiso-iparm-parameter.html)。
 
@@ -180,6 +180,6 @@ always-fresh 与 adaptive 的坐标和差约 `1e-10`，碰撞整数指标一致�
 ## 11. 采用建议与后续瓶颈
 
 - 大型 CPU benchmark 或 10 万 DOF 级 SPD Newton 系统：优先试 `pardiso --pardiso-threads <physical cores>`；本机为 16。
-- 小场景、无 oneMKL、需要最小二进制或 MSVC Debug：继续使用默认 SuiteSparse LDL。PARDISO 暂不设为默认，原因是额外依赖、静态二进制体积、Debug CRT 边界和跨平台可用性，而不是数值结果问题。
+- 当前配置提供 PARDISO 时，能力感知默认值直接选择 PARDISO（16线程）；无 oneMKL、显式关闭或 MSVC Debug 时自动回退 SuiteSparse LDL。仍可用 `--linear-solver suitesparse-ldl` 强制选择较小、可移植的后端。
 - 下一性能目标应是直接构建/更新 CSC、减少 `setFromTriplets` 与 pattern comparison 成本，以及降低 phase 11 前后的串行工作；在本机继续从 16 增到 32 线程没有收益。
 - 若评估固定 superset pattern，必须同时报告 symbolic 次数、factor nnz、峰值内存、Newton/线搜索和最终轨迹；少做分析但让 fill 长期膨胀并不是净优化。

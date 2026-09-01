@@ -1,37 +1,40 @@
 #pragma once
-#ifndef FEM_SIMULATOR_H
-#define FEM_SIMULATOR_H
 
-//#include "setting.h"
-//#include "mesh.h"
-#include "collisionUtil.h"
-//#include "FEMMeshes.cuh"
-#include "FEMTimeIntegrator.h"
+#include "CollisionBroadPhase.h"
+#include "IPCSolver.h"
+
+enum class SimulationScene {
+    TwistingMat,
+    ClothOverBunny
+};
+
+struct SimulationOptions {
+    SimulationScene scene = SimulationScene::ClothOverBunny;
+    bool resumeCheckpoint = false;
+    bool writeRuntimeFiles = true;
+    bool writeCheckpoints = false;
+    bool verbose = true;
+    bool diagnoseLineSearch = false;
+    bool disableBarrier = false;
+    BroadPhaseBackend broadPhaseBackend = BroadPhaseBackend::LinearBVH;
+    LinearSolverOptions linearSolver;
+};
 
 class FEMSimulator {
 public:
-	FEMSimulator() { dt = 0.025; }
-	~FEMSimulator() {}
-	bool buildModels(unsigned int buildType, unsigned int sceneType);
-	
-	
-	model_obj& getTriangleMeshes() { return triangle_meshes; }
-	model_tet& getTetrahedraMeshes() { return tetrahedra_meshes; }
-	//fiber_obj& getFiberObj() { return fiberObj; }
-	int simulateStick(int& stepId);
+    bool buildModels(SimulationScene scene = SimulationScene::ClothOverBunny);
+    bool buildModels(const SimulationOptions& options);
+
+    SimulationModel& getModel() { return model_; }
+    const SimulationModel& getModel() const { return model_; }
+    const IPCStepStats& getLastStepStats() const { return solverContext_.lastStep; }
+    int simulateStep(int& stepId);
+
 private:
-	void buildIntegrator(const int integratorType, unsigned int sceneType);
-	void buildCollisionSets();
-	int vertexNum;
-	int tetrahedraNum;
-	model_obj triangle_meshes;
-	model_tet tetrahedra_meshes;
-	//fiber_obj fiberObj;
-	SpatialHash sh;
-	Ground gd;
-	std::unique_ptr<FEMIntegrator>  integrator;
-	double dt;
+    void rebuildCollisionSets();
+
+    SimulationModel model_;
+    SpatialHash broadPhase_;
+    Ground ground_;
+    IPCSolverContext solverContext_;
 };
-
-
-#endif //FEM_SIMULATOR_H

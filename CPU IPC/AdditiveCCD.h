@@ -1,0 +1,24 @@
+#pragma once
+#include <Eigen/Dense>
+using namespace Eigen;
+double point_triangle_ccd(
+    const Vector3d& _p,
+    const Vector3d& _t0,
+    const Vector3d& _t1,
+    const Vector3d& _t2,
+    const Vector3d& _dp,
+    const Vector3d& _dt0,
+    const Vector3d& _dt1,
+    const Vector3d& _dt2,
+    double eta, double thickness);
+double edge_edge_ccd(
+    const Vector3d& _ea0,
+    const Vector3d& _ea1,
+    const Vector3d& _eb0,
+    const Vector3d& _eb1,
+    const Vector3d& _dea0,
+    const Vector3d& _dea1,
+    const Vector3d& _deb0,
+    const Vector3d& _deb1,
+    double eta, double thickness);
+// Returned alpha is expressed in the original full-step parameterization.

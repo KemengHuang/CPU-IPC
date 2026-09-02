@@ -5,7 +5,7 @@ option(CIPC_BUILD_VIEWER "Build the GLUT/OpenGL viewer" ON)
 option(CIPC_ENABLE_FRICTION "Enable lagged IPC friction" ON)
 option(CIPC_ENABLE_QUADRATIC_BENDING "Enable quadratic cloth bending" ON)
 option(CIPC_ENABLE_METIS_ORDERING "Enable CHOLMOD's cost-aware METIS ordering fallback" ON)
-option(CIPC_ENABLE_PARDISO "Build the optional oneMKL PARDISO backend when available" ON)
+option(CIPC_ENABLE_PARDISO "Build the recommended/default oneMKL PARDISO backend when available" ON)
 
 # Select a default build type for single-configuration generators.
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)

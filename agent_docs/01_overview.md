@@ -7,7 +7,7 @@
 依赖（`README.md`）：
 
 - Windows: `vcpkg install eigen3 freeglut tbb openblas suitesparse metis`
-- Windows 可选 PARDISO：`vcpkg install intel-mkl:x64-windows`
+- Windows 推荐/默认 PARDISO（应安装）：`vcpkg install intel-mkl:x64-windows`
 - Ubuntu: `sudo apt install libeigen3-dev freeglut3-dev libtbb-dev libopenblas-dev libsuitesparse-dev libmetis-dev`
 
 构建：
@@ -23,7 +23,7 @@ cmake --build build --config Release
   - `CIPC_ENABLE_FRICTION=ON` — 定义 `USE_FRICTION`。
   - `CIPC_ENABLE_QUADRATIC_BENDING=ON` — 定义 `USE_QUADRATIC_BENDING`。
   - `CIPC_ENABLE_METIS_ORDERING=ON` — 要求 CHOLMOD Partition/METIS 可用，采用 CHOLMOD 的 cost-aware AMD→METIS 策略；设为 OFF 则固定为 AMD-only，便于真实 A/B。
-  - `CIPC_ENABLE_PARDISO=ON` — 找到 oneMKL CMake package 时编入 PARDISO；未找到时其余后端照常构建。Windows vcpkg oneMKL 静态库使用 Release CRT，因此 MSVC Debug 自动只排除 PARDISO，Release/RelWithDebInfo 可用。
+  - `CIPC_ENABLE_PARDISO=ON` — 推荐保持开启；找到 oneMKL CMake package 时以 PARDISO 作为默认主后端。未找到时为保证兼容性回退 SuiteSparse LDL。Windows vcpkg oneMKL 静态库使用 Release CRT，因此 MSVC Debug 回退 LDL，Release/RelWithDebInfo 使用 PARDISO。
   - `CIPC_ASSETS_DIR` = `<repo>/Assets/`（活，`Simulator.cpp` 读参数文件/网格用）
   - `CIPC_OUTPUT_DIR` = `<repo>/Output/`（活，由 `RuntimePaths` 统一管理日志、检查点、表面和截图输出）
 - SuiteSparse 查找器会校验 `cholmod_metis`，兼容 `METIS::METIS`、`METIS::metis`、vcpkg 的 `metis` target、Linux 常规 `metis.h + libmetis` 以及内嵌 Partition 的 CHOLMOD；多配置生成器分别绑定 Release/Debug SuiteSparse 库。BLAS/LAPACK 必须来自同一 provider，优先使用带配置映射的 OpenBLAS target。

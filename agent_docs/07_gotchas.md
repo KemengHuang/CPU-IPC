@@ -7,7 +7,7 @@
 3. **仍非 bitwise 确定**：主 PT/EE 候选已排序，文件级全局状态也已移除，但 TBB 浮点归并与并行梯度加法顺序仍可产生约 1e−11～1e−14 的差异。回归使用容差，不比较二进制 hash。
 4. **迭代上限尚未配置化**：Newton 10000、κ 64、穿透回退 64、ACCD 10000 目前是代码常量；已有失败出口，但若要针对场景调节，应进入 `SolverSettings`/配置文件。
 5. **`mesh3D` 仍是 god object**：静止拓扑、材料、动态状态、接触历史和 workspace 伴随数据尚未完全分离；当前仅把 Newton workspace、solver context 和 broad phase 独立出来。
-6. **PARDISO 是可选且较重的 Release 后端**：当前 Windows vcpkg oneMKL 2025.2 静态链接使 headless 约 74.0 MB（70.6 MiB），并且该包的 Release CRT 与 `/MDd` 不兼容；CMake 因而在 MSVC Debug 自动排除 PARDISO。能力感知默认值会在无 MKL/Debug 时回退 SuiteSparse LDL；只有显式强制 `pardiso` 才报 unavailable。
+6. **PARDISO 是推荐必装的默认 Release 后端，同时依赖较重**：当前 Windows vcpkg oneMKL 2025.2 静态链接使 headless 约 74.0 MB（70.6 MiB），并且该包的 Release CRT 与 `/MDd` 不兼容；因此正式性能运行应使用 Release/RelWithDebInfo。无 MKL 或 MSVC Debug 时才为兼容性回退 SuiteSparse LDL；只有显式强制 `pardiso` 才报 unavailable。
 
 ## B. 保留但默认未接入的安全路径
 

@@ -89,7 +89,7 @@ cipc_headless --scene bunny2 --steps 1 --linear-solver pardiso --pardiso-threads
 - SuiteSparse LDL、CHOLMOD、PARDISO 与 Eigen-CG 共用同一 `Eigen::SparseMatrix`、RHS 和解向量，再统一 scatter 回每顶点方向；这保证切换后端不会改变约束或装配语义。
 - 能力感知默认值在 `LinearSolverOptions` 中由 `CIPC_HAS_PARDISO` 决定；没有 PARDISO 时为 SuiteSparse LDL。Eigen-CG 使用 `Eigen::ConjugateGradient<SparseMatrix, Lower, IncompleteCholesky>`，容差 `1e-6`、最大 10000 次，可由 `LinearSolverOptions` 设置。
 - CHOLMOD 后端随默认构建开启 `CIPC_ENABLE_METIS_ORDERING`：配置阶段要求 SuiteSparse `Partition` 并链接验证 `cholmod_metis`；运行时保持 `nmethods=0`、指定 `default_nesdis=0` 和 weighted postorder，即先由 AMD 估计 fill/work，仅在代价较高时再尝试 METIS。关闭选项时设置 `nmethods=1 + CHOLMOD_AMD`，形成真正的 AMD-only A/B。
-- PARDISO 后端由 `CIPC_ENABLE_PARDISO` 控制；oneMKL 不存在时 CMake 只关闭该后端，不影响默认 LDL。`PardisoSolver` 直接调用 phase 11/22/33，使用 SPD `mtype=2`、LP64/zero-based 索引、TBB threading 和 in-core factorization。lower CSC 与 upper CSR 的等价布局避免额外矩阵转置；RHS 使用自有副本。符号分析、METIS permutation、factor 与 phase workspace 随 `IPCSolverContext::linearSystem` 跨时间步复用，稀疏模式变化才重新分析，并用 1.2× fill 阈值自适应触发 fresh ordering。
+- PARDISO 是推荐安装并默认使用的主后端，由默认开启的 `CIPC_ENABLE_PARDISO` 控制；oneMKL 不存在时才为兼容性回退 LDL。`PardisoSolver` 直接调用 phase 11/22/33，使用 SPD `mtype=2`、LP64/zero-based 索引、TBB threading 和 in-core factorization。lower CSC 与 upper CSR 的等价布局避免额外矩阵转置；RHS 使用自有副本。符号分析、METIS permutation、factor 与 phase workspace 随 `IPCSolverContext::linearSystem` 跨时间步复用，稀疏模式变化才重新分析，并用 1.2× fill 阈值自适应触发 fresh ordering。
 - Windows vcpkg oneMKL 静态链接会使 Release headless 约 74.0 MB（70.6 MiB）；其静态包不兼容 `/MDd`，所以 MSVC Debug 自动不定义 PARDISO，选择该后端会报告 unavailable。Release/RelWithDebInfo 是正式 benchmark 配置。
 - Eigen-CG 可用 `cipc_headless --scene twisting-mat --steps 1 --no-output --linear-solver eigen-cg` 做手工 smoke；它不要求与直接法 bitwise 相同。
 

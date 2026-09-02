@@ -1,6 +1,6 @@
 # CPU-IPC
 
-CPU-IPC is a CPU-optimized implementation of Incremental Potential Contact for tetrahedral solids and cloth. It is intended both as a concise and practical CPU simulator and as an optional reproducible benchmark/reference point when comparing other CPU IPC implementations.
+CPU-IPC is a CPU-optimized implementation of Incremental Potential Contact for tetrahedral solids and cloth. It is intended both as a concise and practical CPU simulator and as a reproducible benchmark/reference point when comparing other CPU IPC implementations. The recommended and default Release solver is oneMKL PARDISO with 16 threads.
 
 The benchmark path is fully headless and records solver-stage timing together with numerical/iteration diagnostics. The implementation preserves the same contact, CCD, CFL, energy, gradient, and Hessian semantics across its alternative broad-phase and linear-solver backends, so performance comparisons are not obtained by silently changing the simulated problem.
 
@@ -12,9 +12,9 @@ The benchmark path is fully headless and records solver-stage timing together wi
 - Fixed-size Eigen element kernels, precomputed PFPX operators, and precomputed quadratic/hinge bending geometry.
 - Lower-triangular sparse Hessian assembly without placeholder zeros.
 - Reused Newton, energy, sparse-matrix, RHS, and solver workspaces.
-- Block-aware SuiteSparse LDL with reusable symbolic data and a pre-permuted upper CSC numeric path; this is the automatic fallback when PARDISO is unavailable.
+- Default oneMKL PARDISO SPD solver with parallel factorization, cross-time-step symbolic reuse, adaptive METIS-permutation refresh, and per-phase metrics.
+- Block-aware SuiteSparse LDL with reusable symbolic data and a pre-permuted upper CSC numeric path; retained as the compatibility fallback and an explicit comparison backend.
 - Optional CHOLMOD with symbolic-factorization reuse and a verified, cost-aware METIS nested-dissection fallback.
-- Optional oneMKL PARDISO SPD backend with parallel factorization, cross-time-step symbolic reuse, adaptive METIS-permutation refresh, and per-phase metrics.
 - Optional Eigen-CG backend using the same assembled system and boundary handling.
 - Current-step Newton convergence checks before CCD/line search, avoiding strict-energy backtracking on numerically vanished directions.
 - Strict energy-decreasing line search, Additive CCD, and the original IPC CFL strategy.
@@ -23,7 +23,7 @@ The benchmark path is fully headless and records solver-stage timing together wi
 Windows:
 ```bash
 vcpkg install eigen3 freeglut tbb openblas suitesparse metis
-# Optional parallel PARDISO backend:
+# Recommended/default PARDISO solver (install this for the intended fast path):
 vcpkg install intel-mkl:x64-windows
 ```
 
@@ -31,6 +31,8 @@ Ubuntu:
 ```bash
 sudo apt install libeigen3-dev freeglut3-dev libtbb-dev libopenblas-dev libsuitesparse-dev libmetis-dev
 ```
+
+On Linux, also install Intel oneMKL and expose its `MKLConfig.cmake` through `MKL_ROOT` or `CMAKE_PREFIX_PATH`; this is the recommended/default solver path. A build without oneMKL remains possible only to preserve portability through the SuiteSparse LDL fallback.
 
 ## Build
 
@@ -55,11 +57,11 @@ The build intentionally contains no test targets or CTest registration.
 | `CIPC_ENABLE_FRICTION` | `ON` | Enable lagged IPC friction. |
 | `CIPC_ENABLE_QUADRATIC_BENDING` | `ON` | Use quadratic isometric bending; set `OFF` for the complete dihedral-hinge model. |
 | `CIPC_ENABLE_METIS_ORDERING` | `ON` | Require CHOLMOD Partition/METIS support and allow CHOLMOD's fill/work heuristic to select METIS after AMD; set `OFF` for AMD-only ordering. |
-| `CIPC_ENABLE_PARDISO` | `ON` | Build the oneMKL PARDISO backend when an MKL CMake package is available; otherwise keep the other solvers available. |
+| `CIPC_ENABLE_PARDISO` | `ON` | Build the recommended/default oneMKL PARDISO backend; disabling it is intended for compatibility and fallback validation. |
 
 With METIS ordering enabled, configuration fails early unless the installed CHOLMOD exports the Partition functionality and `cholmod_metis` is linkable. The local SuiteSparse finder accepts `METIS::METIS`, `METIS::metis`, vcpkg's un-namespaced `metis` target, conventional `metis.h + libmetis` installations, and CHOLMOD builds with embedded Partition support. It also selects matching Debug/Release SuiteSparse libraries for multi-configuration builds.
 
-PARDISO uses oneMKL's static LP64/TBB threading layer in Release-family configurations. If oneMKL is absent, configuration succeeds but selecting `--linear-solver pardiso` reports that the backend is unavailable. The Windows oneMKL static package uses the Release CRT, so MSVC Debug builds deliberately exclude only PARDISO while retaining the rest of the project; use Release or RelWithDebInfo for PARDISO benchmarking. Static oneMKL also increases the headless executable to about 74.0 MB (70.6 MiB) on the measured setup.
+PARDISO is the recommended installation and the default solver in Release-family configurations. It uses oneMKL's static LP64/TBB threading layer and defaults to 16 threads. If oneMKL is absent, configuration remains usable by falling back to SuiteSparse LDL, but that is a compatibility path rather than the recommended performance configuration. The Windows oneMKL static package uses the Release CRT, so MSVC Debug builds deliberately fall back to LDL; use Release or RelWithDebInfo for the intended PARDISO path. Static oneMKL increases the headless executable to about 74.0 MB (70.6 MiB) on the measured setup.
 
 Headless-only non-quadratic build:
 
@@ -99,13 +101,13 @@ Scene construction is fresh by default. Checkpoint loading and writing are opt-i
 
 The CPU LBVH broad phase is the default; use `--broad-phase spatial-hash` for the optimized legacy backend.
 
-The default Newton solver is selected from build capabilities: PARDISO when oneMKL is available in the current configuration, otherwise SuiteSparse LDL. PARDISO defaults to 16 threads, while `--pardiso-threads 0` explicitly requests the oneMKL default. Use `--linear-solver suitesparse-ldl` to force the portable block-aware LDL backend, `--linear-solver cholmod` for CHOLMOD's cost-aware AMD/METIS policy, or `--linear-solver eigen-cg` for Eigen conjugate gradient with incomplete-Cholesky preconditioning. All four backends share the same lower-triangular Hessian assembly and boundary handling.
+PARDISO is the project's primary and default Newton solver. Install oneMKL and use a Release-family build to obtain the intended default path; it uses 16 threads unless `--pardiso-threads` overrides the limit. SuiteSparse LDL is retained as the automatic compatibility fallback when PARDISO cannot be built. `--linear-solver suitesparse-ldl`, `cholmod`, and `eigen-cg` explicitly select the other optional comparison backends. All four backends share the same lower-triangular Hessian assembly and boundary handling.
 
 Each Newton convergence decision uses the direction just solved from the current gradient/Hessian. A converged direction exits before CCD and line search; the strict acceptance rule remains `E_trial < E0` with `armijoCoefficient=0`. This prevents a numerically vanished direction from being halved repeatedly only because parallel energy summation fluctuates in the last bit. On the two-bunny2 scene, five independent five-step runs reduced the first 25 frames from 417 energy backtracks to 0, made all five final states identical, and reduced median total time from 4.429 s to 3.396 s. The final convergence-check factorization is still counted, so `numeric_factorizations` can be one greater than the number of accepted Newton updates.
 
 On the development machine, alternating paired Release runs reduced five-step wall time by about 5.9% on cloth-bunny and 8.6% on twisting-mat versus the installed non-supernodal CHOLMOD build. These numbers are machine/dependency specific; use `scripts/benchmark.py` to compare locally.
 
-For the larger two-`bunny2` scene (38,386 vertices, 115,158 DOF), one complete time step with three Newton solves had a three-run median of 1.284 s with 16-thread PARDISO, versus 8.253 s with CHOLMOD and 12.568 s with SuiteSparse LDL on the development machine. Here one `--steps 1` means one complete simulation time step/frame, not one Newton iteration. See [`agent_docs/10_pardiso_report.md`](agent_docs/10_pardiso_report.md) for the thread sweep, phase timings, memory, 50-step contact validation, and limitations.
+PARDISO was the fastest solver in every measured project scene. Over five complete time steps it was 1.66× faster than SuiteSparse LDL and 1.79× faster than CHOLMOD on cloth-bunny, and 1.34×/1.44× faster on twisting-mat. For the larger two-`bunny2` scene (38,386 vertices, 115,158 DOF), one complete time step had a three-run median of 1.284 s with 16-thread PARDISO, versus 8.253 s with CHOLMOD and 12.568 s with SuiteSparse LDL: 6.43× and 9.79× faster. Here one `--steps 1` means one complete simulation time step/frame, not one Newton iteration. See [`agent_docs/10_pardiso_report.md`](agent_docs/10_pardiso_report.md) for the thread sweep, phase timings, memory, 50-step contact validation, and limitations.
 
 The project deliberately does not require CHOLMOD's GPL supernodal module. If your SuiteSparse build includes it, benchmark `cholmod` separately; its relative performance can differ from the default non-supernodal vcpkg build.
 

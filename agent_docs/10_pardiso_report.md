@@ -10,7 +10,7 @@ bunny2 首时间步为 3 次 Newton，因此 PARDISO phase 22 与 phase 33 各�
 
 ## 2. 构建与接口
 
-- `CIPC_ENABLE_PARDISO=ON` 为默认探测选项。找到 `MKL CONFIG` 时定义 `CIPC_HAS_PARDISO` 并编译 `PardisoSolver.cpp`；找不到时继续构建 SuiteSparse LDL、CHOLMOD 与 Eigen-CG，运行期显式选择 PARDISO 会给出可读错误。
+- `CIPC_ENABLE_PARDISO=ON` 是推荐保持开启的默认主路径。找到 `MKL CONFIG` 时定义 `CIPC_HAS_PARDISO`、编译 `PardisoSolver.cpp` 并默认选择 PARDISO；找不到时仅为兼容性继续构建 SuiteSparse LDL、CHOLMOD 与 Eigen-CG。
 - Windows/vcpkg：`vcpkg install intel-mkl:x64-windows`。当前接入固定 `MKL_LINK=static`、`MKL_INTERFACE=lp64`、`MKL_THREADING=tbb_thread`。
 - 当前 vcpkg oneMKL 2025.2 静态包使用 Release CRT。为避免 `/MD` 与 `/MDd` 的 `LNK2038`，MSVC Debug 配置自动只排除 PARDISO；Release、RelWithDebInfo 和其余 Debug 产品仍正常。静态链接后的 Release `cipc_headless.exe` 在本机为 74,003,968 bytes（约 74.0 MB / 70.6 MiB）。
 - CLI：`--linear-solver pardiso --pardiso-threads N`。运行时默认 `N=16`，显式 `N=0` 才采用 oneMKL 默认；正数通过每个 phase 外层的 `tbb::global_control(max_allowed_parallelism)` 生效。直接调用 `mkl_set_num_threads` 对 TBB threading layer 的实测限制无效，因此未采用。

@@ -144,9 +144,9 @@ bunny2 单时间步、50 ms 轮询的一次运行记录：
 
 PARDISO 的 working set 与两者相近，private bytes 比 CHOLMOD 高约 7%；这是单次轮询样本，不应解释成精确分配剖析。
 
-## 9. 50 步接触与 ordering 策略
+## 9. 50 步接触与 ordering 策略（旧停止点基线）
 
-bunny2 前 42 帧主要检验跨帧 reuse；frame 43 首次出现 ground=694/self=3，frame 49 为 ground=441/self=1006。三个排序策略都得到相同整数接触指标和正的最小距离：
+以下三组 ordering A/B 在“用上一轮方向判断收敛”的旧停止点下完成，用于比较 permutation 策略；当前方向判定改变了绝对 Newton/回退数，不能把表中总时间当作现版本基线。bunny2 前 42 帧主要检验跨帧 reuse；frame 43 首次出现 ground=694/self=3，frame 49 为 ground=441/self=1006。三个排序策略都得到相同整数接触指标和正的最小距离：
 
 | 策略 | total | linear | phase 11 | phase 22 | phase 33 | 末帧 factor nnz |
 |---|---:|---:|---:|---:|---:|---:|
@@ -156,7 +156,7 @@ bunny2 前 42 帧主要检验跨帧 reuse；frame 43 首次出现 ground=694/sel
 
 adaptive 比 always-fresh 快 19.0%，比 permanently-fixed 快 5.8%。它允许少量额外 phase 11 来阻止固定 permutation 的 fill 膨胀。
 
-当前 adaptive 50 步末态：
+旧停止点 adaptive 50 步末态：
 
 ```text
 sum_x             = -4725.2909366452941
@@ -169,12 +169,14 @@ matrix_nnz        = 2214465
 
 always-fresh 与 adaptive 的坐标和差约 `1e-10`，碰撞整数指标一致，最小距离差约 `1e-18`，属于并行归约/直接法浮点路径差异。
 
-## 10. 正确性与被否决的实验
+改为用本轮刚求出的方向判断后，在保持原 `beta` 辅助退出的隔离50步运行中，总时间54.716 s、153个接受Newton步、15次能量回退；末帧ground/self=441/999、`min_distance2=7.3487834099833287e−7>0`、`matrix_nnz=2,214,492`。与旧停止点相比轨迹和接触有小幅变化，但仍保持严格下降与正距离。
+
+## 10. 正确性与当前方向收敛
 
 - PARDISO、CHOLMOD、SuiteSparse LDL 使用同一 Hessian、RHS、边界处理、CCD pair、CFL 与 line search；后端只替换线性求解。
 - 首步跨后端结果在浮点舍入内一致；50 步 ordering A/B 保持接触数和正最小距离。
 - `armijoCoefficient=0`、严格 `E_trial<E0`、摩擦 Hessian scale=1 均未改变。
-- 无接触且接近机器精度时，不同直接法/TBB 归约舍入可能造成“零能量严格比较”长尾：最终 smoke 曾在 `gTp≈7.33e−30`、能量仅末位约 `1e−16` 摆动时记录 52 次二分，随后既有收敛阈值分支恢复原位置。它不代表一次物理 Newton 步接受了极小 α，但会影响 wall time/回退计数，因此 benchmark 使用多进程中位数。曾实验在求得新方向后立即按阈值跳过 CCD/line search，虽然消除了该长尾，但 bunny2 50 步终态出现约 `3e-2` 量级坐标和差异，因此该实验已完全撤回；正式代码保留原收敛/严格线搜索语义。
+- 无接触且接近机器精度时，旧停止顺序会把本轮近零方向继续送入严格比较：实测 `gTp≈7.33e−30`、能量只在约 `1e−16` 末位摆动，单帧可随机二分至52次。按项目当前要求，正式顺序改为先完成本轮线性求解，再用该当前方向判断；收敛时不进入CCD/line search。5次独立运行×前5帧的回退由417降为0，终态完全一致，5步中位由4429.220降至3396.438 ms。该调整不允许相等/上升能量，也没有修改Hessian或scale。
 - PARDISO `iparm[1]=3` 的 parallel nested dissection 在当前 MKL/TBB/场景上更慢，已恢复 METIS `iparm[1]=2`。
 
 ## 11. 采用建议与后续瓶颈

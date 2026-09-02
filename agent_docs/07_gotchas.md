@@ -59,7 +59,7 @@
 - **`output_tetrahedraMesh` round-trip off-by-one**：tet 节点引用已写成 1-based，并补齐 Gmsh 结束标记。
 - **零 Newton 次数除零**：平均碰撞数在 `total_iter==0` 时返回 0。
 - **位置式参数解析**：已改为 key/value map，校验未知、重复、缺失、非有限与物理范围；默认与文件路径共用 `updateMaterial`。
-- **Newton threshold/line-search 伪接口**：阈值已接通；`armijoCoefficient` 固定为0，严格要求 `E_trial<E0`，并有64次失败上限。旧的 `1e−3·初始步长` 截止会在未下降时也退出，现已删除。若严格比较在机器精度处耗尽但方向已低于既有收敛阈值，会恢复原位置并收敛退出；正常路径不会提前跳过小 Newton 步。
+- **Newton threshold/line-search 伪接口**：阈值已接通，并改为在线性求解后检查本轮当前方向；收敛时不再把近零方向送入 CCD/line search。`armijoCoefficient` 固定为0，严格要求 `E_trial<E0`，并有64次失败上限；旧的 `1e−3·初始步长` 截止已删除。line search 内的机器精度耗尽分支仍作为安全兜底，但不再是正常收敛路径。
 - **宽阶段影响物理步长**：原 `Self_CCD_ActiveSet` 直接保存后端候选，体素假阳性会改变 partial/CFL 分支；现由统一静态 AABB+dHat 生成 partial pair，Full CCD 也在 ACCD 前统一扫掠 AABB 过滤。PT 使用入口 α，EE 使用 PT 更新后的 α；两个后端应用相同的精确区间过滤。原 CFL 合并公式保留。
 - **无界循环**：ACCD、κ 外层、动画边界和穿透 safeguard 均加入上限、非有限/underflow 处理与异常诊断。
 - **全局运行状态**：帧号、累计计时、碰撞和 checkpoint 状态已移入每个 Simulator 的 `IPCSolverContext`。

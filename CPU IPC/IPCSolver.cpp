@@ -915,20 +915,23 @@ int solveBarrierSubproblem(
         timer0.stop();
         timer1.start();
 
-        const double directionNorm = directionInfinityNorm(moveDir);
-
-        const double convergenceThreshold = mesh.Newton_Solver_Threshold
-            * std::sqrt(mesh.bboxDiagSize2) * mesh.IPC_dt;
-        const bool directionVanished = directionNorm < convergenceThreshold;
-        if (k > 0 && directionVanished) {
-            break;
-        }
-
         workspace.linearSystem.solve(
             mesh, BH, gradient, moveDir,
             linearSolverOptions, stats.matrixNonZeros);
 
         timer1.stop();
+
+        // Test the direction solved from the current gradient/Hessian before
+        // spending work on CCD or strict-energy line search.
+        const double directionNorm = directionInfinityNorm(moveDir);
+        const double convergenceThreshold = mesh.Newton_Solver_Threshold
+            * std::sqrt(mesh.bboxDiagSize2) * mesh.IPC_dt;
+        if (directionNorm < convergenceThreshold) {
+            stats.assemblyMilliseconds += timer0.milliseconds();
+            stats.linearSolveMilliseconds += timer1.milliseconds();
+            break;
+        }
+
         timer2.start();
 
         double alpha = 1.0;

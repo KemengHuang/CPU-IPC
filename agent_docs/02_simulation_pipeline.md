@@ -21,13 +21,15 @@
 | 顺序 | 步骤 | 位置 | 计时器 |
 |---|---|---|---|
 | 1 | `computeGradientAndHessian(mesh, gradient, BH, gd)`，返回碰撞数 | `:1971` | time0 |
-| 2 | 收敛检查（用上一轮方向）：`directionInfinityNorm(moveDir)`；阈值 = `Newton_Solver_Threshold·sqrt(bboxDiagSize2)·dt`；`k>0 && directionVanished` 则 break | `solveBarrierSubproblem` | — |
-| 3 | `NewtonLinearSystem::solve`：统一装配后按配置调用 SuiteSparse LDL、CHOLMOD、PARDISO 或 Eigen-CG；三个直接法在稀疏结构不变时复用符号分析 | `NewtonLinearSystem.cpp` | time1 |
+| 2 | `NewtonLinearSystem::solve`：统一装配后按配置调用 SuiteSparse LDL、CHOLMOD、PARDISO 或 Eigen-CG；三个直接法在稀疏结构不变时复用符号分析 | `NewtonLinearSystem.cpp` | time1 |
+| 3 | 用**本轮刚求出的方向**做收敛检查：`directionInfinityNorm(moveDir)`；阈值 = `Newton_Solver_Threshold·sqrt(bboxDiagSize2)·dt`；低于阈值则记录本轮 assembly/linear 时间并在 CCD/line search 前 break | `solveBarrierSubproblem` | — |
 | 4 | 可行步长上限（见 §3） | `:1990-2024` | time2 |
 | 5 | `lineSearch(...)` 回溯 | `:2031` | time3 |
 | 6 | `postLineSearch(mesh, gd, Kappa)` κ 自适应 + 近约束簿记 | `IPCSolver.cpp` | time4 |
 
 `collisionNum` 来自 `compute_g_dpt`：每个 EE/PT 约束 +1，PP/PE 加重数（`ContactMechanics.cpp`），纯诊断用。
+
+当前方向收敛时仍完成了一次 numeric factorization，因此 `numeric_factorizations` 通常比实际接受的 `newton` 步数多 1；这是判断当前解是否收敛所需的确认求解，不是漏计的 Newton 更新。
 
 ## 3. 可行步长上限（`:1990-2024`，`alpha` 初值 1，slackness=0.8）
 

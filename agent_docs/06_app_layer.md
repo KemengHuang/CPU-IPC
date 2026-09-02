@@ -53,6 +53,8 @@
 - **`TwistingMatSoft` / `buildTwistingMatScene(..., SoftTarget)`（默认）**：可运行的软边界范例；复用同一网格、两侧顶点选择和 hard 版本的一步目标端点，但端点保持 free DOF，通过 `soft.updateTarget` 与 `weight=100` 二次势拉向目标。viewer、headless、`SimulationOptions`、无参 `buildModels()` 与 benchmark 脚本均默认选择它，也可显式传 `--scene twisting-mat-soft`。
 - **`Bunny2` / `buildBunny2Scene`**：参考 `GPU_IPC/GPU_IPC/gl_main.cpp` 的 `initScene1`，两次追加 `Assets/tetrahedraMesh/bunny2.msh`，两只都取 scale=0.2，offset 分别为 `(0,0.65,0)` 与 `(0,0,0)`，`YoungModulus=1e5`。合并后是 38,386 顶点、159,870 tet、41,664 表面三角形；用于大稀疏系统/碰撞压力基准，不替换默认场景。
 
+README 的 “Boundary conditions” 小节给出 hard Dirichlet（静态/动画）和 soft target（静态/动画）的完整配置代码；修改场景边界时必须同时遵守 `BoundaryConditions.h` 的索引、free/constrained 状态与初始化约定。
+
 ### `buildModels`（`:283-336`）全流程
 
 1. 接收 `SimulationOptions{scene,resume,write files,checkpoint,verbose,broad phase,linear solver}`；恢复和 checkpoint 写入默认均为 false，必须显式 opt-in；`RuntimePaths::initialize` → `loadSettings` → 选择场景；重复 build 会先清理旧 model；

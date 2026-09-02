@@ -194,6 +194,57 @@ For fair comparisons:
 
 `BoundaryConditionSet` keeps hard and soft boundary data separate. Animated Dirichlet vertices are marked constrained in `boundaryTypes`; their `updateDirection(current, rest, step, alpha, dt)` callback returns the search direction used by the existing `x_new = x - p` convention, and the motion remains guarded by CCD. Static constrained vertices need no callback.
 
+### Hard Dirichlet boundary setup
+
+For an animated hard boundary, mark every selected vertex as Dirichlet, add it to the animated Dirichlet list, and provide the update callback:
+
+```cpp
+for (int vertex : selectedVertices) {
+    mesh.boundaryTypes[vertex] =
+        boundaryTypeCode(VertexBoundaryType::Dirichlet);
+    mesh.boundaryConditions.dirichlet.vertexIndices.push_back(vertex);
+}
+
+mesh.boundaryConditions.dirichlet.updateDirection =
+    [](const Eigen::Vector3d& current,
+       const Eigen::Vector3d& rest,
+       int step,
+       double alpha,
+       double dt) {
+        // Example: prescribe an upward velocity of 0.1 units/second.
+        // The callback returns p, while the solver applies x_new = x - p.
+        const Eigen::Vector3d target =
+            current + alpha * dt * Eigen::Vector3d(0.0, 0.1, 0.0);
+        return current - target;
+    };
+```
+
+`alpha` is the fractional hard-boundary step selected by CCD. Use `rest` to classify vertices without that classification changing as the mesh deforms, and use `step` for staged or time-dependent motion. For a static hard boundary, only set `boundaryTypes[vertex]` to `Dirichlet`; do not add it to `dirichlet.vertexIndices` and do not install an update callback.
+
+### Soft target boundary setup
+
+Soft-boundary vertices must remain free Newton unknowns. Add them only to the soft list, choose a finite positive weight, and return an absolute target position from `updateTarget`:
+
+```cpp
+for (int vertex : selectedVertices) {
+    mesh.boundaryTypes[vertex] =
+        boundaryTypeCode(VertexBoundaryType::Free);
+    mesh.boundaryConditions.soft.vertexIndices.push_back(vertex);
+}
+
+mesh.boundaryConditions.soft.weight = 100.0;
+mesh.boundaryConditions.soft.updateTarget =
+    [](const Eigen::Vector3d& current,
+       const Eigen::Vector3d& rest,
+       int step,
+       double dt) {
+        // Targets are evaluated once and then frozen for the whole time step.
+        return current + dt * Eigen::Vector3d(0.0, 0.1, 0.0);
+    };
+```
+
+For a static soft target, omit `updateTarget` and fill `soft.targetPositions` in exactly the same order as `soft.vertexIndices`. If `targetPositions` is omitted, initialization uses the selected vertices' current positions.
+
 The historical `update_soft_constraint_functor` path is represented by `soft.updateTarget(current, rest, step, dt)`. Its vertices remain free Newton unknowns and contribute the matched incremental-potential terms
 
 ```text
@@ -203,6 +254,15 @@ H_soft = weight * I.
 ```
 
 This is a target-position penalty (often called the project's soft or Neumann-style boundary), mathematically closer to a spring/Robin condition than a pure prescribed-traction Neumann condition. Targets are frozen once per time step so line search evaluates one consistent objective. Configuration validation rejects duplicate/out-of-range indices, non-finite targets and weights, and soft vertices accidentally marked as hard-constrained.
+
+Configure the boundary sets after loading/selecting mesh vertices. The normal `FEMSimulator::buildModels()` path assigns `v_rest` and calls `BoundaryConditionOps::initialize(mesh)` automatically. Code that constructs a `mesh3D` outside that path must do so once after finalizing the rest positions:
+
+```cpp
+mesh.v_rest = mesh.vertexes;
+BoundaryConditionOps::initialize(mesh);
+```
+
+Do not place the same vertex in both sets. `BoundaryConditionOps::initialize()` validates array sizes, uniqueness, index ranges, hard/free status, targets, and weights before simulation starts.
 
 `--scene twisting-mat` is the original hard-Dirichlet example. `--scene twisting-mat-soft` uses the same mesh, selected end vertices, and per-step target endpoint, but keeps those vertices free and attracts them with `weight=100`; it is the runnable soft-boundary example for both the viewer and headless benchmark.
 

@@ -107,6 +107,7 @@ set(IPC_SOURCE_DIR "CPU IPC")
 
 set(CIPC_CORE_SOURCES
     "${IPC_SOURCE_DIR}/AdditiveCCD.cpp"
+    "${IPC_SOURCE_DIR}/BoundaryConditions.cpp"
     "${IPC_SOURCE_DIR}/CholmodSolver.cpp"
     "${IPC_SOURCE_DIR}/CollisionBroadPhase.cpp"
     "${IPC_SOURCE_DIR}/ContactMechanics.cpp"

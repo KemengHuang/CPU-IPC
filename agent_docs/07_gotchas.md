@@ -38,7 +38,7 @@
 - 布料 `areas[i]` 含厚度（= 体积），能量/力直接乘它。
 - `vec()` 列主序；`PFPX` 布局依赖这一点。
 - 障碍函数只在 `d < Hhat` 合法；新增调用点必须先过滤活动集。
-- `BHessian::toTriplets` 会按 `boundaryTypes` 过滤固定/驱动顶点；若改硬约束机制，矩阵和 RHS 必须一起改。
+- `BHessian::toTriplets` 会按 `boundaryTypes` 过滤 Dirichlet/外部 collider 顶点，RHS 必须用同一 predicate 清零；软边界顶点必须保持 code 0，否则 `weight·I` 与梯度会被错误消元。
 - 并行累加共享状态必须有明确的数据竞争策略；替换 spin mutex 时要做数值回归。
 - 产品入口为 `ViewerMain.cpp` 和 `apps/cipc_headless.cpp`；核心源文件由 CMake 显式列出。项目当前不保留测试源码或 CTest target。
 - CHOLMOD的排序策略会影响symbolic时间、fill-in和factorization；当前生产策略固定AMD，因为项目矩阵上的强制METIS与multi-method AUTO都更慢。Partition/METIS模块仍编入供实验。
@@ -53,7 +53,7 @@
 - **METIS 看似找到但未生效**：vcpkg导出target名为`metis`，旧查找器只接受`METIS::METIS`。现已归一化常见target名并链接检查`cholmod_metis`；模块保留供实验，但后续A/B确认生产ordering使用AMD更快。
 - **多配置依赖混链**：SuiteSparse fallback target 现分别设置 Debug/Release imported location；vcpkg 的 `lib` 与 `debug/lib` 采用隔离查找。BLAS/LAPACK 统一 provider，避免一半来自标准 BLAS、一半来自 OpenBLAS。
 - **假场景参数/空透传层**：已用 `SimulationScene::{TwistingMat,ClothOverBunny,Bunny2}` 接通 switch；删除无第二实现、只转发到 `solveIPCStep` 的 FEMIntegrator 层。Bunny2 严格按 GPU_IPC 参考使用两份 scale=0.2 网格。
-- **动画约束 alpha 收窄**：`update_hard_constraint_functor` 第二参数已由 `int` 改为 `double`。
+- **边界条件在重构中丢失/混用索引**：`e3df45e` 保留了 hard functor，却遗漏旧版 soft functor 的目标、能量、梯度和 Hessian。现集中为 `BoundaryConditions.cpp/.h`：hard/soft 各有独立且唯一的顶点集合；hard `updateDirection` 恢复 `rest/stepId/double alpha/dt`，明确返回 `x_new=x−p` 的方向，并在穿透回退时始终从同一个时间步起点重算 fractional motion；soft `updateTarget` 每时间步冻结目标，统一加入 `½w‖x−t‖² / w(x−t) / wI`。临时 soft twisting-mat Taylor 回归的一阶相对误差为 `3.2e-12/4.8e-11`，曲率比为 `0.999997/0.999994`；默认 hard twisting-mat 5 步终态保持不变。
 - **CWD 相对输出与硬编码导出**：已由 `RuntimePaths` 统一写到 `<repo>/Output/` 并自动建目录；表面/截图均默认关闭、由按键切换；表面导出只读引用 `SimulationModel`。
 - **检查点越界/半恢复风险**：加载先校验完整数量再整体提交，计时状态只在网格恢复成功时恢复，保存精度提高到 17 位。
 - **旧检查点覆盖初始场景**：`SimulationOptions::resumeCheckpoint/writeCheckpoints` 已改为默认 false；viewer 和普通 API 构建默认 fresh。只有显式 `--resume` 才读取 `Output/tempData`。
@@ -77,5 +77,5 @@
 - **程序化网格索引**：`InitMesh` 已按 local corner 写 tet，`load_test(1/2)` 使用正确的 0/+8 offset，并补 boundaryTypes。
 - **viewer 近裁剪面**：初始化与 resize 均统一为 0.1。
 - **文件与特效遗留**：删除 shader 目录、GLEW、无效 VBO 分支、未消费的 viewer 开关、`fem_parameters.h`、2D/肌肉/肌腱加载器和旧 EKF 状态；viewer 改名 `ViewerMain.cpp`。
-- **职责化命名**：`IPCSolver`、`ContactMechanics`、`CollisionBroadPhase`、`AdditiveCCD`、`Elasticity`、`ElasticityMath`、`CholmodSolver`、`FeasibleStep`、`StageTimer`、`EncodedContact` 均按实际职责命名。
+- **职责化命名**：`IPCSolver`、`BoundaryConditions`、`ContactMechanics`、`CollisionBroadPhase`、`AdditiveCCD`、`Elasticity`、`ElasticityMath`、`CholmodSolver`、`FeasibleStep`、`StageTimer`、`EncodedContact` 均按实际职责命名。
 - **SVD 扁平化**：删除 `SVD/` 子目录和三个未调用的 JacobiSVD 包装；公开接口为 `RotationAwareSVD`，底层自包含 `ImplicitQR3x3SVD.h`。

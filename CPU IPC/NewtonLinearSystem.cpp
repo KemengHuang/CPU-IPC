@@ -147,7 +147,7 @@ void NewtonLinearSystem::assemble(
 
     tbb::parallel_for(0, static_cast<int>(gradient.size()), 1, [&](int vertex) {
         rightHandSide_.template segment<3>(3 * vertex) =
-            mesh.boundaryTypes[vertex] == 0
+            isFreeBoundary(mesh.boundaryTypes[vertex])
                 ? gradient[vertex]
                 : Eigen::Vector3d::Zero();
     });

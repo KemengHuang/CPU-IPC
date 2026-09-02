@@ -1,4 +1,5 @@
 #include "Simulator.h"
+#include "BoundaryConditions.h"
 #include "iostream"
 #include "Eigen/Eigen"
 #include "RuntimePaths.h"
@@ -251,13 +252,18 @@ void buildTwistingMatScene(mesh3D& mesh3d, const std::string& assetDirectory) {
     {
         if (mesh3d.vertexes[i][0] < mesh3d.objMinConer[0] + eps || mesh3d.vertexes[i][0] > mesh3d.objMaxConer[0] - eps)
         {
-            mesh3d.boundary_vertexes_indices.push_back(i);
-            mesh3d.boundaryTypes[i] = 1;
+            mesh3d.boundaryConditions.dirichlet.vertexIndices.push_back(i);
+            mesh3d.boundaryTypes[i] =
+                boundaryTypeCode(VertexBoundaryType::Dirichlet);
         }
     }
 
-    mesh3d.update_hard_constraint_functor =
-        [](Vector3d vertex, double alpha, double ipc_dt) -> Vector3d
+    mesh3d.boundaryConditions.dirichlet.updateDirection =
+        [](const Vector3d& vertex,
+            const Vector3d&,
+            int,
+            double alpha,
+            double ipc_dt) -> Vector3d
         {
             double angleX = 3.14 / 5 * ipc_dt * alpha;
             Matrix3d rotationL, rotationR;
@@ -409,6 +415,7 @@ bool FEMSimulator::buildModels(const SimulationOptions& options) {
 
     mesh3d.v_rest = mesh3d.vertexes;
     mesh3d.V_prev = mesh3d.vertexes;
+    BoundaryConditionOps::initialize(mesh3d);
 
     updateInertialTarget(mesh3d);
 

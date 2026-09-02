@@ -50,17 +50,18 @@ cipc viewer / cipc_headless
         └─ solveIPCStep + IPCSolverContext     每时间步求解 + 实例级指标/恢复状态
                   ├─ κ 外层循环: solveBarrierSubproblem × N
                   │    └─ Newton 迭代:
-                  │         computeGradientAndHessian  (弹性+障碍+摩擦)
+                  │         computeGradientAndHessian  (弹性+软边界+障碍+摩擦)
                   │         NewtonLinearSystem::solve  (PARDISO / optimized CHOLMOD / Eigen-CG)
                   │         可行步长 (ACCD / CFL / 地面射线)
                   │         lineSearch (回溯 + 穿透防护)
                   │         postLineSearch (κ 自适应)
+                  ├─ BoundaryConditionOps (软目标冻结 + Dirichlet/CCD 驱动)
                   ├─ Friction::initialize (每步开始时冻结 λ 与切空间基)
                   └─ updateVelocity / updateInertialTarget
 ```
 
 - `FEMSimulator::simulateStep` 直接对 `SimulationModel::meshes.front()` 调 `solveIPCStep`；已删除仅做一次转发、没有第二实现的 integrator 层。当前仍是单 mesh 求解。
-- 弹性数值内核在 `Elasticity.cpp`，旋转保持 SVD 在 `RotationAwareSVD.cpp` + 自包含 `ImplicitQR3x3SVD.h`；摩擦在 `Friction.cpp`；Newton 线性系统在 `NewtonLinearSystem.cpp`；`IPCSolver.cpp` 负责时间步、Newton、CCD 与线搜索编排。
+- 弹性数值内核在 `Elasticity.cpp`，旋转保持 SVD 在 `RotationAwareSVD.cpp` + 自包含 `ImplicitQR3x3SVD.h`；边界在 `BoundaryConditions.cpp`；摩擦在 `Friction.cpp`；Newton 线性系统在 `NewtonLinearSystem.cpp`；`IPCSolver.cpp` 负责时间步、Newton、CCD 与线搜索编排。
 - 碰撞宽阶段默认使用 `LBVH.cpp`，`CollisionBroadPhase.cpp` 的 SpatialHash 保留为回归后端；距离、障碍与接触装配在 `ContactMechanics.cpp`，Additive CCD 在 `AdditiveCCD.cpp`。
 
 ## 核心数据结构
@@ -84,7 +85,7 @@ cipc viewer / cipc_headless
 | 活动集 | `Self_ActiveSet`（`EncodedContact`，PT/EE/PP/PE 混合）、`Self_EE_ActiveSet` + `Self_EEeIe_ActiveSet`（近平行 EE，mollified）、`Self_CCD_ActiveSet`（pair<int,int>）、`Environment_ActiveSet`（地面接触顶点 id） |
 | 摩擦滞后量 | `Self_lambda_lastH / Environment_lambda_lastH`（法向力幅值）、`MMDistCoord`（最近点坐标 β/γ/η）、`MMTanBasis`（3×2 切空间基）、`*_activeSet_lastH`（上一步活动集快照） |
 | 弯曲 | quadratic：`quadBendingInfo` 含 `Q⊗I₃`；hinge：`hingeBendingInfo` 含四顶点、静止角和 `l0/(h0+h1)`；二者共用 `plateRigidity` |
-| 边界 | `boundaryTypes`：0=自由，1=固定，≥2=动画驱动；`boundary_vertexes_indices`；`update_hard_constraint_functor` 签名 `(Vector3d, double alpha, double dt)` |
+| 边界 | `BoundaryConditionSet` 分离 `dirichlet` 与 `soft` 集合；`boundaryTypes` 由 `VertexBoundaryType` 命名：0=自由、1=Dirichlet、≥2=外部 prescribed collider。硬回调 `updateDirection(current,rest,step,alpha,dt)` 返回 `x_new=x−p` 的方向；软回调 `updateTarget(current,rest,step,dt)` 返回绝对目标位置 |
 | 开关 | `use_barrier, apply_gravity(默认true), is_quasi_static(默认false)` |
 | 恢复 | `resumedFromCheckpoint`：仅当位置与 x̃ 检查点均通过顶点数校验时为 true；计时/κ 只在此时恢复 |
 
@@ -92,7 +93,7 @@ cipc viewer / cipc_headless
 
 弹性/障碍/摩擦的逐单元 Hessian 全部以**小块**形式追加进 4 个列表：
 
-- `H3x3 + D1Index`：1 顶点（地面障碍、地面摩擦）
+- `H3x3 + D1Index`：1 顶点（软边界、地面障碍、地面摩擦）
 - `H6x6 + D2Index`：2 顶点（PP 接触）
 - `H9x9 + D3Index`：3 顶点（PE 接触、布料三角形弹性）
 - `H12x12 + D4Index`：4 顶点（PT/EE 接触、tet 弹性、弯曲）

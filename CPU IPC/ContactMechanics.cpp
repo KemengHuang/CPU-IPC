@@ -26,14 +26,14 @@ void appendLowerTriangleBlocks(
             const int rowVertex = getVertex(indices[block], localRowVertex);
             if (rowVertex < 0
                 || static_cast<size_t>(rowVertex) >= boundaryTypes.size()
-                || boundaryTypes[rowVertex] != 0) {
+                || !isFreeBoundary(boundaryTypes[rowVertex])) {
                 continue;
             }
             for (int localColumnVertex = 0; localColumnVertex < VertexCount; ++localColumnVertex) {
                 const int columnVertex = getVertex(indices[block], localColumnVertex);
                 if (columnVertex < 0
                     || static_cast<size_t>(columnVertex) >= boundaryTypes.size()
-                    || boundaryTypes[columnVertex] != 0) {
+                    || !isFreeBoundary(boundaryTypes[columnVertex])) {
                     continue;
                 }
                 for (int rowDimension = 0; rowDimension < 3; ++rowDimension) {
@@ -65,14 +65,14 @@ void appendLowerTriangleBlocks(
             const int rowVertex = getVertex(indices[block], localRowVertex);
             if (rowVertex < 0
                 || static_cast<size_t>(rowVertex) >= boundaryTypes.size()
-                || boundaryTypes[rowVertex] != 0) {
+                || !isFreeBoundary(boundaryTypes[rowVertex])) {
                 continue;
             }
             for (int localColumnVertex = 0; localColumnVertex < VertexCount; ++localColumnVertex) {
                 const int columnVertex = getVertex(indices[block], localColumnVertex);
                 if (columnVertex < 0
                     || static_cast<size_t>(columnVertex) >= boundaryTypes.size()
-                    || boundaryTypes[columnVertex] != 0) {
+                    || !isFreeBoundary(boundaryTypes[columnVertex])) {
                     continue;
                 }
                 for (int rowDimension = 0; rowDimension < 3; ++rowDimension) {
@@ -3776,7 +3776,12 @@ void Self_largestFeasibleStepSize_CCD(const mesh3D& mesh,
             {
                 const Vector4i& sfVInd = mesh.surface[sfI];
 
-                if (mesh.boundaryTypes[vI]>=2&&mesh.boundaryTypes[sfVInd[0]]>=2&&mesh.boundaryTypes[sfVInd[1]]>=2&&mesh.boundaryTypes[sfVInd[2]]>=2)continue;
+                if (isExternalColliderBoundary(mesh.boundaryTypes[vI])
+                    && isExternalColliderBoundary(mesh.boundaryTypes[sfVInd[0]])
+                    && isExternalColliderBoundary(mesh.boundaryTypes[sfVInd[1]])
+                    && isExternalColliderBoundary(mesh.boundaryTypes[sfVInd[2]])) {
+                    continue;
+                }
                 if (vI == sfVInd[0] || vI == sfVInd[1] || vI == sfVInd[2])continue;
 
                 const CPUAABB faceBox = makeSweptTriangleAABB(
@@ -3827,7 +3832,12 @@ void Self_largestFeasibleStepSize_CCD(const mesh3D& mesh,
             // edge-edge
             for (const auto& eI : edgeInds) {
                 const auto& meshEI = mesh.surfEdges[eI];
-                if (mesh.boundaryTypes[meshEI.first]>=2&&mesh.boundaryTypes[meshEI.second]>=2&&mesh.boundaryTypes[meshEJ.first]>=2&&mesh.boundaryTypes[meshEJ.second]>=2)continue;
+                if (isExternalColliderBoundary(mesh.boundaryTypes[meshEI.first])
+                    && isExternalColliderBoundary(mesh.boundaryTypes[meshEI.second])
+                    && isExternalColliderBoundary(mesh.boundaryTypes[meshEJ.first])
+                    && isExternalColliderBoundary(mesh.boundaryTypes[meshEJ.second])) {
+                    continue;
+                }
                 if (meshEI.first == meshEJ.first || meshEI.first == meshEJ.second || meshEI.second == meshEJ.first || meshEI.second == meshEJ.second || eI < eJ)continue;
 
                 const CPUAABB secondEdgeBox = makeSweptEdgeAABB(

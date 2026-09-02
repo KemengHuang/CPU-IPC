@@ -105,7 +105,7 @@ E_e = ½·D·w_e·(θ−θ0)²
 - 逐 tet：`Dm`（`:575-603`）、体积（`calculateVolum`，`:540-566`，`|det|/6`）、集中质量 `V·ρ/4` 到 4 节点、`Dm.inverse()` 存入。
 - 逐 tet 同时预计算固定尺寸 `TetPFPX`；逐布料三角形计算 `calculateDms2D_double`、**`areas = 面积 × clothThicness`**（体积化！）、质量和 `TrianglePFPX`。相关 vector 会按单元数 reserve。
 - `type`/`scale` 参数**被忽略**。
-- 其余网格伴随数据在别处建：`surface/surfVerts/surfEdges`、`quadBendingInfo` 或 `hingeBendingInfo`。固定/驱动状态只由 `boundaryTypes` 表示。
+- 其余网格伴随数据在别处建：`surface/surfVerts/surfEdges`、`quadBendingInfo` 或 `hingeBendingInfo`。`BoundaryConditionOps::initialize` 在 `v_rest` 完成后校验 hard/soft 索引与目标；Dirichlet 消元状态仍由 `boundaryTypes` 表示，软边界则必须保持自由 DOF。
 
 ## 7. 死代码清单（本模块）
 

@@ -1,6 +1,7 @@
 #pragma once
 #ifndef CIPC_SIMULATION_MESH_H
 #define CIPC_SIMULATION_MESH_H
+#include "BoundaryConditions.h"
 #include "Eigen/Eigen"
 #include "EncodedContact.h"
 #include "HingeBending.h"
@@ -73,7 +74,6 @@ public:
 	bool use_barrier;
 
 	vector<Vector3d> vertexes;
-	vector<int> boundary_vertexes_indices;
 	vector<Vector3d> v_rest;
 	vector<Vector4i> tetrahedras;
 	vector<Vector3i> triangles;
@@ -101,6 +101,7 @@ public:
 	Vector3d minConer, maxConer;
 	Vector3d objMinConer, objMaxConer;
 	vector<int> boundaryTypes;
+	BoundaryConditionSet boundaryConditions;
 	//IPC
 	vector<Vector3d> inertialTarget;
 	vector<Vector3d> V_prev;
@@ -110,7 +111,6 @@ public:
 
 	vector<QuadBendingInfo> quadBendingInfo;
 	vector<HingeBendingInfo> hingeBendingInfo;
-	std::function<Vector3d(Vector3d vertex, double alpha, double ipc_dt)> update_hard_constraint_functor = nullptr;
 	bool apply_gravity = true;
 	bool is_quasi_static = false;
 	bool resumedFromCheckpoint = false;

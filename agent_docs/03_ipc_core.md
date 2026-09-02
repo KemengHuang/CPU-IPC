@@ -38,7 +38,7 @@ b''(d)= −2·ln(d/dHat) − 4(d−dHat)/d + (d−dHat)²/d²
 默认查询由 CPU face/edge LBVH 提供，SpatialHash 可切回；两者都用半径 `sqrt(Hhat)` 做静态候选，精确距离判定为 `d < Hhat`。并行于 `surfVerts`（PT）和 `surfEdges`（EE，`eJ > eI` 去重）；候选输出排序，线程内 scratch 复用。
 
 过滤规则：
-- 4 个顶点全部 `boundaryTypes ≥ 2`（全是动画驱动顶点）→ 跳过；
+- 4 个顶点全部满足 `isExternalColliderBoundary(boundaryTypes[v])`（code ≥2，均为不参与求解的外部 prescribed collider）→ 跳过；普通 Dirichlet 顶点(code 1)及软边界自由顶点不会被这条规则误删；
 - 点-面：点是三角形角点 → 跳过；
 - 边-边：共享顶点且 `eI > eJ` → 跳过。
 

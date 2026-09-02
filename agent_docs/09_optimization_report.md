@@ -12,6 +12,7 @@
 - `IPCStepStats + metrics.csv`：逐帧记录五阶段耗时、Newton/κ、总/能量/穿透回退、mean/min/max α、碰撞、最小平方距离、活动集、nnz、analyze/factorize；PARDISO 追加 phase 11/22/33、线程数和 factor nnz。
 - `scripts/benchmark.py`：独立进程重复运行，报告 median/min/max，并保留每次 metrics。
 - 摩擦冻结量、能量、梯度和解析 PSD Hessian 拆到 `Friction.cpp/.h`；`IPCSolver.cpp` 只保留调用与总能量编排。
+- 边界条件拆到 `BoundaryConditions.cpp/.h`：Dirichlet 与 soft-target 顶点不再共享易错索引数组；恢复重构时遗漏的 soft 目标更新及 `½w‖x−t‖² / w(x−t) / wI` 一致装配，恢复 hard callback 的 rest/step/alpha/dt 上下文，并用命名 predicate 取代 0/1/2 magic comparisons。
 - Newton稀疏装配、RHS/scatter和后端分派拆到`NewtonLinearSystem.cpp/.h`。默认PARDISO，不可用时自动选择优化CHOLMOD；Eigen-CG保留显式入口，三个后端共用同一矩阵/边界条件装配。
 - 删除旧自定义 PCG、多 RHS 实验入口、无用 `mesh3D::Constraints`、`FEMTimeIntegrator` 透传层和未调用的场景辅助函数；`Simulator.cpp` 辅助函数采用用途命名并限制为内部链接。
 - 文件职责整理：`ViewerMain/IPCSolver/ContactMechanics/CollisionBroadPhase/AdditiveCCD/Elasticity/ElasticityMath/CholmodSolver/FeasibleStep/StageTimer` 取代含糊旧名；`EncodedContact` 取代 `MMCVID` 类型名，`SimulationModel` 取代 `model_tet`。
@@ -131,6 +132,7 @@ cloth-bunny、1 步、独立进程：
 
 - WSL2 Ubuntu 22.04.5（GCC 11.4、CMake 4.3.3、Ninja 1.10.1）已用零参数 `./build.sh` 从系统检查、依赖安装到产品链接端到端通过；Linux oneMKL 2025.2、METIS/TBB 来自固定 `x64-linux` vcpkg，SuiteSparse 7.14/CHOLMOD 5.3.5 由校验下载的源码直接构建，`ldd` 中没有 OpenBLAS。`--dependencies-only --no-system-packages` 与 bundle stamp 增量复用分支均通过。默认 PARDISO 与显式 CHOLMOD 的 twisting-mat 单步 smoke 成功且终态仅有浮点归约误差；`./build.sh --viewer` 也已完成 OpenGL/X11/FreeGLUT 配置与链接，并通过 WSLg 3 秒启动 smoke。
 - Windows `.\build.cmd -HeadlessOnly` 已从空的固定 revision vcpkg checkout 验证 MSVC/CMake 自动解析、`tbb[core]`/METIS/oneMKL 安装、无 OpenBLAS 的 SuiteSparse bundle、六个 DLL 自动部署和 CPU-IPC Release；`.\build.cmd -DependenciesOnly -HeadlessOnly` 及 bundle stamp 二次复用也通过。MSVC Debug 自动 CHOLMOD smoke 通过。
+- 边界重构的临时 soft twisting-mat 验证实际执行 2 次 Newton、0 次能量回退；两次 Taylor 诊断一阶相对误差 `3.2e-12/4.8e-11`、曲率比 `0.999997/0.999994`。恢复默认 hard 配置后，Windows/WSL、PARDISO/CHOLMOD 的 5 步 `Newton=2`、`nnz=151335` 均不变，`squared_norm_sum=560.775874160993xx`，与重构前差异不超过约 `1.2e-13`。
 - 安装器开发期间发现 WSL non-quadratic 曾在 PARDISO phase 22 报 `-4`、CHOLMOD 报非正定；根因不是 Hessian/solver，而是 Gmsh 行末“空格+CRLF”被旧 `split(" ")` 在 Linux 解析出额外 `\r` token，破坏了全部 tet 连接。改为结构化 Gmsh 2.2 stream parser 后，Windows/WSL 均为 4074 surface faces、8 Newton、12 energy backtracks、`nnz=161979`，PARDISO/CHOLMOD 单步终态在浮点误差内一致。
 - 新 bundle 的 Windows 五次独立进程中位数：bunny2 单步 PARDISO/CHOLMOD 为 `1.310/1.686 s`，cloth-bunny 五步为 `0.575/0.621 s`，twisting-mat 五步为 `0.431/0.412 s`，终态逐次一致。同一时段旧/新 CHOLMOD bunny2 对照为 `1.670/1.686 s`（约 1%）；不把安装简化宣称为算法提速，PARDISO 仍是默认。
 - MSVC Release `--clean-first` 全量构建：通过，无新增编译警告。

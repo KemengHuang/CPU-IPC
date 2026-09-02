@@ -196,7 +196,7 @@ cipc_headless  benchmark/regression CLI
 3. 已完成：PARDISO phase 11/22/33细分、线程sweep、双bunny2单步/50步与permutation A/B；PARDISO不可用时自动使用优化CHOLMOD。
 4. 已完成：CHOLMOD supernodal/OpenBLAS/MKL、AMD/METIS/AUTO与1/2/4/6/8/12/16线程A/B；性能版通过`CIPC_CHOLMOD_ROOT`接入并验证符号。
 5. 下一步：继续细分 PARDISO/CHOLMOD 之外的 `linear_ms`（triplet / setFromTriplets），评估直接 CSC 数值装配和 phase 11 前的结构构造成本。
-6. 下一步：拆 `mesh3D`、把 `EncodedContact` 改为 tagged contact、保存 checkpoint 拓扑/参数 hash，逐步清理仍嵌在活跃大文件中的实验函数。
+6. 进行中：边界状态已先从 `mesh3D` 的平铺字段拆为 `BoundaryConditionSet`，hard/soft 更新与软势导数集中到独立模块；后续继续拆 mesh 几何/材料/接触状态、把 `EncodedContact` 改为 tagged contact、保存 checkpoint 拓扑/参数 hash。
 7. profile 证明 assembly 锁争用成为瓶颈时，再比较 graph coloring / TLS / gather。lagged Hessian 仍作为独立高风险实验。
 
 ## 每项优化的完成标准

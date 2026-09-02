@@ -1,4 +1,5 @@
 #include "IPCSolver.h"
+#include "BoundaryConditions.h"
 #include "ContactMechanics.h"
 #include "FeasibleStep.h"
 #include <iostream>
@@ -125,6 +126,8 @@ int computeGradientAndHessian(
         }
 
     );
+
+    BoundaryConditionOps::addSoftDerivatives(mesh, gradient, BH);
 
 #if defined USE_QUADRATIC_BENDING
     BH.H12x12.resize(mesh.tetrahedraNum + mesh.quadBendingInfo.size());
@@ -384,6 +387,7 @@ void computeEnergy(
     );
 
     energyVal += deltaE;
+    energyVal += BoundaryConditionOps::softEnergy(mesh);
     Eigen::VectorXd& constraintVals = workspace.constraintValues;
     Eigen::VectorXd& bVals = workspace.barrierValues;
     constraintVals.resize(0);
@@ -454,14 +458,14 @@ void computeEnergy(
 void stepForward(const vector<Vector3d>& dataV0,
     const vector<Vector3d>& searchDir,
     mesh3D& mesh,
-    double stepSize, bool boundary_update = false) {
+    double stepSize, bool updateConstrainedVertices = false) {
     //assert(dataV0.rows() == data.V.rows());
     //assert(data.V.rows() * dim == searchDir.size());
     //assert(data.V.rows() == result.V.rows());
 
 
     tbb::parallel_for(0, mesh.vertexNum, 1, [&](int vI) {
-        if (mesh.boundaryTypes[vI] == 0 || boundary_update)
+        if (isFreeBoundary(mesh.boundaryTypes[vI]) || updateConstrainedVertices)
             mesh.vertexes[vI] = dataV0[vI] - stepSize * searchDir[vI];
         }
 
@@ -486,7 +490,11 @@ bool checkEdgeTriIntersectionIfAny(const mesh3D& mesh,
                 continue;
             }
 
-            if (mesh.boundaryTypes[meshEI.first] >= 2 && mesh.boundaryTypes[meshEI.second] >= 2 && mesh.boundaryTypes[sfVInd[0]] >= 2 && mesh.boundaryTypes[sfVInd[1]] >= 2 && mesh.boundaryTypes[sfVInd[2]] >= 2) {
+            if (isExternalColliderBoundary(mesh.boundaryTypes[meshEI.first])
+                && isExternalColliderBoundary(mesh.boundaryTypes[meshEI.second])
+                && isExternalColliderBoundary(mesh.boundaryTypes[sfVInd[0]])
+                && isExternalColliderBoundary(mesh.boundaryTypes[sfVInd[1]])
+                && isExternalColliderBoundary(mesh.boundaryTypes[sfVInd[2]])) {
                 continue;
             }
 
@@ -1107,24 +1115,19 @@ int solveIPCStep(
     Friction::initialize(mesh, gd);
 #endif
 
-    if (mesh.update_hard_constraint_functor != nullptr) {
+    BoundaryConditionOps::updateSoftTargets(mesh, stepId);
+
+    const DirichletBoundaryCondition& dirichlet =
+        mesh.boundaryConditions.dirichlet;
+    if (dirichlet.updateDirection) {
         vector<Vector3d> moveDir(mesh.vertexNum, Vector3d(0, 0, 0));
         double new_alpha = 1;
-        int boundary_vertex_num = mesh.boundary_vertexes_indices.size();
-        tbb::parallel_for(0, boundary_vertex_num, 1, [&](int i)
-            {
-                moveDir[mesh.boundary_vertexes_indices[i]] = mesh.update_hard_constraint_functor(
-                    mesh.vertexes[mesh.boundary_vertexes_indices[i]], new_alpha, mesh.IPC_dt);
-            }
-        );
+        BoundaryConditionOps::evaluateDirichletDirections(
+            mesh, stepId, new_alpha, moveDir);
         sh.build(mesh, moveDir, new_alpha, mesh.averageEdgeLenth);
         Self_largestFeasibleStepSize_CCD(mesh, sh, moveDir, 0.8, new_alpha);
-        tbb::parallel_for(0, boundary_vertex_num, 1, [&](int i)
-            {
-                moveDir[mesh.boundary_vertexes_indices[i]] = mesh.update_hard_constraint_functor(
-                    mesh.vertexes[mesh.boundary_vertexes_indices[i]], new_alpha, mesh.IPC_dt);
-            }
-        );
+        BoundaryConditionOps::evaluateDirichletDirections(
+            mesh, stepId, new_alpha, moveDir);
         vector<Vector3d> resultV0 = mesh.vertexes;
         stepForward(resultV0, moveDir, mesh, 1, true);
 
@@ -1137,12 +1140,11 @@ int solveIPCStep(
                 throw std::runtime_error("animated boundary update remains intersecting");
             }
             new_alpha /= 2.0;
-            tbb::parallel_for(0, boundary_vertex_num, 1, [&](int i)
-                {
-                    moveDir[mesh.boundary_vertexes_indices[i]] = mesh.update_hard_constraint_functor(
-                        mesh.vertexes[mesh.boundary_vertexes_indices[i]], new_alpha, mesh.IPC_dt);
-                }
-            );
+            // Every fractional prescribed motion is evaluated from the same
+            // time-step start, not from the previous rejected trial state.
+            mesh.vertexes = resultV0;
+            BoundaryConditionOps::evaluateDirichletDirections(
+                mesh, stepId, new_alpha, moveDir);
             stepForward(resultV0, moveDir, mesh, 1, true);
             sh.build(mesh, mesh.averageEdgeLenth);
         }

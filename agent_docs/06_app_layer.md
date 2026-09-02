@@ -49,14 +49,14 @@
 ### 场景
 
 - **`ClothOverBunny` / `buildClothOverBunnyScene`（默认）**：布料盖 bunny。当前载入 `Assets/triangleMesh/planes/plane1024.obj`（1024 顶点、1922 个三角形，scale 1），绕 X 转 π/2；按编译选项预计算 quadratic 或 hinge bending；再载入 `Assets/tetrahedraMesh/bunny.msh`（scale 0.5，offset (0,−0.5,0)）追加进同一 `mesh3D`。
-- **`TwistingMat` / `buildTwistingMatScene`**：扭转垫（准静态，`is_quasi_static=true`，无重力），`ipcmesh/mat40x40.msh`，两侧顶点 `boundaryTypes=1` + `update_hard_constraint_functor` 旋转驱动。通过 `SimulationScene` 的 switch 可选；回调的 `alpha` 是 double。
+- **`TwistingMat` / `buildTwistingMatScene`**：扭转垫（准静态，`is_quasi_static=true`，无重力），`ipcmesh/mat40x40.msh`；两侧顶点标为 `VertexBoundaryType::Dirichlet` 并加入 `boundaryConditions.dirichlet.vertexIndices`，`updateDirection(current,rest,step,alpha,dt)` 保留原旋转驱动。当前三个产品场景未默认启用软边界，但通用接口和完整能量/导数链已恢复。
 - **`Bunny2` / `buildBunny2Scene`**：参考 `GPU_IPC/GPU_IPC/gl_main.cpp` 的 `initScene1`，两次追加 `Assets/tetrahedraMesh/bunny2.msh`，两只都取 scale=0.2，offset 分别为 `(0,0.65,0)` 与 `(0,0,0)`，`YoungModulus=1e5`。合并后是 38,386 顶点、159,870 tet、41,664 表面三角形；用于大稀疏系统/碰撞压力基准，不替换默认场景。
 
 ### `buildModels`（`:283-336`）全流程
 
 1. 接收 `SimulationOptions{scene,resume,write files,checkpoint,verbose,broad phase,linear solver}`；恢复和 checkpoint 写入默认均为 false，必须显式 opt-in；`RuntimePaths::initialize` → `loadSettings` → 选择场景；重复 build 会先清理旧 model；
 2. 按 vector 尺寸重数 `vertexNum/tetrahedraNum/triangleNum`（加载器会覆盖计数，必须重数）；
-3. `initMesh3D`（质量、Dm 逆、面积）；`v_rest = V_prev = vertexes`；`updateInertialTarget`；
+3. `initMesh3D`（质量、Dm 逆、面积）；`v_rest = V_prev = vertexes`；`BoundaryConditionOps::initialize` 校验边界集合并补静态软目标；`updateInertialTarget`；
 4. `bboxDiagSize2 = (maxConer−minConer).squaredNorm()`；`Hhat/Fhat/dTol` 各乘之；
 5. 加入 `SimulationModel::meshes`；`calculateSurface()`；
 6. `averageEdgeLenth = Σ边长 / (3·边数)`（/3 是刻意的 IPC dHat 启发式）；
@@ -87,7 +87,7 @@ cipc_headless --scene bunny2 --steps 1 --linear-solver pardiso --pardiso-threads
 
 `NewtonLinearSystem.cpp/.h` 是 Newton 线性系统的唯一入口：
 
-- `assemble` 从 `BHessian` 生成下三角 triplet，加入质量/阻尼对角并按 `boundaryTypes` 将固定顶点 RHS 清零。
+- `assemble` 从 `BHessian` 生成下三角 triplet，加入质量/阻尼对角并按 `boundaryTypes` 将 Dirichlet/外部 collider 顶点 RHS 清零；软边界保持 free，因此其 `weight·I` 不会被过滤。
 - CHOLMOD、PARDISO与Eigen-CG共用同一`Eigen::SparseMatrix`、RHS和解向量，再统一scatter回每顶点方向。
 - `LinearSolverOptions`在PARDISO可用时首选PARDISO，否则选择优化CHOLMOD。Eigen-CG保留为显式对照。
 - 性能版 CHOLMOD 由 `scripts/build_cholmod_mkl.ps1` / `build.sh` 从固定 SuiteSparse 7.14.0 源码构建完整 bundle：仅 Config、AMD、CAMD、CCOLAMD、COLAMD、GPL supernodal CHOLMOD，oneMKL LP64/TBB 为唯一 BLAS/LAPACK，CUDA/OpenMP关闭。主工程用 `CIPC_CHOLMOD_ROOT` 接入全部组件并验证 `cholmod_super_numeric/cholmod_metis`；Windows 会复制六个 SuiteSparse DLL。生产ordering固定AMD（历史 bunny2中位2.464s，优于METIS 2.557s与AUTO约2.66s）；supernodal模式保持CHOLMOD AUTO，三个场景均实际选择supernodal。线程默认`0=auto`：`nnz<500k`用4线程，否则8线程；`--cholmod-threads`可覆盖。

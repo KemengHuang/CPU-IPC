@@ -9,10 +9,11 @@
 1. **断点恢复**：每个 `IPCSolverContext` 最多检查一次 `<output>/tempData/timeCost.txt`，且只有位置/x̃ 检查点完整且顶点数一致时才恢复累计指标、帧号和 κ；不再使用文件级全局状态。
 2. **κ 初始化**（2110-2114）：`upperBoundKappa` 封顶；`Kappa < 1e-16` 时 `suggestKappa` → `initKappa`（见 §5）。
 3. **摩擦设置**（`USE_FRICTION`）：`Friction::initialize(mesh, gd)` —— 用**时间步开始时**的活动集计算每个接触的 λ、最近点坐标（MMDistCoord）、切空间基（MMTanBasis），快照 `*_activeSet_lastH`。
-4. **动画硬约束**（2120-2159）：若 `update_hard_constraint_functor != nullptr`，对 `boundary_vertexes_indices` 算位移 `moveDir`，用 `Self_largestFeasibleStepSize_CCD(moveDir, slackness=0.8)` 求 `new_alpha`，施加 `stepForward(..., boundary_update=true)`，再 `new_alpha /= 2` 直到无穿透；重建碰撞集。
-5. **κ 外层循环**：反复 `solveBarrierSubproblem`；每轮后评估全部地面 + 自碰撞 PT 约束值，当 `minCoeff < mesh.dTol` **或** `maxCoeff < mesh.Hhat`（或无约束）时跳出。外层现有 64 轮硬上限，超限抛出带语义的异常。
-6. **速度更新**：`v = (x − V_prev)/dt`（`is_quasi_static` 则 v=0）；`V_prev = vertexes`；`updateInertialTarget`。
-7. **日志/指标**：`IPCStepStats` 记录逐帧 stage ms、Newton/κ、总/能量/穿透回退、单 Newton 最大回退、超过 2 次的 Newton 数、mean/min/max α、碰撞、活动集、nnz、analyze/factorize；PARDISO 还记录 phase 11/22/33 累计时间、有效线程数与 factor nnz；写 `<output>/metrics.csv`。
+4. **软边界目标冻结**：`BoundaryConditionOps::updateSoftTargets(mesh, stepId)` 调一次 `soft.updateTarget(current,rest,step,dt)`，本时间步全部 Newton/line search 共用同一组目标，确保能量和导数属于同一目标函数。
+5. **动画硬约束**：若 `dirichlet.updateDirection` 存在，对独立的 `dirichlet.vertexIndices` 计算 `x_new=x−p` 的方向；用 `Self_largestFeasibleStepSize_CCD(..., slackness=0.8)` 求 `new_alpha`，施加 constrained update，再将 `new_alpha` 减半直到无穿透；重建碰撞集。每次回退都先恢复同一个时间步起点再评估 functor，不会从上一次 rejected trial 累积运动。回调同时接收 rest position 与 `stepId`，可稳定实现分阶段 prescribed motion。
+6. **κ 外层循环**：反复 `solveBarrierSubproblem`；每轮后评估全部地面 + 自碰撞 PT 约束值，当 `minCoeff < mesh.dTol` **或** `maxCoeff < mesh.Hhat`（或无约束）时跳出。外层现有 64 轮硬上限，超限抛出带语义的异常。
+7. **速度更新**：`v = (x − V_prev)/dt`（`is_quasi_static` 则 v=0）；`V_prev = vertexes`；`updateInertialTarget`。
+8. **日志/指标**：`IPCStepStats` 记录逐帧 stage ms、Newton/κ、总/能量/穿透回退、单 Newton 最大回退、超过 2 次的 Newton 数、mean/min/max α、碰撞、活动集、nnz、analyze/factorize；PARDISO 还记录 phase 11/22/33 累计时间、有效线程数与 factor nnz；写 `<output>/metrics.csv`。
 
 ## 2. `solveBarrierSubproblem` — Newton 循环
 
@@ -62,6 +63,7 @@
 E = dt²·(E_SNH(四面体) + E_BaraffWitkin(布料) + E_bend)
   + Σ_v ½·m_v·‖x_v − x̃_v‖²                (惯性, x̃ = V_prev + v·dt + g·dt², g=-9.8)
   + Σ_v ½·drag_coeff·m_v·‖x_v − V_prev‖²    (阻尼, 默认 drag=0)
+  + Σ_soft ½·w·‖x_v − target_v‖²             (软目标边界；target 每时间步冻结)
   + κ·( Σ_ground b(d) + Σ_PT b(d)·重数 + Σ_EE e(x)·b(d) )
   + μ·Σ_c λ_c·f(‖u_t‖)                      (USE_FRICTION, f = 光滑钳制, ε² = Fhat·dt²)
 ```
@@ -69,6 +71,7 @@ E = dt²·(E_SNH(四面体) + E_BaraffWitkin(布料) + E_bend)
 `computeGradientAndHessian`（`:566-831`）按同一公式装配梯度/Hessian，细节：
 
 - 惯性梯度 `m(x−x̃)`；质量对角 `m(1+drag)` 由 `NewtonLinearSystem::assemble` 加入 Hessian。
+- 软边界：`g += w(x−target)`，向 `H3x3/D1Index` 加 `wI`；软顶点必须保持 `boundaryTypes=0`，否则硬约束消元会错误过滤该项。公式延续旧 `update_soft_constraint_functor` 的离散权重语义，不再额外乘 `dt²`。
 - tet：TBB parallel_for，`P = computePEPF_StableNHK3D_2_double(F, μ, λ)`，梯度 `f = volum·PFPXᵀ·vec(P)`（每顶点 spin_mutex 累加），Hessian `volum·dt²·PFPXᵀ·Hq·PFPX`（Hq 已 PD 投影）→ `BH.H12x12`。
 - 布料：Baraff-Witkin，9×9 块 → `BH.H9x9`。
 - 弯曲：两条路径共用 `plateRigidity=Et³/[12(1−ν²)]`。quadratic 使用预计算 `Q⊗I₃`；非 quadratic 使用预计算 `θ0`、`l0/(h0+h1)` 和二面角精确导数，Hessian 在装配前做 PSD 投影 → `H12x12`。
@@ -79,7 +82,7 @@ E = dt²·(E_SNH(四面体) + E_BaraffWitkin(布料) + E_bend)
 
 ## 7. 线性求解（`NewtonLinearSystem.cpp/.h`）
 
-- 三个后端共用完全相同的`BHessian`下三角triplet、质量对角和固定顶点RHS清零逻辑，避免后端间装配语义分叉。
+- 三个后端共用完全相同的`BHessian`下三角triplet、质量对角和Dirichlet顶点RHS清零逻辑；软边界仍是自由未知量并正常进入矩阵，避免后端间装配语义分叉。
 - 可选 `LinearSolverBackend::Cholmod`：只有CSC结构变化才重新analyze，使用`cholmod_solve2`复用dense solution/workspace。性能prefix启用GPL supernodal+oneMKL/TBB，生产ordering按实测固定AMD；`--cholmod-threads 0`按矩阵nnz自动选择4/8线程，正数显式覆盖。无prefix时兼容system CHOLMOD。
 - 首选 `LinearSolverBackend::Pardiso`：当前配置定义 `CIPC_HAS_PARDISO` 时自动成为默认；使用 `mtype=2` 的实对称正定模式。Eigen 的 lower CSC 对称地解释为 upper CSR，避免转置/复制矩阵；phase 11 分析、22 数值分解、33 求解分别计时。同模式跨 Newton/κ/时间步跳过 phase 11；模式变化时优先复用已有 METIS permutation，若 factor nnz 超过最近 fresh ordering 的 1.2 倍则下一轮重新排序。默认限制为 16 线程；`--pardiso-threads 0` 使用 oneMKL 默认，其他正数通过 `tbb::global_control` 限制每个 phase。
 - 可选 `LinearSolverBackend::EigenConjugateGradient`：Eigen CG + `IncompleteCholesky<Lower>`，容差/最大迭代来自 `LinearSolverOptions`。CLI 用 `--linear-solver eigen-cg`；可通过 twisting-mat 单步手工 smoke。它是正式可选项，不是死代码。

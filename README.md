@@ -33,6 +33,7 @@ The first run downloads the numerical dependencies and builds the tuned CHOLMOD 
 - Default oneMKL PARDISO SPD solver with parallel factorization, cross-time-step symbolic reuse, adaptive METIS-permutation refresh, and per-phase metrics.
 - Optional high-performance CHOLMOD comparison path: GPL supernodal factorization, embedded oneMKL LP64/TBB, measured AMD ordering, and adaptive 4/8-thread limits.
 - Optional Eigen-CG backend using the same assembled system and boundary handling.
+- Centralized boundary handling with validated hard Dirichlet motion and soft target penalties whose energy, gradient, and Hessian are assembled consistently.
 - Current-step Newton convergence checks before CCD/line search, avoiding strict-energy backtracking on numerically vanished directions.
 - Strict energy-decreasing line search, Additive CCD, and the original IPC CFL strategy.
 
@@ -184,6 +185,20 @@ For fair comparisons:
 - report the median of multiple independent runs, not only the fastest sample;
 - do not compare absolute timings from different machines as if they were directly interchangeable.
 
+## Boundary conditions
+
+`BoundaryConditionSet` keeps hard and soft boundary data separate. Animated Dirichlet vertices are marked constrained in `boundaryTypes`; their `updateDirection(current, rest, step, alpha, dt)` callback returns the search direction used by the existing `x_new = x - p` convention, and the motion remains guarded by CCD. Static constrained vertices need no callback.
+
+The historical `update_soft_constraint_functor` path is represented by `soft.updateTarget(current, rest, step, dt)`. Its vertices remain free Newton unknowns and contribute the matched incremental-potential terms
+
+```text
+E_soft = 0.5 * weight * ||x - target||^2
+g_soft = weight * (x - target)
+H_soft = weight * I.
+```
+
+This is a target-position penalty (often called the project's soft or Neumann-style boundary), mathematically closer to a spring/Robin condition than a pure prescribed-traction Neumann condition. Targets are frozen once per time step so line search evaluates one consistent objective. Configuration validation rejects duplicate/out-of-range indices, non-finite targets and weights, and soft vertices accidentally marked as hard-constrained.
+
 ## Project layout
 
 | Path | Responsibility |
@@ -192,6 +207,7 @@ For fair comparisons:
 | `CPU IPC/ContactMechanics.*` | Contact distances, barriers, derivatives, and feasible self-contact steps. |
 | `CPU IPC/CollisionBroadPhase.*`, `LBVH.*` | SpatialHash and Linear BVH broad phases. |
 | `CPU IPC/Elasticity.*`, `HingeBending.*` | Solid/cloth elasticity and bending models. |
+| `CPU IPC/BoundaryConditions.*` | Dirichlet motion, soft-target updates, validation, and soft energy/derivatives. |
 | `CPU IPC/NewtonLinearSystem.*`, `CholmodSolver.*`, `PardisoSolver.*` | Shared sparse assembly and optimized CHOLMOD/PARDISO/Eigen-CG backends. |
 | `CPU IPC/SimulationMesh.*`, `Simulator.*` | Mesh state, IO, scene construction, and simulation ownership. |
 | `CPU IPC/ViewerMain.cpp` | Fixed-function GLUT viewer. |

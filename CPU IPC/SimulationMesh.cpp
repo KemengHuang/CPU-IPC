@@ -84,7 +84,7 @@ void mesh3D::InitMesh(int type, double scale) {
         double mass = 0;
         vertexes.push_back(vertex);
         velocities.push_back(velocity);
-        boundaryTypes.push_back(0);
+        boundaryTypes.push_back(boundaryTypeCode(VertexBoundaryType::Free));
         masses.push_back(mass);
     }
 
@@ -126,7 +126,7 @@ void mesh3D::load_test(double scale, int num) {
         Vector3d velocity = Vector3d(0, 0, 0);
         double mass = 0;
         velocities.push_back(velocity);
-        boundaryTypes.push_back(0);
+        boundaryTypes.push_back(boundaryTypeCode(VertexBoundaryType::Free));
         masses.push_back(mass);
         Vector3d pos = vert;
         if (xmin > pos[0]) xmin = pos[0];
@@ -146,7 +146,7 @@ void mesh3D::load_test(double scale, int num) {
             Vector3d velocity = Vector3d(0, 0, 0);
             double mass = 0;
             velocities.push_back(velocity);
-            boundaryTypes.push_back(0);
+            boundaryTypes.push_back(boundaryTypeCode(VertexBoundaryType::Free));
             masses.push_back(mass);
 
             Vector3d pos = vert;
@@ -338,7 +338,7 @@ bool mesh3D::load_tetrahedraMesh(const std::string &filename, double scale, Vect
         vertexes.push_back(vertex);
         velocities.push_back(Vector3d::Zero());
         masses.push_back(0.0);
-        boundaryTypes.push_back(0);
+        boundaryTypes.push_back(boundaryTypeCode(VertexBoundaryType::Free));
         tempMinConer = tempMinConer.cwiseMin(vertex);
         tempMaxConer = tempMaxConer.cwiseMax(vertex);
     }
@@ -566,9 +566,9 @@ bool mesh3D::load_triangleMesh(const string &filename, double scale, Vector3d po
             Vector3d vertex = scale * Vector3d(x, y, z) + position_offset;
             Vector3d velocity = Vector3d(0, 0, 0);
             double mass = 0;
-            int boundaryType = 0;
+            int boundaryType = boundaryTypeCode(VertexBoundaryType::Free);
             if(type==2){
-                boundaryType = 2;
+                boundaryType = boundaryTypeCode(VertexBoundaryType::ExternalCollider);
             }
             vertexes.push_back(vertex);
             velocities.push_back(velocity);

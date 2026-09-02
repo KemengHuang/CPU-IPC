@@ -19,33 +19,46 @@ The benchmark path is fully headless and records solver-stage timing together wi
 - Strict energy-decreasing line search, Additive CCD, and the original IPC CFL strategy.
 
 ## Dependencies
+
 Windows:
+
 ```powershell
 # Recommended: installs and connects every dependency and builds Release.
-powershell -ExecutionPolicy Bypass -File build.ps1 -VcpkgRoot D:/VCPKG/vcpkg
+powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
-Ubuntu:
+WSL/Ubuntu (headless benchmark build by default):
+
 ```bash
-sudo apt install libeigen3-dev freeglut3-dev libtbb-dev libopenblas-dev libsuitesparse-dev libmetis-dev
+bash build.sh --headless-only
 ```
 
-On Linux, also install Intel oneMKL and expose its `MKLConfig.cmake` through `MKL_ROOT` or `CMAKE_PREFIX_PATH`; both production direct solvers use oneMKL.
+Both launchers locate vcpkg from an explicit option, `VCPKG_ROOT`, or `PATH`. If none exists, they bootstrap an isolated copy automatically—`build/_deps/vcpkg` on Windows and `${XDG_CACHE_HOME:-$HOME/.cache}/cpu-ipc/vcpkg` on Ubuntu. All solver dependencies, including Linux oneMKL, are then installed by vcpkg.
+
+A fresh Ubuntu installation needs a compiler and build frontends once: `sudo apt-get install build-essential cmake ninja-build git curl tar`. These were already present in the WSL installation used for validation. Its missing `zip`/`unzip` tools were downloaded and unpacked into the user cache by `build.sh`, without sudo or system package changes.
 
 ## Build
 
 Recommended one-command Windows build—installs dependencies, builds and connects the tuned CHOLMOD DLL, configures CPU-IPC, and compiles Release:
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File build.ps1 -VcpkgRoot D:/VCPKG/vcpkg
+powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
-Use `-HeadlessOnly` to skip the viewer. The lower-level manual build remains available after the one-command setup:
+Recommended WSL/Ubuntu 22.04 command—uses Linux packages/binaries only and writes them separately under `build-wsl`:
+
+```bash
+bash build.sh --headless-only
+```
+
+Use `powershell -ExecutionPolicy Bypass -File build.ps1 -HeadlessOnly` on Windows or `bash build.sh --viewer` on WSL to change the application targets. Existing vcpkg checkouts can be selected with `-VcpkgRoot <path>` or `--vcpkg-root <path>`; no repository file contains a machine-specific vcpkg path. The lower-level manual build remains available after one-time setup:
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release --parallel
 ```
+
+For best WSL compilation throughput, keeping the repository in the Linux filesystem (for example under `~/src`) is preferable, but the complete workflow was also verified directly from this repository through `/mnt/c`.
 
 Targets:
 
@@ -71,7 +84,7 @@ With METIS ordering enabled, configuration fails early unless the installed CHOL
 
 PARDISO is the recommended installation and the default solver in Release-family configurations. It uses oneMKL's static LP64/TBB threading layer and defaults to 16 threads. When PARDISO is unavailable—most notably MSVC Debug—the tuned CHOLMOD backend is selected automatically. Static oneMKL increases the headless executable to about 74.0 MB (70.6 MiB) on the measured setup.
 
-For CHOLMOD performance, run `scripts/build_cholmod_mkl.ps1` before configuring CPU-IPC. It builds a shared CHOLMOD with the GPL supernodal module and embeds static oneMKL LP64/TBB; CPU-IPC verifies both `cholmod_super_numeric` and `cholmod_metis` and deploys the resulting DLL. This changes the distribution license boundary to include GPL-2.0-or-later code. Without `CIPC_CHOLMOD_ROOT`, the system CHOLMOD remains a compatibility path and may use OpenBLAS or lack supernodal support.
+The root launchers build high-performance CHOLMOD automatically: Windows delegates to `scripts/build_cholmod_mkl.ps1`, while Ubuntu performs the equivalent Linux shared-library build inside `build.sh`. Both enable the GPL supernodal module and embed static oneMKL LP64/TBB; CPU-IPC verifies both `cholmod_super_numeric` and `cholmod_metis`. This changes the distribution license boundary to include GPL-2.0-or-later code. A system CHOLMOD is only a compatibility diagnostic when `CIPC_REQUIRE_OPTIMIZED_CHOLMOD=OFF`; it may use OpenBLAS or lack supernodal support.
 
 Headless-only non-quadratic build:
 
@@ -105,7 +118,13 @@ build/Release/cipc_headless --scene bunny2 --steps 1 --linear-solver pardiso --p
 python scripts/benchmark.py --exe build/Release/cipc_headless.exe --repeats 5 --steps 20
 ```
 
-Runtime metrics are written to `metrics.csv` in the selected output directory. See [`agent_docs/README.md`](agent_docs/README.md) for architecture, algorithms, known issues, and optimization results.
+WSL/Ubuntu headless executable:
+
+```bash
+./build-wsl/cpu-ipc/cipc_headless --scene bunny2 --steps 1 --no-output
+```
+
+Runtime metrics are written to `metrics.csv` in the selected output directory. See [`agent_docs/README.md`](agent_docs/README.md) for architecture, algorithms, known issues, and optimization results, and [`agent_docs/12_wsl_ubuntu_build.md`](agent_docs/12_wsl_ubuntu_build.md) for the verified WSL/Ubuntu toolchain and build flow.
 
 Scene construction is fresh by default. Checkpoint loading and writing are opt-in through `--resume` and `--write-checkpoints`.
 
@@ -173,6 +192,7 @@ D = E * thickness^3 / (12 * (1 - poisson_ratio^2)).
 | `CPU IPC/SimulationMesh.*`, `Simulator.*` | Mesh state, IO, scene construction, and simulation ownership. |
 | `CPU IPC/ViewerMain.cpp` | Fixed-function GLUT viewer. |
 | `apps/cipc_headless.cpp` | Headless executable. |
+| `build.ps1`, `build.sh` | Portable one-command Windows and WSL/Ubuntu production builds. |
 | `scripts/` | Benchmark and video utilities. |
 
 ## Manual smoke checks

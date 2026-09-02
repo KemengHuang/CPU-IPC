@@ -2,7 +2,7 @@
 
 构建已分层：`cipc_core` 包含 Simulator/elasticity/IPC/contact/solver 且不依赖 OpenGL；`cipc` 仅是 viewer；`cipc_headless` 是无窗口 CLI。`CIPC_BUILD_VIEWER=OFF` 可完全跳过 OpenGL/GLUT 查找。项目已无 GLEW 依赖。
 
-Windows生产构建入口为根目录`build.ps1`：它串联vcpkg依赖、GPL supernodal+oneMKL CHOLMOD、`CIPC_CHOLMOD_ROOT`和CPU-IPC Release编译；`-HeadlessOnly`跳过viewer。
+生产构建入口按平台分开：Windows 使用根目录 `build.ps1`，WSL/Ubuntu 使用 `build.sh`。二者都串联 vcpkg 依赖、GPL supernodal+oneMKL CHOLMOD、`CIPC_CHOLMOD_ROOT` 和 CPU-IPC Release 编译；Windows 的 `-HeadlessOnly` 与 Linux 的默认/`--headless-only` 跳过 viewer。两套产物分别写入 `build` 和 `build-wsl`，不得共用 CMake cache 或二进制。
 
 ## 1. ViewerMain.cpp —— 固定管线查看器
 

@@ -9,6 +9,7 @@
 5. **`mesh3D` 仍是 god object**：静止拓扑、材料、动态状态、接触历史和 workspace 伴随数据尚未完全分离；当前仅把 Newton workspace、solver context 和 broad phase 独立出来。
 6. **PARDISO 是推荐默认Release后端**：Windows静态oneMKL与`/MDd`不兼容，因此MSVC Debug自动使用优化CHOLMOD。两条生产路径都需要oneMKL，一键脚本会统一准备。
 7. **性能版 CHOLMOD 改变许可边界**：`scripts/build_cholmod_mkl.ps1` 启用GPL supernodal模块并将静态oneMKL嵌入CHOLMOD DLL。配置必须通过`CIPC_CHOLMOD_ROOT`接入且验证`cholmod_super_numeric`；不能把普通OpenBLAS/simplicial包的结果标成MKL supernodal。二进制分发需遵守GPL-2.0-or-later。
+8. **Windows 与 WSL 构建目录不可复用**：两边的编译器、路径语法、库格式和 ABI 不同。Windows 固定使用 `build`，WSL 一键脚本固定使用 `build-wsl`；不要从 WSL 配置已有的 Windows build tree，也不要把 `/mnt/c/...` 或盘符路径写入仓库配置。vcpkg 只能复用同一平台的 checkout/installed tree。
 
 ## B. 保留但默认未接入的安全路径
 

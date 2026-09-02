@@ -14,10 +14,16 @@
 推荐一键构建（依赖、CHOLMOD、连接、CPU-IPC Release全部完成）：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File build.ps1 -VcpkgRoot D:/VCPKG/vcpkg
+powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
-底层`build_cholmod_mkl.ps1`默认安装到`build/cholmod-mkl-install`，主工程自动识别；也可显式传`-DCIPC_CHOLMOD_ROOT=<prefix>`。根目录一键脚本已用全新build目录完成端到端验证。
+WSL/Ubuntu 22.04 对应入口为：
+
+```bash
+bash build.sh --headless-only
+```
+
+Windows 底层 `build_cholmod_mkl.ps1` 默认安装到 `build/cholmod-mkl-install`，主工程自动识别；Linux 脚本安装到隔离的 `build-wsl/cholmod-mkl-install` 并显式传入。也可手动设置 `-DCIPC_CHOLMOD_ROOT=<prefix>`。两条根目录一键脚本都已完成端到端验证；Linux 的详细环境与复现记录见 `12_wsl_ubuntu_build.md`。
 
 ## 2. 许可边界
 
@@ -58,3 +64,4 @@ bunny2，一个完整time step，3次独立进程中位数；所有运行得到�
 - `CIPC_CHOLMOD_ROOT=`的system/OpenBLAS兼容配置独立构建并通过smoke。
 - 优化DLL依赖中含`tbb12.dll`，不含`openblas.dll`或`lapack.dll`；大小约26.6MB。
 - quadratic/non-quadratic Release、普通Debug、PARDISO关闭与system-CHOLMOD fallback均完成构建和headless smoke；性能数字只来自quadratic默认路径。
+- WSL2 Ubuntu 22.04.5 使用 SuiteSparse 7.14.0/CHOLMOD 5.3.5 与 oneMKL 2025.2 完成 Release 全量构建；共享 `libcholmod.so` 通过 `--exclude-libs` 隐藏内嵌静态 MKL 符号，主程序链接无重复符号警告。默认 PARDISO 和显式 CHOLMOD 均完成 twisting-mat 单步 smoke，`ldd` 无 `not found`。

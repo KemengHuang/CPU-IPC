@@ -4,20 +4,19 @@
 
 ## 构建与运行
 
-依赖（`README.md`）：
-
-- Windows: `vcpkg install eigen3 freeglut tbb openblas suitesparse metis`
-- Windows 推荐/默认 PARDISO（应安装）：`vcpkg install intel-mkl:x64-windows`
-- 性能版 CHOLMOD：`powershell -ExecutionPolicy Bypass -File scripts/build_cholmod_mkl.ps1 -VcpkgRoot D:/VCPKG/vcpkg`（启用 GPL supernodal）
-- Ubuntu: `sudo apt install libeigen3-dev freeglut3-dev libtbb-dev libopenblas-dev libsuitesparse-dev libmetis-dev`
-
-构建：
+推荐构建入口（依赖细节见 `README.md` 与 `12_wsl_ubuntu_build.md`）：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File build.ps1 -VcpkgRoot D:/VCPKG/vcpkg
+# Windows：默认同时构建 viewer 和 headless
+powershell -ExecutionPolicy Bypass -File build.ps1
 ```
 
-以上是一键推荐路径；完成后仍可手工增量构建：
+```bash
+# WSL/Ubuntu：默认只构建 benchmark 所需的 headless 产品
+bash build.sh --headless-only
+```
+
+两条脚本均按“显式参数 → `VCPKG_ROOT` → `PATH` → 自动 bootstrap”解析 vcpkg。Windows 的隔离 checkout 位于 `<repo>/build/_deps/vcpkg`，WSL 默认位于 `${XDG_CACHE_HOME:-$HOME/.cache}/cpu-ipc/vcpkg`；没有任何提交到仓库的本机绝对路径。Windows 产物位于 `build/<Configuration>`，WSL 使用独立的 `build-wsl/cpu-ipc`，避免两套 ABI/缓存互相污染。完成一次配置后仍可在相应 build 目录手工增量构建：
 
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
@@ -31,8 +30,8 @@ cmake --build build --config Release
   - `CIPC_ENABLE_QUADRATIC_BENDING=ON` — 定义 `USE_QUADRATIC_BENDING`。
   - `CIPC_ENABLE_METIS_ORDERING=ON` — 构建/链接 CHOLMOD Partition/METIS 供实验；生产配置按实测固定 AMD，因为它在三个项目矩阵上都快于强制 METIS 与 multi-method AUTO。
   - `CIPC_ENABLE_PARDISO=ON` — 推荐保持开启；找到oneMKL时以PARDISO作为默认主后端。PARDISO不可用或MSVC Debug时自动选择优化CHOLMOD。
-  - `CIPC_CHOLMOD_ROOT` — 指向性能版 CHOLMOD prefix；标准 `build/cholmod-mkl-install` 会自动识别。配置会验证 supernodal 与 METIS 符号，并让DLL内部使用oneMKL LP64/TBB。
-  - `CIPC_REQUIRE_OPTIMIZED_CHOLMOD=ON` — 默认拒绝误连普通OpenBLAS CHOLMOD；运行根目录`build.ps1`可一键完成依赖、连接和编译。
+  - `CIPC_CHOLMOD_ROOT` — 指向性能版 CHOLMOD prefix；Windows 标准 `build/cholmod-mkl-install` 会自动识别，WSL 一键脚本显式传入 `build-wsl/cholmod-mkl-install`。配置会验证 supernodal 与 METIS 符号，并让共享库内部使用 oneMKL LP64/TBB。
+  - `CIPC_REQUIRE_OPTIMIZED_CHOLMOD=ON` — 默认拒绝误连普通 OpenBLAS CHOLMOD；根目录 `build.ps1` / `build.sh` 可一键完成依赖、连接和编译。
   - `CIPC_ASSETS_DIR` = `<repo>/Assets/`（活，`Simulator.cpp` 读参数文件/网格用）
   - `CIPC_OUTPUT_DIR` = `<repo>/Output/`（活，由 `RuntimePaths` 统一管理日志、检查点、表面和截图输出）
 - SuiteSparse 查找器会校验 `cholmod_metis`，兼容 `METIS::METIS`、`METIS::metis`、vcpkg 的 `metis` target、Linux 常规 `metis.h + libmetis` 以及内嵌 Partition 的 CHOLMOD；多配置生成器分别绑定 Release/Debug SuiteSparse 库。性能版CHOLMOD通过共享库内部嵌入oneMKL并额外校验`cholmod_super_numeric`；system fallback才选择OpenBLAS/系统BLAS-LAPACK。

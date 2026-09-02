@@ -129,6 +129,7 @@ cloth-bunny、1 步、独立进程：
 
 ## 8. 自动验证结果
 
+- WSL2 Ubuntu 22.04.5（GCC 11.4、CMake 4.3.3、Ninja 1.10.1）已用根目录 `build.sh --headless-only` 从依赖安装到产品链接端到端通过；Linux oneMKL 2025.2、SuiteSparse 7.14/CHOLMOD 5.3.5、METIS/TBB 均来自 `x64-linux` vcpkg tree。默认 PARDISO 与显式 CHOLMOD 的 twisting-mat 单步 smoke 均成功且终态仅有浮点归约误差；`ldd` 无缺失依赖。`build.sh --viewer` 也已完成 OpenGL/X11/FreeGLUT 配置与链接，并通过 WSLg 3 秒启动 smoke。
 - MSVC Release `--clean-first` 全量构建：通过，无新增编译警告。
 - headless-only（viewer OFF）独立构建：通过。
 - METIS ordering ON/OFF 两套 MSVC Release 构建与 twisting-mat/cloth-bunny CHOLMOD smoke 均通过；ON 下 Eigen-CG smoke 也通过。ON 配置会实际编译/链接检查 `cholmod_metis` 后才提供 `Partition`，不会只根据包名静默假定支持。

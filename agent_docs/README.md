@@ -27,10 +27,11 @@
 | `09_optimization_report.md` | 已实施优化、实测结果、回归与仍保留的高风险事项 |
 | `10_pardiso_report.md` | oneMKL PARDISO 实现、bunny2 大场景、线程/阶段/内存基准与 50 步正确性验证 |
 | `11_cholmod_mkl_report.md` | GPL supernodal+oneMKL CHOLMOD 构建、ordering/线程A/B及与PARDISO的当前性能对比 |
+| `12_wsl_ubuntu_build.md` | Windows/WSL 路径解耦、Ubuntu 一键依赖/CHOLMOD/主工程构建及实机验证 |
 
 ## 30 秒上手
 
-1. Windows推荐直接运行`powershell -ExecutionPolicy Bypass -File build.ps1 -VcpkgRoot D:/VCPKG/vcpkg`，一键安装依赖、构建/连接优化CHOLMOD并编译Release，得到`cipc`、`cipc_headless`和`cipc_core`。项目不生成测试target。
+1. Windows 推荐运行 `powershell -ExecutionPolicy Bypass -File build.ps1`；WSL/Ubuntu 推荐运行 `bash build.sh --headless-only`。两者都会自动定位或隔离安装 vcpkg，一键安装依赖、构建/连接优化 CHOLMOD 并编译 Release，不依赖任何开发者机器的绝对路径。项目不生成测试 target。
 2. 运行 `cipc`：打开 1000×1000 GLUT 窗口，**空格键**开始/暂停仿真；每显示一帧 = 一个 IPC 时间步。资产和输出均使用编译期绝对路径，不再依赖当前工作目录。
 3. `SimulationScene` 已接通三个场景：默认 `ClothOverBunny`、`TwistingMat`，以及参考 GPU_IPC 的双 `bunny2` 大场景（每只 scale=0.2）。场景参数在 `Assets/scene/parameterSetting.txt`，现按键名解析并校验未知、重复、缺失及越界值。
 4. 时间步/Newton/线搜索编排在 `CPU IPC/IPCSolver.cpp`（`solveIPCStep` / `solveBarrierSubproblem`）；接触导数在 `ContactMechanics.cpp`，摩擦在 `Friction.cpp`，线性后端在 `NewtonLinearSystem.cpp`。

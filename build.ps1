@@ -1,5 +1,5 @@
 param(
-    [string]$VcpkgRoot = $env:VCPKG_ROOT,
+    [string]$VcpkgRoot = "",
     [string]$BuildDirectory = "",
     [ValidateSet("Release", "RelWithDebInfo", "Debug")]
     [string]$Configuration = "Release",
@@ -8,25 +8,25 @@ param(
 
 $ErrorActionPreference = "Stop"
 $repositoryRoot = $PSScriptRoot
-
-if ([string]::IsNullOrWhiteSpace($VcpkgRoot)) {
-    $defaultVcpkgRoot = "D:/VCPKG/vcpkg"
-    if (Test-Path -LiteralPath "$defaultVcpkgRoot/vcpkg.exe") {
-        $VcpkgRoot = $defaultVcpkgRoot
-    }
-    else {
-        throw "Set VCPKG_ROOT or pass -VcpkgRoot."
-    }
-}
+. (Join-Path $repositoryRoot "scripts/ResolveVcpkg.ps1")
+$vcpkg = Resolve-VcpkgInstallation `
+    -RequestedRoot $VcpkgRoot `
+    -BootstrapRoot (Join-Path $repositoryRoot "build/_deps/vcpkg")
+$VcpkgRoot = $vcpkg.Root
 if ([string]::IsNullOrWhiteSpace($BuildDirectory)) {
     $BuildDirectory = Join-Path $repositoryRoot "build"
 }
 
-$vcpkgExecutable = Join-Path $VcpkgRoot "vcpkg.exe"
+$vcpkgExecutable = $vcpkg.Executable
 $triplet = "x64-windows"
+if (-not $HeadlessOnly) {
+    & $vcpkgExecutable install "freeglut:$triplet"
+    if ($LASTEXITCODE -ne 0) {
+        throw "Viewer dependency installation failed."
+    }
+}
 & $vcpkgExecutable install `
     "eigen3:$triplet" `
-    "freeglut:$triplet" `
     "tbb:$triplet" `
     "metis:$triplet"
 if ($LASTEXITCODE -ne 0) {
@@ -44,7 +44,7 @@ if ($LASTEXITCODE -ne 0) {
 $configureArguments = @(
     "-S", $repositoryRoot,
     "-B", $BuildDirectory,
-    "-DCMAKE_TOOLCHAIN_FILE=$VcpkgRoot/scripts/buildsystems/vcpkg.cmake",
+    "-DCMAKE_TOOLCHAIN_FILE=$($vcpkg.Toolchain)",
     "-DCIPC_CHOLMOD_ROOT=$cholmodInstall",
     "-DCIPC_REQUIRE_OPTIMIZED_CHOLMOD=ON"
 )

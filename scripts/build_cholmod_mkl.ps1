@@ -1,21 +1,16 @@
 param(
-    [string]$VcpkgRoot = $env:VCPKG_ROOT,
+    [string]$VcpkgRoot = "",
     [string]$BuildDirectory = "",
     [string]$InstallPrefix = ""
 )
 
 $ErrorActionPreference = "Stop"
 $repositoryRoot = Split-Path -Parent $PSScriptRoot
-
-if ([string]::IsNullOrWhiteSpace($VcpkgRoot)) {
-    $defaultVcpkgRoot = "D:/VCPKG/vcpkg"
-    if (Test-Path -LiteralPath "$defaultVcpkgRoot/vcpkg.exe") {
-        $VcpkgRoot = $defaultVcpkgRoot
-    }
-    else {
-        throw "Set VCPKG_ROOT or pass -VcpkgRoot."
-    }
-}
+. (Join-Path $PSScriptRoot "ResolveVcpkg.ps1")
+$vcpkg = Resolve-VcpkgInstallation `
+    -RequestedRoot $VcpkgRoot `
+    -BootstrapRoot (Join-Path $repositoryRoot "build/_deps/vcpkg")
+$VcpkgRoot = $vcpkg.Root
 if ([string]::IsNullOrWhiteSpace($BuildDirectory)) {
     $BuildDirectory = Join-Path $repositoryRoot "build/cholmod-mkl-lib"
 }
@@ -23,14 +18,11 @@ if ([string]::IsNullOrWhiteSpace($InstallPrefix)) {
     $InstallPrefix = Join-Path $repositoryRoot "build/cholmod-mkl-install"
 }
 
-$vcpkgExecutable = Join-Path $VcpkgRoot "vcpkg.exe"
-if (-not (Test-Path -LiteralPath $vcpkgExecutable)) {
-    throw "vcpkg.exe was not found under $VcpkgRoot"
-}
+$vcpkgExecutable = $vcpkg.Executable
 
 & $vcpkgExecutable install `
     "intel-mkl:x64-windows" `
-    "suitesparse-cholmod[partition,supernodal]:x64-windows" `
+    "suitesparse-cholmod[partition]:x64-windows" `
     --recurse
 if ($LASTEXITCODE -ne 0) {
     throw "vcpkg dependency installation failed."

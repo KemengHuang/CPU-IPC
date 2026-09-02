@@ -14,6 +14,36 @@ using namespace Eigen;
 namespace {
 
 constexpr double pi = 3.14159265358979323846;
+constexpr double twistingSoftConstraintWeight = 100.0;
+
+enum class TwistingBoundaryMode {
+    HardDirichlet,
+    SoftTarget
+};
+
+Vector3d twistingBoundaryDirection(
+    const Vector3d& vertex,
+    const Vector3d& restVertex,
+    double stepFraction,
+    double timeStep)
+{
+    const double angleX = 3.14 / 5 * timeStep * stepFraction;
+    Matrix3d rotationL, rotationR;
+    rotationL << 1, 0, 0,
+        0, cos(angleX), sin(angleX),
+        0, -sin(angleX), cos(angleX);
+    rotationR << 1, 0, 0,
+        0, cos(angleX), -sin(angleX),
+        0, sin(angleX), cos(angleX);
+
+    if (restVertex[0] < 0.0) {
+        return rotationL * vertex - vertex;
+    }
+    if (restVertex[0] > 0.0) {
+        return rotationR * vertex - vertex;
+    }
+    return Vector3d::Zero();
+}
 
 void prepareQuadraticBending(mesh3D& mesh)
 {
@@ -232,7 +262,10 @@ void loadSettings(mesh3D& mesh3d) {
     updateMaterial(mesh3d);
 }
 
-void buildTwistingMatScene(mesh3D& mesh3d, const std::string& assetDirectory) {
+void buildTwistingMatScene(
+    mesh3D& mesh3d,
+    const std::string& assetDirectory,
+    TwistingBoundaryMode boundaryMode) {
 
     mesh3d.YoungModulus = 1e6;
     updateMaterial(mesh3d);
@@ -252,35 +285,43 @@ void buildTwistingMatScene(mesh3D& mesh3d, const std::string& assetDirectory) {
     {
         if (mesh3d.vertexes[i][0] < mesh3d.objMinConer[0] + eps || mesh3d.vertexes[i][0] > mesh3d.objMaxConer[0] - eps)
         {
-            mesh3d.boundaryConditions.dirichlet.vertexIndices.push_back(i);
-            mesh3d.boundaryTypes[i] =
-                boundaryTypeCode(VertexBoundaryType::Dirichlet);
+            if (boundaryMode == TwistingBoundaryMode::HardDirichlet) {
+                mesh3d.boundaryConditions.dirichlet.vertexIndices.push_back(i);
+                mesh3d.boundaryTypes[i] =
+                    boundaryTypeCode(VertexBoundaryType::Dirichlet);
+            }
+            else {
+                mesh3d.boundaryConditions.soft.vertexIndices.push_back(i);
+            }
         }
     }
 
-    mesh3d.boundaryConditions.dirichlet.updateDirection =
-        [](const Vector3d& vertex,
-            const Vector3d&,
-            int,
-            double alpha,
-            double ipc_dt) -> Vector3d
-        {
-            double angleX = 3.14 / 5 * ipc_dt * alpha;
-            Matrix3d rotationL, rotationR;
-            rotationL << 1, 0, 0, 0, cos(angleX), sin(angleX), 0, -sin(angleX), cos(angleX);
-            rotationR << 1, 0, 0, 0, cos(angleX), -sin(angleX), 0, sin(angleX), cos(angleX);
-            Vector3d moveDir = Vector3d(0, 0, 0);
-            if (vertex[0] < 0)
+    if (boundaryMode == TwistingBoundaryMode::HardDirichlet) {
+        mesh3d.boundaryConditions.dirichlet.updateDirection =
+            [](const Vector3d& vertex,
+                const Vector3d& restVertex,
+                int,
+                double alpha,
+                double ipc_dt) -> Vector3d
             {
-                moveDir = rotationL * vertex - vertex;
-            }
-            if (vertex[0] > 0)
+                return twistingBoundaryDirection(
+                    vertex, restVertex, alpha, ipc_dt);
+            };
+    }
+    else {
+        mesh3d.boundaryConditions.soft.weight = twistingSoftConstraintWeight;
+        mesh3d.boundaryConditions.soft.updateTarget =
+            [](const Vector3d& vertex,
+                const Vector3d& restVertex,
+                int,
+                double ipc_dt) -> Vector3d
             {
-                // rotate along x axis counterclockwise
-                moveDir = rotationR * vertex - vertex;
-            }
-            return moveDir;
-        };
+                // Use the same endpoint as the hard x_new = x - p update,
+                // but attract the free vertex to it with a finite penalty.
+                return vertex - twistingBoundaryDirection(
+                    vertex, restVertex, 1.0, ipc_dt);
+            };
+    }
 }
 
 void buildClothOverBunnyScene(mesh3D& mesh3d, const std::string& assetDirectory) {
@@ -359,6 +400,23 @@ void buildBunny2Scene(mesh3D& mesh3d, const std::string& assetDirectory)
 
 } // namespace
 
+SimulationScene parseSimulationScene(const std::string& name)
+{
+    if (name == "cloth-bunny") {
+        return SimulationScene::ClothOverBunny;
+    }
+    if (name == "twisting-mat") {
+        return SimulationScene::TwistingMat;
+    }
+    if (name == "twisting-mat-soft") {
+        return SimulationScene::TwistingMatSoft;
+    }
+    if (name == "bunny2") {
+        return SimulationScene::Bunny2;
+    }
+    throw std::invalid_argument("unknown scene: " + name);
+}
+
 bool FEMSimulator::buildModels(SimulationScene scene) {
     SimulationOptions options;
     options.scene = scene;
@@ -392,7 +450,12 @@ bool FEMSimulator::buildModels(const SimulationOptions& options) {
 
     switch (options.scene) {
     case SimulationScene::TwistingMat:
-        buildTwistingMatScene(mesh3d, assetDirectory);
+        buildTwistingMatScene(
+            mesh3d, assetDirectory, TwistingBoundaryMode::HardDirichlet);
+        break;
+    case SimulationScene::TwistingMatSoft:
+        buildTwistingMatScene(
+            mesh3d, assetDirectory, TwistingBoundaryMode::SoftTarget);
         break;
     case SimulationScene::ClothOverBunny:
         buildClothOverBunnyScene(mesh3d, assetDirectory);

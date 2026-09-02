@@ -3,11 +3,16 @@
 #include "CollisionBroadPhase.h"
 #include "IPCSolver.h"
 
+#include <string>
+
 enum class SimulationScene {
     TwistingMat,
+    TwistingMatSoft,
     ClothOverBunny,
     Bunny2
 };
+
+SimulationScene parseSimulationScene(const std::string& name);
 
 struct SimulationOptions {
     SimulationScene scene = SimulationScene::ClothOverBunny;

@@ -9,6 +9,7 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <vector>
 
@@ -33,6 +34,27 @@ bool mouseDragging = false;
 bool simulationPaused = true;
 bool screenshotsEnabled = false;
 bool surfaceExportEnabled = false;
+
+SimulationScene extractViewerSceneArgument(int& argc, char** argv)
+{
+    SimulationScene scene = SimulationScene::ClothOverBunny;
+    int outputArgument = 1;
+    for (int inputArgument = 1; inputArgument < argc; ++inputArgument) {
+        const std::string argument = argv[inputArgument];
+        if (argument == "--scene") {
+            if (++inputArgument >= argc) {
+                throw std::invalid_argument("--scene requires a value");
+            }
+            scene = parseSimulationScene(argv[inputArgument]);
+        }
+        else {
+            argv[outputArgument++] = argv[inputArgument];
+        }
+    }
+    argc = outputArgument;
+    argv[outputArgument] = nullptr;
+    return scene;
+}
 
 #pragma pack(push, 1)
 struct BitmapFileHeader {
@@ -285,9 +307,9 @@ void configureProjection(int width, int height)
     glTranslatef(0.0f, 0.0f, -3.0f);
 }
 
-void initializeViewer()
+void initializeViewer(SimulationScene scene)
 {
-    simulator.buildModels(SimulationScene::ClothOverBunny);
+    simulator.buildModels(scene);
     configureProjection(initialWindowWidth, initialWindowHeight);
     glDepthMask(GL_TRUE);
     glEnable(GL_DEPTH_TEST);
@@ -346,6 +368,17 @@ void motion(int x, int y)
 
 int main(int argc, char** argv)
 {
+    SimulationScene scene = SimulationScene::ClothOverBunny;
+    try {
+        scene = extractViewerSceneArgument(argc, argv);
+    }
+    catch (const std::exception& error) {
+        std::cerr << error.what() << '\n';
+        std::cerr << "Usage: " << argv[0]
+                  << " [--scene cloth-bunny|twisting-mat|twisting-mat-soft|bunny2]\n";
+        return 1;
+    }
+
     glutInit(&argc, argv);
     glutSetOption(GLUT_MULTISAMPLE, 16);
     glutInitDisplayMode(GLUT_DOUBLE | GLUT_RGBA | GLUT_DEPTH | GLUT_MULTISAMPLE);
@@ -353,7 +386,7 @@ int main(int argc, char** argv)
     glutInitWindowPosition(0, 0);
     glutCreateWindow("CPU IPC");
 
-    initializeViewer();
+    initializeViewer(scene);
     glutDisplayFunc(display);
     glutReshapeFunc(reshape);
     glutKeyboardFunc(keyboard);

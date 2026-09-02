@@ -52,7 +52,7 @@
 - **CHOLMOD 生命周期与重复符号分析**：`CholmodSolver` 已改为 RAII；模式变化时释放 factor，同模式刷新只做数值分解；`IPCSolverContext` 持有的 `NewtonLinearSystem` 现跨 Newton/κ/时间步复用实例。
 - **METIS 看似找到但未生效**：vcpkg导出target名为`metis`，旧查找器只接受`METIS::METIS`。现已归一化常见target名并链接检查`cholmod_metis`；模块保留供实验，但后续A/B确认生产ordering使用AMD更快。
 - **多配置依赖混链**：SuiteSparse fallback target 现分别设置 Debug/Release imported location；vcpkg 的 `lib` 与 `debug/lib` 采用隔离查找。BLAS/LAPACK 统一 provider，避免一半来自标准 BLAS、一半来自 OpenBLAS。
-- **假场景参数/空透传层**：已用 `SimulationScene::{TwistingMat,ClothOverBunny,Bunny2}` 接通 switch；删除无第二实现、只转发到 `solveIPCStep` 的 FEMIntegrator 层。Bunny2 严格按 GPU_IPC 参考使用两份 scale=0.2 网格。
+- **假场景参数/空透传层**：已用 `SimulationScene::{TwistingMat,TwistingMatSoft,ClothOverBunny,Bunny2}` 接通 switch；hard/soft twisting 复用同一几何与目标运动，后者是 `weight=100` 的软边界范例。删除无第二实现、只转发到 `solveIPCStep` 的 FEMIntegrator 层。Bunny2 严格按 GPU_IPC 参考使用两份 scale=0.2 网格。
 - **边界条件在重构中丢失/混用索引**：`e3df45e` 保留了 hard functor，却遗漏旧版 soft functor 的目标、能量、梯度和 Hessian。现集中为 `BoundaryConditions.cpp/.h`：hard/soft 各有独立且唯一的顶点集合；hard `updateDirection` 恢复 `rest/stepId/double alpha/dt`，明确返回 `x_new=x−p` 的方向，并在穿透回退时始终从同一个时间步起点重算 fractional motion；soft `updateTarget` 每时间步冻结目标，统一加入 `½w‖x−t‖² / w(x−t) / wI`。临时 soft twisting-mat Taylor 回归的一阶相对误差为 `3.2e-12/4.8e-11`，曲率比为 `0.999997/0.999994`；默认 hard twisting-mat 5 步终态保持不变。
 - **CWD 相对输出与硬编码导出**：已由 `RuntimePaths` 统一写到 `<repo>/Output/` 并自动建目录；表面/截图均默认关闭、由按键切换；表面导出只读引用 `SimulationModel`。
 - **检查点越界/半恢复风险**：加载先校验完整数量再整体提交，计时状态只在网格恢复成功时恢复，保存精度提高到 17 位。

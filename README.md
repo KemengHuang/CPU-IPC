@@ -113,7 +113,10 @@ Viewer:
 
 ```bash
 build/cpu-ipc/Release/cipc.exe
+build/cpu-ipc/Release/cipc.exe --scene twisting-mat-soft
 ```
+
+Without `--scene`, the viewer retains the existing `cloth-bunny` default.
 
 Press Space to simulate, `9` to toggle OBJ output, and `/` to toggle screenshots.
 
@@ -125,6 +128,7 @@ Headless:
 build/cpu-ipc/Release/cipc_headless.exe --scene cloth-bunny --steps 20 --broad-phase lbvh --output Output/run
 build/cpu-ipc/Release/cipc_headless.exe --scene cloth-bunny --steps 20 --linear-solver cholmod --no-output
 build/cpu-ipc/Release/cipc_headless.exe --scene twisting-mat --steps 1 --linear-solver eigen-cg --no-output
+build/cpu-ipc/Release/cipc_headless.exe --scene twisting-mat-soft --steps 20 --no-output
 build/cpu-ipc/Release/cipc_headless.exe --scene bunny2 --steps 1 --linear-solver pardiso --pardiso-threads 16 --no-output
 python scripts/benchmark.py --exe build/cpu-ipc/Release/cipc_headless.exe --repeats 5 --steps 20
 ```
@@ -139,6 +143,7 @@ WSL/Ubuntu viewer:
 
 ```bash
 ./build-wsl/cpu-ipc/cipc
+./build-wsl/cpu-ipc/cipc --scene twisting-mat-soft
 ```
 
 Runtime metrics are written to `metrics.csv` in the selected output directory. See [`agent_docs/README.md`](agent_docs/README.md) for architecture, algorithms, known issues, and optimization results, and [`agent_docs/12_wsl_ubuntu_build.md`](agent_docs/12_wsl_ubuntu_build.md) for the verified WSL/Ubuntu toolchain and build flow.
@@ -199,6 +204,8 @@ H_soft = weight * I.
 
 This is a target-position penalty (often called the project's soft or Neumann-style boundary), mathematically closer to a spring/Robin condition than a pure prescribed-traction Neumann condition. Targets are frozen once per time step so line search evaluates one consistent objective. Configuration validation rejects duplicate/out-of-range indices, non-finite targets and weights, and soft vertices accidentally marked as hard-constrained.
 
+`--scene twisting-mat` is the original hard-Dirichlet example. `--scene twisting-mat-soft` uses the same mesh, selected end vertices, and per-step target endpoint, but keeps those vertices free and attracts them with `weight=100`; it is the runnable soft-boundary example for both the viewer and headless benchmark.
+
 ## Project layout
 
 | Path | Responsibility |
@@ -224,6 +231,7 @@ build/cpu-ipc/Release/cipc_headless.exe --scene cloth-bunny --steps 1 --no-outpu
 build/cpu-ipc/Release/cipc_headless.exe --scene cloth-bunny --steps 1 --no-output --broad-phase spatial-hash
 build/cpu-ipc/Release/cipc_headless.exe --scene cloth-bunny --steps 1 --no-output --linear-solver cholmod
 build/cpu-ipc/Release/cipc_headless.exe --scene twisting-mat --steps 1 --no-output --linear-solver eigen-cg
+build/cpu-ipc/Release/cipc_headless.exe --scene twisting-mat-soft --steps 5 --no-output --linear-solver pardiso
 build/cpu-ipc/Release/cipc_headless.exe --scene bunny2 --steps 1 --no-output --linear-solver pardiso --pardiso-threads 16
 build/cpu-ipc-nonquadratic/Release/cipc_headless.exe --scene cloth-bunny --steps 1 --no-output
 ```

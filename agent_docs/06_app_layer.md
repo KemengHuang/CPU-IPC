@@ -6,7 +6,7 @@
 
 ## 1. ViewerMain.cpp —— 固定管线查看器
 
-- `main`：GLUT 初始化（1000×1000 窗口 "CPU IPC"）→ `initializeViewer` → 注册 display/reshape/keyboard/mouse/motion/idle 回调。
+- `main`：先移除并解析统一的 `--scene` 参数（缺省保持 `cloth-bunny`），再做 GLUT 初始化（1000×1000 窗口 "CPU IPC"）→ `initializeViewer(scene)` → 注册 display/reshape/keyboard/mouse/motion/idle 回调。场景名称由 `Simulator::parseSimulationScene` 与 headless 共用，非法名称在创建窗口前报错。
 - shader 目录、永远为 false 的 shader 分支、VBO/VAO 全局量和 GLEW 初始化/链接已全部删除；viewer 明确只使用当前实际工作的 OpenGL 固定管线。
 - 主循环：`idle` 请求重绘；`display` 渲染后若未暂停则调用一次 `simulator.simulateStep(step)`，即每显示帧一个时间步。
 - `drawSimulationSurface` 只画当前 `SimulationModel::meshes.front()`：红色表面、白色表面边、灰底与线框包围盒。
@@ -49,7 +49,8 @@
 ### 场景
 
 - **`ClothOverBunny` / `buildClothOverBunnyScene`（默认）**：布料盖 bunny。当前载入 `Assets/triangleMesh/planes/plane1024.obj`（1024 顶点、1922 个三角形，scale 1），绕 X 转 π/2；按编译选项预计算 quadratic 或 hinge bending；再载入 `Assets/tetrahedraMesh/bunny.msh`（scale 0.5，offset (0,−0.5,0)）追加进同一 `mesh3D`。
-- **`TwistingMat` / `buildTwistingMatScene`**：扭转垫（准静态，`is_quasi_static=true`，无重力），`ipcmesh/mat40x40.msh`；两侧顶点标为 `VertexBoundaryType::Dirichlet` 并加入 `boundaryConditions.dirichlet.vertexIndices`，`updateDirection(current,rest,step,alpha,dt)` 保留原旋转驱动。当前三个产品场景未默认启用软边界，但通用接口和完整能量/导数链已恢复。
+- **`TwistingMat` / `buildTwistingMatScene(..., HardDirichlet)`**：扭转垫（准静态，`is_quasi_static=true`，无重力），`ipcmesh/mat40x40.msh`；两侧顶点标为 `VertexBoundaryType::Dirichlet` 并加入 `boundaryConditions.dirichlet.vertexIndices`，`updateDirection(current,rest,step,alpha,dt)` 保留原旋转驱动。
+- **`TwistingMatSoft` / `buildTwistingMatScene(..., SoftTarget)`**：可运行的软边界范例；复用同一网格、两侧顶点选择和 hard 版本的一步目标端点，但端点保持 free DOF，通过 `soft.updateTarget` 与 `weight=100` 二次势拉向目标。headless/benchmark 名称为 `twisting-mat-soft`，viewer 也接受 `--scene twisting-mat-soft`。
 - **`Bunny2` / `buildBunny2Scene`**：参考 `GPU_IPC/GPU_IPC/gl_main.cpp` 的 `initScene1`，两次追加 `Assets/tetrahedraMesh/bunny2.msh`，两只都取 scale=0.2，offset 分别为 `(0,0.65,0)` 与 `(0,0,0)`，`YoungModulus=1e5`。合并后是 38,386 顶点、159,870 tet、41,664 表面三角形；用于大稀疏系统/碰撞压力基准，不替换默认场景。
 
 ### `buildModels`（`:283-336`）全流程
@@ -72,6 +73,7 @@
 ```bash
 cipc_headless --scene cloth-bunny --steps 20 --broad-phase lbvh --output Output/run
 cipc_headless --scene twisting-mat --steps 1 --linear-solver eigen-cg --no-output
+cipc_headless --scene twisting-mat-soft --steps 5 --linear-solver pardiso --no-output
 cipc_headless --scene bunny2 --steps 1 --linear-solver pardiso --pardiso-threads 16 --no-output
 ```
 
@@ -90,7 +92,7 @@ cipc_headless --scene bunny2 --steps 1 --linear-solver pardiso --pardiso-threads
 - `assemble` 从 `BHessian` 生成下三角 triplet，加入质量/阻尼对角并按 `boundaryTypes` 将 Dirichlet/外部 collider 顶点 RHS 清零；软边界保持 free，因此其 `weight·I` 不会被过滤。
 - CHOLMOD、PARDISO与Eigen-CG共用同一`Eigen::SparseMatrix`、RHS和解向量，再统一scatter回每顶点方向。
 - `LinearSolverOptions`在PARDISO可用时首选PARDISO，否则选择优化CHOLMOD。Eigen-CG保留为显式对照。
-- 性能版 CHOLMOD 由 `scripts/build_cholmod_mkl.ps1` / `build.sh` 从固定 SuiteSparse 7.14.0 源码构建完整 bundle：仅 Config、AMD、CAMD、CCOLAMD、COLAMD、GPL supernodal CHOLMOD，oneMKL LP64/TBB 为唯一 BLAS/LAPACK，CUDA/OpenMP关闭。主工程用 `CIPC_CHOLMOD_ROOT` 接入全部组件并验证 `cholmod_super_numeric/cholmod_metis`；Windows 会复制六个 SuiteSparse DLL。生产ordering固定AMD（历史 bunny2中位2.464s，优于METIS 2.557s与AUTO约2.66s）；supernodal模式保持CHOLMOD AUTO，三个场景均实际选择supernodal。线程默认`0=auto`：`nnz<500k`用4线程，否则8线程；`--cholmod-threads`可覆盖。
+- 性能版 CHOLMOD 由 `scripts/build_cholmod_mkl.ps1` / `build.sh` 从固定 SuiteSparse 7.14.0 源码构建完整 bundle：仅 Config、AMD、CAMD、CCOLAMD、COLAMD、GPL supernodal CHOLMOD，oneMKL LP64/TBB 为唯一 BLAS/LAPACK，CUDA/OpenMP关闭。主工程用 `CIPC_CHOLMOD_ROOT` 接入全部组件并验证 `cholmod_super_numeric/cholmod_metis`；Windows 会复制六个 SuiteSparse DLL。生产ordering固定AMD（历史 bunny2中位2.464s，优于METIS 2.557s与AUTO约2.66s）；supernodal模式保持CHOLMOD AUTO，原三个基准几何均实际选择supernodal。线程默认`0=auto`：`nnz<500k`用4线程，否则8线程；`--cholmod-threads`可覆盖。
 - PARDISO是默认主后端；不可用时自动切换优化CHOLMOD。`PardisoSolver`直接调用phase 11/22/33并复用symbolic/permutation/factor workspace。
 - Windows vcpkg oneMKL 静态链接会使 Release headless 约 74.0 MB（70.6 MiB）；性能版CHOLMOD DLL约26.6MB并通过DLL边界供Debug使用。supernodal模块引入GPL-2.0-or-later许可，分发时必须明确处理。Release/RelWithDebInfo仍是正式benchmark配置。
 - Eigen-CG 可用 `cipc_headless --scene twisting-mat --steps 1 --no-output --linear-solver eigen-cg` 做手工 smoke；它不要求与直接法 bitwise 相同。

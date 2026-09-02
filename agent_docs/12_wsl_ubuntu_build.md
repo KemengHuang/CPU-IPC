@@ -107,11 +107,14 @@ bundle 安装目录包含内容签名；SuiteSparse 版本、vcpkg/关键 ports�
 
 ./build-wsl/cpu-ipc/cipc_headless \
   --scene twisting-mat --steps 1 --linear-solver cholmod --no-output
+
+./build-wsl/cpu-ipc/cipc_headless \
+  --scene twisting-mat-soft --steps 5 --no-output
 ```
 
-两条路径都完成 1 个完整时间步、2 次 Newton，`matrix_nnz=151335`；`squared_norm_sum` 均为 `560.74908434861868`，坐标和只存在约 `1e-14` 的并行浮点归约差异。`ldd` 能解析优化 `libcholmod.so.5`，没有 `not found`。这里的单次耗时只用于 smoke，不是隔离性能基准；正式 PARDISO/CHOLMOD A/B 仍应使用 `scripts/benchmark.py` 多进程重复并报告中位数。
+前两条 hard 路径都完成 1 个完整时间步、2 次 Newton，`matrix_nnz=151335`；`squared_norm_sum` 均为 `560.74908434861868`，坐标和只存在约 `1e-14` 的并行浮点归约差异。soft 范例的 PARDISO/CHOLMOD 五步均为末步 1 Newton、`matrix_nnz=158907`、`squared_norm_sum=560.77059938845662`。`ldd` 能解析优化 `libcholmod.so.5`，没有 `not found`。这里的单次耗时只用于 smoke，不是隔离性能基准；正式 PARDISO/CHOLMOD A/B 仍应使用 `scripts/benchmark.py` 多进程重复并报告中位数。
 
-零参数 `./build.sh` 的 viewer 路径已完整通过：CMake 找到 Linux OpenGL、X11 与 vcpkg FreeGLUT，生成并链接 `build-wsl/cpu-ipc/cipc`；WSLg 启动 smoke 持续运行 3 秒后由验证命令主动终止。显式 `--viewer` 得到相同配置。
+零参数 `./build.sh` 的 viewer 路径已完整通过：CMake 找到 Linux OpenGL、X11 与 vcpkg FreeGLUT，生成并链接 `build-wsl/cpu-ipc/cipc`；默认 `cloth-bunny` viewer 与 `cipc --scene twisting-mat-soft` 均在 WSLg 启动并持续运行 3 秒后由验证命令主动终止。显式 `--viewer` 得到相同配置。
 
 Gmsh 2.2 tet loader 已改用与换行类型无关的字段解析。cloth-bunny 在 Windows/WSL 都得到 `7356 tets / 2893 vertices / 4074 surface faces`；non-quadratic 模式下 PARDISO 与 CHOLMOD 均完成单步，和 Windows 同为 8 Newton、12 次能量回退、`nnz=161979`，不再出现假性非正定。
 

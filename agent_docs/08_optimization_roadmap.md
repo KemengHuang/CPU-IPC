@@ -16,7 +16,7 @@
 
 - 默认场景：`ClothOverBunny`，当前布料 `plane1024.obj` 为 1024 顶点 / 1922 三角形，bunny 为 7356 四面体。
 - 大规模 solver 场景：双 `bunny2`，38,386 顶点 / 159,870 tet / 115,158 DOF，用于避免小场景掩盖并行直接法收益。
-- 当前构建只生成产品 target，不注册 CTest。维护验证采用 quadratic ON/OFF Release、普通 Debug、PARDISO ON/OFF 构建，cloth-bunny/twisting-mat/bunny2 headless smoke、双 broad-phase 对照和 benchmark。
+- 当前构建只生成产品 target，不注册 CTest。维护验证采用 quadratic ON/OFF Release、普通 Debug、PARDISO ON/OFF 构建，cloth-bunny/hard+soft twisting-mat/bunny2 headless smoke、双 broad-phase 对照和 benchmark。
 - `metrics.csv` 逐帧记录五阶段、nnz、活动集、回退、direct solver analyze/factorize；PARDISO 另有 phase 11/22/33、线程数与 factor nnz。
 - PARDISO与CHOLMOD两个直接法的solver状态随`IPCSolverContext::linearSystem`跨Newton、κ子问题与时间步复用；同一CSC模式跳过符号分析。
 - 已有无窗口多步入口与容差回归；并行结果仍非 bitwise 确定。

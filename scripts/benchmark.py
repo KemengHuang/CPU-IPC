@@ -14,7 +14,7 @@ def parse_args():
     parser.add_argument("--steps", type=int, default=1)
     parser.add_argument(
         "--scene",
-        choices=("cloth-bunny", "twisting-mat", "bunny2"),
+        choices=("cloth-bunny", "twisting-mat", "twisting-mat-soft", "bunny2"),
         default="cloth-bunny",
     )
     parser.add_argument(

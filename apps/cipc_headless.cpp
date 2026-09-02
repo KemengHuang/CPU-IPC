@@ -31,7 +31,7 @@ void printUsage(const char* executable)
 {
     std::cout
         << "Usage: " << executable << " [options]\n"
-        << "  --scene cloth-bunny|twisting-mat|bunny2\n"
+        << "  --scene cloth-bunny|twisting-mat|twisting-mat-soft|bunny2\n"
         << "  --steps N\n"
         << "  --output DIRECTORY\n"
         << "  --broad-phase spatial-hash|lbvh\n"
@@ -71,19 +71,7 @@ CommandLineOptions parseCommandLine(int argc, char** argv)
         };
 
         if (argument == "--scene") {
-            const std::string value = requireValue("--scene");
-            if (value == "cloth-bunny") {
-                options.scene = SimulationScene::ClothOverBunny;
-            }
-            else if (value == "twisting-mat") {
-                options.scene = SimulationScene::TwistingMat;
-            }
-            else if (value == "bunny2") {
-                options.scene = SimulationScene::Bunny2;
-            }
-            else {
-                throw std::invalid_argument("unknown scene: " + value);
-            }
+            options.scene = parseSimulationScene(requireValue("--scene"));
         }
         else if (argument == "--steps") {
             options.steps = parseNonNegativeInt(requireValue("--steps"), "--steps");

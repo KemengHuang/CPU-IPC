@@ -3,12 +3,14 @@ set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 build_root="${repo_root}/build-wsl"
+requested_project_build=""
 configuration="Release"
-build_viewer="OFF"
+build_viewer="ON"
 requested_vcpkg_root="${VCPKG_ROOT:-}"
 cache_root="${XDG_CACHE_HOME:-${HOME}/.cache}/cpu-ipc"
 install_system_packages="ON"
 dependencies_only="OFF"
+quadratic_bending="ON"
 vcpkg_revision="$(tr -d '[:space:]' < "${repo_root}/scripts/vcpkg-revision.txt")"
 suitesparse_version="$(tr -d '[:space:]' < "${repo_root}/scripts/suitesparse-version.txt")"
 if [[ ! "$vcpkg_revision" =~ ^[0-9a-fA-F]{40}$ ]]; then
@@ -38,6 +40,14 @@ while [[ $# -gt 0 ]]; do
             build_root="$2"
             shift 2
             ;;
+        --project-build-dir)
+            if [[ $# -lt 2 ]]; then
+                echo "--project-build-dir requires a path" >&2
+                exit 2
+            fi
+            requested_project_build="$2"
+            shift 2
+            ;;
         --config)
             if [[ $# -lt 2 ]]; then
                 echo "--config requires Release, RelWithDebInfo, or Debug" >&2
@@ -54,6 +64,10 @@ while [[ $# -gt 0 ]]; do
             build_viewer="OFF"
             shift
             ;;
+        --nonquadratic-bending)
+            quadratic_bending="OFF"
+            shift
+            ;;
         --dependencies-only)
             dependencies_only="ON"
             shift
@@ -67,9 +81,13 @@ while [[ $# -gt 0 ]]; do
 Usage: ./build.sh [options]
   --vcpkg-root PATH  Use an existing Linux vcpkg checkout.
   --build-dir PATH   Build root (default: ./build-wsl).
+  --project-build-dir PATH
+                     Override only the CPU-IPC build directory.
   --config TYPE      Release, RelWithDebInfo, or Debug.
-  --viewer           Build the GLUT viewer (headless is the default).
-  --headless-only    Explicitly disable the viewer.
+  --viewer           Build the GLUT viewer (default).
+  --headless-only    Disable FreeGLUT and the viewer.
+  --nonquadratic-bending
+                     Build the complete dihedral-hinge bending model.
   --dependencies-only
                      Install/build dependencies without building CPU-IPC.
   --no-system-packages
@@ -243,14 +261,19 @@ if [[ "$dependencies_only" == "ON" ]]; then
 fi
 
 echo "[4/4] Configuring and building CPU-IPC"
-project_build="${build_root}/cpu-ipc"
+if [[ -n "$requested_project_build" ]]; then
+    mkdir -p "$requested_project_build"
+    project_build="$(cd "$requested_project_build" && pwd)"
+else
+    project_build="${build_root}/cpu-ipc"
+fi
 "$cmake_executable" -S "$repo_root" -B "$project_build" -G Ninja \
     -DCMAKE_BUILD_TYPE="$configuration" \
     -DCMAKE_TOOLCHAIN_FILE="$vcpkg_toolchain" \
     -DVCPKG_TARGET_TRIPLET="$triplet" \
     -DCIPC_BUILD_VIEWER="$build_viewer" \
     -DCIPC_ENABLE_FRICTION=ON \
-    -DCIPC_ENABLE_QUADRATIC_BENDING=ON \
+    -DCIPC_ENABLE_QUADRATIC_BENDING="$quadratic_bending" \
     -DCIPC_ENABLE_METIS_ORDERING=ON \
     -DCIPC_ENABLE_PARDISO=ON \
     -DCIPC_CHOLMOD_ROOT="$cholmod_install" \

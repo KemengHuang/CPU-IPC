@@ -20,7 +20,7 @@ WSL/Ubuntu:
 ./build.sh
 ```
 
-The first run downloads the numerical dependencies and builds the tuned CHOLMOD library, so it is substantially slower than later incremental builds. Windows produces the viewer and headless runner; Ubuntu defaults to the headless benchmark. Use `.\build.cmd -HeadlessOnly` or `./build.sh --viewer` to select the other application set.
+The first run downloads the numerical dependencies and builds the tuned CHOLMOD library, so it is substantially slower than later incremental builds. Both platforms produce the viewer and headless runner by default; use `.\build.cmd -HeadlessOnly` or `./build.sh --headless-only` on machines without a graphical environment.
 
 ### CPU-oriented optimizations
 
@@ -39,7 +39,7 @@ The first run downloads the numerical dependencies and builds the tuned CHOLMOD 
 ## System requirements
 
 - Windows: 64-bit Windows and Visual Studio/Build Tools with the **Desktop development with C++** workload. `build.cmd` detects this prerequisite and prints a ready-to-run `winget` command if it is absent. Git is needed only when the private vcpkg cache must first be downloaded or updated, with an equivalent command shown on failure. CMake is resolved from `PATH`, Visual Studio, or vcpkg's own downloaded tools.
-- WSL/Ubuntu: x86-64 Ubuntu. `build.sh` detects missing compiler/build packages and installs them through `apt` automatically, requesting sudo only when necessary. `zip`/`unzip` can be unpacked into the user cache without sudo, and a system CMake older than 3.23 is transparently replaced by vcpkg's private tool. Pass `--no-system-packages` in CI or managed environments to disable automatic `apt` changes and receive the exact required command instead.
+- WSL/Ubuntu: x86-64 Ubuntu. `build.sh` detects missing compiler/build/OpenGL packages and installs them through `apt` automatically, requesting sudo only when necessary. `zip`/`unzip` can be unpacked into the user cache without sudo, and a system CMake older than 3.23 is transparently replaced by vcpkg's private tool. The viewer runs with WSLg or another working X11 `DISPLAY`; use `--headless-only` on servers. Pass `--no-system-packages` in CI or managed environments to disable automatic `apt` changes and receive the exact required command instead.
 
 Everything else is project-managed. An explicit vcpkg option or `VCPKG_ROOT` overrides the default; otherwise the launchers bootstrap the revision pinned in `scripts/vcpkg-revision.txt`. Windows keeps that checkout in a short `%LOCALAPPDATA%/CPU-IPC` path to avoid path-length failures, while Ubuntu uses `${XDG_CACHE_HOME:-$HOME/.cache}/cpu-ipc`. Eigen, TBB core, METIS, oneMKL, and optional FreeGLUT are installed together. SuiteSparse is downloaded at a pinned version with a verified SHA-512 hash and only the required CHOLMOD/AMD family is built—OpenBLAS and TBB's unused hwloc feature are not installed.
 
@@ -95,6 +95,17 @@ PARDISO is the recommended installation and the default solver in Release-family
 
 The root launchers build high-performance CHOLMOD automatically: Windows delegates to `scripts/build_cholmod_mkl.ps1`, while Ubuntu performs the equivalent build inside `build.sh`. Both build a self-contained shared SuiteSparse bundle containing only Config, AMD, CAMD, CCOLAMD, COLAMD, and GPL supernodal CHOLMOD, with static oneMKL LP64/TBB as the sole BLAS/LAPACK provider. CPU-IPC verifies `cholmod_super_numeric` and `cholmod_metis`, and deploys every required DLL on Windows. A content stamp skips this bundle entirely on unchanged incremental builds. This changes the distribution license boundary to include GPL-2.0-or-later code. A system CHOLMOD is only a compatibility diagnostic when `CIPC_REQUIRE_OPTIMIZED_CHOLMOD=OFF`.
 
+Cross-platform non-quadratic build:
+
+```powershell
+.\build.cmd -HeadlessOnly -NonQuadraticBending -BuildDirectory build/cpu-ipc-nonquadratic
+```
+
+```bash
+./build.sh --headless-only --nonquadratic-bending \
+  --project-build-dir build-wsl/nonquadratic
+```
+
 ## Run
 
 Viewer:
@@ -121,6 +132,12 @@ WSL/Ubuntu headless executable:
 
 ```bash
 ./build-wsl/cpu-ipc/cipc_headless --scene bunny2 --steps 1 --no-output
+```
+
+WSL/Ubuntu viewer:
+
+```bash
+./build-wsl/cpu-ipc/cipc
 ```
 
 Runtime metrics are written to `metrics.csv` in the selected output directory. See [`agent_docs/README.md`](agent_docs/README.md) for architecture, algorithms, known issues, and optimization results, and [`agent_docs/12_wsl_ubuntu_build.md`](agent_docs/12_wsl_ubuntu_build.md) for the verified WSL/Ubuntu toolchain and build flow.
@@ -179,7 +196,7 @@ D = E * thickness^3 / (12 * (1 - poisson_ratio^2)).
 - Non-quadratic bending precomputes each interior hinge's rest angle and geometry weight `l0 / (h0 + h1)`, then uses consistent energy, gradient, and Hessian expressions.
 - `TetInversionGuard` is retained as an optional utility but is not enabled in the default IPC step.
 
-The one-command production launchers deliberately select quadratic bending. The non-quadratic branch passes the Windows smoke but currently fails the WSL direct-solver regression with a non-positive-definite matrix; see `agent_docs/07_gotchas.md` before enabling it manually on Linux.
+The non-quadratic branch is verified on both Windows and WSL with PARDISO and tuned CHOLMOD. Its previous Linux non-positive-definite failure was traced to CRLF-sensitive Gmsh tokenization corrupting tetrahedron connectivity, not to the hinge Hessian or either linear solver.
 
 ## Project layout
 
@@ -206,4 +223,5 @@ build/cpu-ipc/Release/cipc_headless.exe --scene cloth-bunny --steps 1 --no-outpu
 build/cpu-ipc/Release/cipc_headless.exe --scene cloth-bunny --steps 1 --no-output --linear-solver cholmod
 build/cpu-ipc/Release/cipc_headless.exe --scene twisting-mat --steps 1 --no-output --linear-solver eigen-cg
 build/cpu-ipc/Release/cipc_headless.exe --scene bunny2 --steps 1 --no-output --linear-solver pardiso --pardiso-threads 16
+build/cpu-ipc-nonquadratic/Release/cipc_headless.exe --scene cloth-bunny --steps 1 --no-output
 ```

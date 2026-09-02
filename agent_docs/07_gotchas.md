@@ -11,7 +11,6 @@
 7. **性能版 CHOLMOD 改变许可边界**：一键脚本从固定 SuiteSparse 源码构建 Config/AMD/CAMD/CCOLAMD/COLAMD/CHOLMOD 共享 bundle，启用 GPL supernodal 并把静态 oneMKL 嵌入 CHOLMOD。配置必须通过 `CIPC_CHOLMOD_ROOT` 接入完整 bundle 且验证 `cholmod_super_numeric`；不能把普通 OpenBLAS/simplicial 包的结果标成 MKL supernodal。二进制分发需遵守 GPL-2.0-or-later。
 8. **Windows 与 WSL 构建目录不可复用**：两边的编译器、路径语法、库格式和 ABI 不同。Windows 固定使用 `build`，WSL 一键脚本固定使用 `build-wsl`；不要从 WSL 配置已有的 Windows build tree，也不要把 `/mnt/c/...` 或盘符路径写入仓库配置。vcpkg 只能复用同一平台的 checkout/installed tree。
 9. **一键脚本只能代替库配置，不能消除平台编译器**：Windows 仍需 64-bit MSVC C++ workload；脚本会检测并给出 winget 命令。Ubuntu 默认会通过 sudo/apt 补齐缺少的编译工具和 viewer X11/OpenGL 开发包；CI 或受管环境应传 `--no-system-packages`，此时只报告精确缺项、不修改系统。自动 vcpkg 固定 revision；只有用户显式传 `VCPKG_ROOT`/路径时才允许替换，维护者升级 `vcpkg-revision.txt` 后必须重新做双平台首次安装。
-10. **非 quadratic hinge 尚未通过 Linux 直接求解器回归**：相同一键依赖下 Windows PARDISO 单步通过，但 WSL/GCC 的 PARDISO phase 22 返回 `-4`，CHOLMOD 报矩阵非正定并在 0 Newton 退出；两边首轮稀疏模式也不同。默认产品和一键脚本因此明确固定 quadratic bending ON。重新开放 Linux non-quadratic 产品前必须审计 hinge Hessian/PSD 与装配确定性，并完成双求解器轨迹回归。
 
 ## B. 保留但默认未接入的安全路径
 
@@ -59,6 +58,7 @@
 - **检查点越界/半恢复风险**：加载先校验完整数量再整体提交，计时状态只在网格恢复成功时恢复，保存精度提高到 17 位。
 - **旧检查点覆盖初始场景**：`SimulationOptions::resumeCheckpoint/writeCheckpoints` 已改为默认 false；viewer 和普通 API 构建默认 fresh。只有显式 `--resume` 才读取 `Output/tempData`。
 - **`output_tetrahedraMesh` round-trip off-by-one**：tet 节点引用已写成 1-based，并补齐 Gmsh 结束标记。
+- **Gmsh CRLF 导致 Linux tet 拓扑损坏/假性非正定**：旧 `split(" ")` 在 Linux 保留行末 `\r` 并把它当作额外 token，导致每个 tetrahedron 丢失首节点、末节点变成 `-1+offset`；Windows 文本模式会移除 `\r`，所以曾表现为仅 WSL 的 PARDISO `-4` / CHOLMOD 非正定。现按 Gmsh 2.2 的 element type/tag/node 字段使用 stream 解析，映射并校验节点 ID，且先写临时容器再整体提交。cloth-bunny 双平台均恢复为 4074 surface faces，non-quadratic 的 PARDISO/CHOLMOD 均通过。
 - **零 Newton 次数除零**：平均碰撞数在 `total_iter==0` 时返回 0。
 - **位置式参数解析**：已改为 key/value map，校验未知、重复、缺失、非有限与物理范围；默认与文件路径共用 `updateMaterial`。
 - **Newton threshold/line-search 伪接口**：阈值已接通，并改为在线性求解后检查本轮当前方向；收敛时不再把近零方向送入 CCD/line search。`armijoCoefficient` 固定为0，严格要求 `E_trial<E0`，并有64次失败上限；旧的 `1e−3·初始步长` 截止已删除。line search 内的机器精度耗尽分支仍作为安全兜底，但不再是正常收敛路径。
@@ -69,7 +69,7 @@
 - **稀疏装配/临时分配**：只生成下三角有效 triplet；`NewtonWorkspace` 复用 gradient/BHessian/mutex，`IPCSolverContext` 持有的 `NewtonLinearSystem` 跨 Newton/κ/时间步复用 triplet/SparseMatrix/RHS/solver。
 - **PARDISO 与大场景验证**：已接入 phase 指标、线程控制与 adaptive permutation，并以双 bunny2 做 1/5/50 时间步测试；50 步首次接触在 frame 43，末帧 ground/self=441/1006 且最小平方距离保持正值。完整数据见 `10_pardiso_report.md`。
 - **重复 FEM/弯曲计算**：PFPX 初始化预计算，活跃 FEM 使用固定尺寸 Eigen；二次弯曲预计算 `Q⊗I₃` 并移除每轮 eigendecomposition。
-- **非 quadratic hinge 不完整**：现以 `plateRigidity=Et³/[12(1−ν²)]` 为统一材料系数，预计算 `θ0` 与 `l0/(h0+h1)`；能量/梯度/Hessian 使用同一公式。维护时必须同时构建 quadratic ON/OFF 并跑 cloth-bunny smoke。
+- **非 quadratic hinge 不完整**：现以 `plateRigidity=Et³/[12(1−ν²)]` 为统一材料系数，预计算 `θ0` 与 `l0/(h0+h1)`；能量/梯度/Hessian 使用同一公式。CRLF tet 解析修复后已完成 Windows/WSL、PARDISO/CHOLMOD 单步对照；维护时仍必须同时构建 quadratic ON/OFF 并跑 cloth-bunny smoke。
 - **摩擦与场景职责混杂**：摩擦冻结量、能量、梯度和解析 PSD Hessian 已集中到 `Friction.cpp/.h`；场景辅助函数改为用途命名并限制在 `Simulator.cpp` 内部作用域，删除未调用的 `buildSpecialPoints`。
 - **SpatialHash 重建分配**：复用 voxel buckets 与 primitive occupancy，主候选使用线程局部排序 vector。
 - **GPU 风格 CPU LBVH**：已按 `GPU_IPC/mlbvh` 的 Morton/Karras/face+edge/swept AABB 流程实现；现为默认 broad phase，SpatialHash 保留 A/B。

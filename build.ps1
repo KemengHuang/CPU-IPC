@@ -4,6 +4,7 @@ param(
     [ValidateSet("Release", "RelWithDebInfo", "Debug")]
     [string]$Configuration = "Release",
     [switch]$HeadlessOnly,
+    [switch]$NonQuadraticBending,
     [switch]$DependenciesOnly,
     [switch]$Help
 )
@@ -12,6 +13,8 @@ if ($Help) {
     Write-Host @"
 Usage: .\build.cmd [options]
   -HeadlessOnly       Skip FreeGLUT and the viewer.
+  -NonQuadraticBending
+                      Build the complete dihedral-hinge bending model.
   -DependenciesOnly   Install/build dependencies without building CPU-IPC.
   -Configuration TYPE Release, RelWithDebInfo, or Debug.
   -BuildDirectory DIR Override the default .\build\cpu-ipc directory.
@@ -82,7 +85,7 @@ $configureArguments = @(
     "-B", $BuildDirectory,
     "-DCIPC_BUILD_VIEWER=$(if ($HeadlessOnly) { 'OFF' } else { 'ON' })",
     "-DCIPC_ENABLE_FRICTION=ON",
-    "-DCIPC_ENABLE_QUADRATIC_BENDING=ON",
+    "-DCIPC_ENABLE_QUADRATIC_BENDING=$(if ($NonQuadraticBending) { 'OFF' } else { 'ON' })",
     "-DCIPC_ENABLE_METIS_ORDERING=ON",
     "-DCIPC_ENABLE_PARDISO=ON",
     "-DCIPC_CHOLMOD_ROOT=$cholmodInstall",

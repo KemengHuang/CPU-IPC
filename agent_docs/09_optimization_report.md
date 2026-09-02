@@ -131,14 +131,14 @@ cloth-bunny、1 步、独立进程：
 
 - WSL2 Ubuntu 22.04.5（GCC 11.4、CMake 4.3.3、Ninja 1.10.1）已用零参数 `./build.sh` 从系统检查、依赖安装到产品链接端到端通过；Linux oneMKL 2025.2、METIS/TBB 来自固定 `x64-linux` vcpkg，SuiteSparse 7.14/CHOLMOD 5.3.5 由校验下载的源码直接构建，`ldd` 中没有 OpenBLAS。`--dependencies-only --no-system-packages` 与 bundle stamp 增量复用分支均通过。默认 PARDISO 与显式 CHOLMOD 的 twisting-mat 单步 smoke 成功且终态仅有浮点归约误差；`./build.sh --viewer` 也已完成 OpenGL/X11/FreeGLUT 配置与链接，并通过 WSLg 3 秒启动 smoke。
 - Windows `.\build.cmd -HeadlessOnly` 已从空的固定 revision vcpkg checkout 验证 MSVC/CMake 自动解析、`tbb[core]`/METIS/oneMKL 安装、无 OpenBLAS 的 SuiteSparse bundle、六个 DLL 自动部署和 CPU-IPC Release；`.\build.cmd -DependenciesOnly -HeadlessOnly` 及 bundle stamp 二次复用也通过。MSVC Debug 自动 CHOLMOD smoke 通过。
-- 安装器开发期间额外复核 non-quadratic：Windows/PARDISO 单步通过，但 WSL PARDISO phase 22 `-4`，CHOLMOD 报非正定；该便利开关未保留，一键产品固定 quadratic ON，问题登记在 `07_gotchas.md`，不能沿用此前仅 Windows 的 ON/OFF 通过记录推断 Linux 正确。
+- 安装器开发期间发现 WSL non-quadratic 曾在 PARDISO phase 22 报 `-4`、CHOLMOD 报非正定；根因不是 Hessian/solver，而是 Gmsh 行末“空格+CRLF”被旧 `split(" ")` 在 Linux 解析出额外 `\r` token，破坏了全部 tet 连接。改为结构化 Gmsh 2.2 stream parser 后，Windows/WSL 均为 4074 surface faces、8 Newton、12 energy backtracks、`nnz=161979`，PARDISO/CHOLMOD 单步终态在浮点误差内一致。
 - 新 bundle 的 Windows 五次独立进程中位数：bunny2 单步 PARDISO/CHOLMOD 为 `1.310/1.686 s`，cloth-bunny 五步为 `0.575/0.621 s`，twisting-mat 五步为 `0.431/0.412 s`，终态逐次一致。同一时段旧/新 CHOLMOD bunny2 对照为 `1.670/1.686 s`（约 1%）；不把安装简化宣称为算法提速，PARDISO 仍是默认。
 - MSVC Release `--clean-first` 全量构建：通过，无新增编译警告。
 - headless-only（viewer OFF）独立构建：通过。
 - METIS ordering ON/OFF 两套 MSVC Release 构建与 twisting-mat/cloth-bunny CHOLMOD smoke 均通过；ON 下 Eigen-CG smoke 也通过。ON 配置会实际编译/链接检查 `cholmod_metis` 后才提供 `Partition`，不会只根据包名静默假定支持。
 - 多配置映射已在生成的 VS 工程中核对：Debug 链接 `debug/lib`，Release/RelWithDebInfo/MinSizeRel 链接 `lib`；Debug headless 构建和 twisting-mat CHOLMOD smoke 通过。
 - PARDISO/优化CHOLMOD逐帧结果在浮点归约误差内一致；twisting-mat 5步和Eigen-CG单步smoke通过。
-- Windows MSVC 的 quadratic ON/OFF 两种 Release 配置与 cloth-bunny/twisting-mat headless smoke 均通过；Linux 当前只将 quadratic 纳入通过项。项目不再运行 CTest。
+- Windows MSVC 与 Linux GCC 的 quadratic ON/OFF Release 配置及 cloth-bunny 代表 smoke 均通过；项目不再运行 CTest。
 - oneMKL PARDISO Release、非 quadratic+PARDISO、`CIPC_ENABLE_PARDISO=OFF` 与普通 MSVC Debug 四条构建路径均通过；Windows 静态 oneMKL 因 CRT 边界在 Debug 自动排除，显式选择时按预期清晰报错。
 - bunny2 PARDISO 1/5/50时间步运行通过；PARDISO/优化CHOLMOD单步终态在浮点舍入内一致。
 - 默认 LBVH 与 SpatialHash、TwistingMat 三条 1 步轨迹均纳入回归。

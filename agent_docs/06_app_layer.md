@@ -2,7 +2,7 @@
 
 构建已分层：`cipc_core` 包含 Simulator/elasticity/IPC/contact/solver 且不依赖 OpenGL；`cipc` 仅是 viewer；`cipc_headless` 是无窗口 CLI。`CIPC_BUILD_VIEWER=OFF` 可完全跳过 OpenGL/GLUT 查找。项目已无 GLEW 依赖。
 
-生产构建入口按平台分开：Windows 用户直接运行根目录 `build.cmd`（薄包装到 `build.ps1`），WSL/Ubuntu 使用 `build.sh`。二者都自动检查系统工具，以固定 vcpkg revision 准备 Eigen/TBB/METIS/oneMKL，下载校验固定 SuiteSparse 源码并构建 GPL supernodal+oneMKL bundle，再配置 `CIPC_CHOLMOD_ROOT` 和 CPU-IPC Release；`-DependenciesOnly` / `--dependencies-only` 可只准备库。Windows 的 `-HeadlessOnly` 与 Linux 的默认 headless 跳过 viewer。两套主工程分别写入 `build/cpu-ipc` 和 `build-wsl/cpu-ipc`，不得共用 CMake cache 或二进制。
+生产构建入口按平台分开：Windows 用户直接运行根目录 `build.cmd`（薄包装到 `build.ps1`），WSL/Ubuntu 使用 `build.sh`。二者都自动检查系统工具，以固定 vcpkg revision 准备 Eigen/TBB/METIS/oneMKL/FreeGLUT，下载校验固定 SuiteSparse 源码并构建 GPL supernodal+oneMKL bundle，再配置 `CIPC_CHOLMOD_ROOT` 和 CPU-IPC Release；`-DependenciesOnly` / `--dependencies-only` 可只准备库。两平台默认都生成 viewer 与 headless，`-HeadlessOnly` / `--headless-only` 才跳过图形依赖。两套主工程分别写入 `build/cpu-ipc` 和 `build-wsl/cpu-ipc`，不得共用 CMake cache 或二进制。
 
 ## 1. ViewerMain.cpp —— 固定管线查看器
 
@@ -109,8 +109,9 @@ cipc_headless --scene bunny2 --steps 1 --linear-solver pardiso --pardiso-threads
 
 ### 加载
 
-- `load_tetrahedraMesh`：按行触发解析并取节点/单元行尾部 token，支持 append 多网格。文件不存在会返回 false，由场景构建抛出可捕获异常，不再 `exit(-1)`。
-  - 资产：`bunny.msh`（Gmsh 2.2，1869 节点 7356 单元）；`bunny2.msh` 单份为 19,193 节点、79,935 tet；`ipcmesh/mat40x40.msh` 自称 4.1 但体是简化格式（靠“取尾部 token”侥幸解析成功）。`ipcmesh/` 下还有 Armadillo13K、rod、sphere5K、torus 等可用场景网格。
+- `load_tetrahedraMesh`：使用 whitespace-aware stream 解析，不再手写按单个空格 split；标准 Gmsh 2.2 行按 element type/tag/node 读取，节点 ID 显式映射并校验，未知 element type 跳过。节点行字段数必须前后一致，只有三字段节点资产才启用五字段 compact-tet 兼容，避免把标准 Gmsh 的短非 tet element 误判为四面体。加载先写临时容器，全部合法后才 append 到 mesh。文件不存在或字段/引用非法返回 false，由场景构建抛出可捕获异常，不再 `exit(-1)`。
+  - 兼容项目历史简化格式：`ipcmesh/mat40x40.msh` 自称 4.1，但节点行省略 ID、tet 行省略 type/tag；`bunny2.msh` 声明两个 tag 却省略值。两者现为有意兼容而非“取尾部 token”侥幸成功。CRLF 行末 `\r` 被标准 whitespace 处理，不再污染最后一个 tet 节点。
+  - 资产：`bunny.msh`（Gmsh 2.2，1869 节点 7356 单元）；`bunny2.msh` 单份为 19,193 节点、79,935 tet；`ipcmesh/` 下还有 Armadillo13K、rod、sphere5K、torus 等网格。
 - `load_triangleMesh`（OBJ）：`v` 行 scale+offset；`f` 行扇形三角化（支持 `f a/b/c` 与 `f a b c`）；`type==2` 全顶点 `boundaryType=2`，`type==3` 面直接进 `surface`，默认进 `triangles`；末尾建 `tri_edges/_adj_points`（仅 2 三角共享边）。旧 PCG 的逐顶点 3×3 `Constraints` 已删除。资产：`CMU/plane{9,100,1024,200000}.obj`、`cloth7.obj`、`tricloth.obj`、`newtubing.obj`。
 - `getSurface`（`:349-431`）：tet 4 面×6 排列哈希去重找边界面；按对顶点法线测试定向**朝外**；存 `Vector4i(v0,v1,v2,tetId)`；布料面 tetId=0 追加；`surfVerts` 按首现序唯一化；`surfEdges` 用 `std::set` 去重无向边。
 - `mesh3D::InitMesh / load_test(1/2)`：程序化立方体，当前产品场景不调用。

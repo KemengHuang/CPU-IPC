@@ -66,7 +66,7 @@ w_e = l0/(h0+h1) = l0²/[2(A0+A1)]
 E_e = ½·D·w_e·(θ−θ0)²
 ```
 
-角差用 `remainder(θ−θ0,2π)` 取最近分支。梯度为 `D·w_e·Δθ∇θ`，精确 Hessian 为 `D·w_e[∇θ∇θᵀ+Δθ∇²θ]`，进入 Newton 前再做 PSD 投影。能量、梯度、Hessian 共用 `HingeBendingInfo{vertices,restAngle,geometricWeight}`，不再逐轮重算静止长度/角度。实现时曾以有限差分核对一阶/二阶导数及均匀缩放不变性；测试源码现已按项目要求移除。
+角差用 `remainder(θ−θ0,2π)` 取最近分支。梯度为 `D·w_e·Δθ∇θ`，精确 Hessian 为 `D·w_e[∇θ∇θᵀ+Δθ∇²θ]`，进入 Newton 前再做 PSD 投影。能量、梯度、Hessian 共用 `HingeBendingInfo{vertices,restAngle,geometricWeight}`，不再逐轮重算静止长度/角度。实现时曾以有限差分核对一阶/二阶导数及均匀缩放不变性；测试源码现已按项目要求移除。Windows/WSL 曾出现的正定性差异最终定位为 tet `.msh` 的 CRLF 解析破坏拓扑，修复 loader 后两平台使用相同 4074-face surface、`nnz=161979` 并通过 PARDISO/CHOLMOD；hinge Hessian 公式与 scale 未因该问题修改。
 
 ## 4. 摩擦（IPC 滞后摩擦，`Friction.cpp/.h` + `FrictionKinematics.h`）
 

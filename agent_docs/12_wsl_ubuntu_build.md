@@ -17,7 +17,7 @@ sudo apt-get update
 sudo apt-get install -y build-essential ninja-build git curl tar pkg-config
 ```
 
-当前已验证的 WSL 实例已经具备主体工具，不需要再次安装。`zip`/`unzip` 若缺失，脚本优先用 `apt-get download` 将两个 `.deb` 解包到用户缓存，不执行 `sudo`，也不修改系统包状态。启用 `--viewer` 时，还会检测 FreeGLUT 需要的 OpenGL/X11 开发包并按需安装。
+当前已验证的 WSL 实例已经具备主体工具，不需要再次安装。`zip`/`unzip` 若缺失，脚本优先用 `apt-get download` 将两个 `.deb` 解包到用户缓存，不执行 `sudo`，也不修改系统包状态。默认 viewer 构建还会检测 FreeGLUT 需要的 OpenGL/X11 开发包并按需安装；只有 `--headless-only` 跳过这项检查。
 
 ## 2. 一键构建
 
@@ -27,13 +27,13 @@ sudo apt-get install -y build-essential ninja-build git curl tar pkg-config
 ./build.sh
 ```
 
-`headless` 是 Linux 脚本的默认值。该命令依次完成：
+viewer 与 headless 是 Linux 脚本的默认产品。该命令依次完成：
 
 1. 自动补齐必要的 Ubuntu 基础工具；不要求用户理解数值库的系统包名。
 2. 优先使用 `--vcpkg-root` / `VCPKG_ROOT` 显式选择；否则自动 bootstrap `scripts/vcpkg-revision.txt` 固定的 revision 到 `${XDG_CACHE_HOME:-$HOME/.cache}/cpu-ipc/vcpkg`，不受 PATH 上其他 vcpkg 影响。
-3. 在一次 vcpkg transaction 中为 `x64-linux` 安装 Eigen、`tbb[core]`、METIS、oneMKL；viewer 模式再加入 FreeGLUT。`tbb[core]` 明确排除项目未使用的 hwloc/TBBBind。
+3. 在一次 vcpkg transaction 中为 `x64-linux` 安装 Eigen、`tbb[core]`、METIS、oneMKL 和默认 viewer 所需的 FreeGLUT；`--headless-only` 时不安装 FreeGLUT。`tbb[core]` 明确排除项目未使用的 hwloc/TBBBind。
 4. 按 `suitesparse-version.txt` 下载固定 SuiteSparse 7.14.0 并验证 SHA-512，只构建 Config、AMD、CAMD、CCOLAMD、COLAMD 与 GPL supernodal CHOLMOD，把 BLAS/LAPACK 绑定到 oneMKL static LP64/TBB，并安装到 `<repo>/build-wsl/cholmod-mkl-install`。不安装 OpenBLAS。
-5. 以 `CIPC_ENABLE_PARDISO=ON`、`CIPC_REQUIRE_OPTIMIZED_CHOLMOD=ON`、`CIPC_BUILD_VIEWER=OFF` 配置主工程，生成 `<repo>/build-wsl/cpu-ipc/cipc_headless`。
+5. 以 `CIPC_ENABLE_PARDISO=ON`、`CIPC_REQUIRE_OPTIMIZED_CHOLMOD=ON` 配置主工程；默认同时生成 `<repo>/build-wsl/cpu-ipc/cipc` viewer 与 `cipc_headless`，服务器可传 `--headless-only`。
 
 PARDISO 可用时仍是 Release 默认后端，线程默认 16；优化 CHOLMOD 是自动 fallback，也可用 `--linear-solver cholmod` 显式选择。Eigen-CG 仍只作为显式比较项。
 
@@ -49,6 +49,7 @@ PARDISO 可用时仍是 Release 默认后端，线程默认 16；优化 CHOLMOD 
 | 优化 CHOLMOD | `<repo>/build/cholmod-mkl-install` | `<repo>/build-wsl/cholmod-mkl-install` |
 | 主工程 | `<repo>/build/cpu-ipc` | `<repo>/build-wsl/cpu-ipc` |
 | headless 产品 | `<repo>/build/cpu-ipc/Release/cipc_headless.exe` | `<repo>/build-wsl/cpu-ipc/cipc_headless` |
+| viewer 产品 | `<repo>/build/cpu-ipc/Release/cipc.exe` | `<repo>/build-wsl/cpu-ipc/cipc` |
 
 Windows 与 Linux build tree 不能互换；两边的 CMake cache、库格式和 ABI 都不同。WSL 可以直接从 `/mnt/c` 完成构建，本次验证就是这样执行的；但大量小文件的编译和 vcpkg 安装通常在 Linux 文件系统（例如 `~/src/CPU-IPC`）更快。
 
@@ -80,19 +81,23 @@ bundle 安装目录包含内容签名；SuiteSparse 版本、vcpkg/关键 ports�
 ```text
 --vcpkg-root PATH   使用已有 Linux vcpkg checkout 或 vcpkg 可执行文件
 --build-dir PATH    覆盖默认 <repo>/build-wsl
+--project-build-dir PATH
+                    仅覆盖 CPU-IPC build tree，复用默认依赖 bundle
 --config TYPE       Release、RelWithDebInfo 或 Debug
---viewer            同时构建 GLUT viewer
---headless-only     只构建 benchmark/headless 产品（默认）
+--viewer            构建 GLUT viewer（默认）
+--headless-only     只构建 benchmark/headless 产品
+--nonquadratic-bending
+                    构建完整二面角 hinge bending 分支
 --dependencies-only 只安装/构建全部库，不编译 CPU-IPC
 --no-system-packages
                     不调用 sudo/apt，只报告缺失的 Ubuntu 包
 ```
 
-`--viewer` 会额外安装 `freeglut:x64-linux`，并要求系统具有 OpenGL/X11 开发库；vcpkg 在缺失时会列出对应的 Ubuntu `apt` 包。当前 WSL 已实际完成 viewer 配置、编译、链接，并在 WSLg 下成功启动 3 秒。普通无桌面的 Ubuntu 仍需可用的 X server/`DISPLAY` 才能显示窗口；这不影响 headless benchmark。
+默认构建会安装 `freeglut:x64-linux`，并要求系统具有 OpenGL/X11 开发库；脚本在缺失时会列出或自动安装对应的 Ubuntu `apt` 包。`--viewer` 是保留的显式同义开关，`--headless-only` 才跳过这些图形依赖。当前 WSL 已实际完成 viewer 配置、编译、链接，并在 WSLg 下成功启动 3 秒。普通无桌面的 Ubuntu 仍需可用的 X server/`DISPLAY` 才能显示窗口；这不影响 headless benchmark。
 
 ## 6. 实机验证结果
 
-零参数 `./build.sh` 已从系统前置检查、固定 vcpkg 依赖安装、校验 SuiteSparse 下载、优化 bundle 编译/安装一直执行到 CPU-IPC GCC Release 链接成功；随后再次增量运行同一命令也成功。`./build.sh --dependencies-only --no-system-packages` 也验证通过，只准备依赖后正常退出；第二次运行命中 bundle 内容签名并即时复用。CMake cache 确认 `CIPC_ENABLE_PARDISO=ON`、`CIPC_REQUIRE_OPTIMIZED_CHOLMOD=ON`，编译定义包含 `CIPC_HAS_PARDISO`。
+零参数 `./build.sh` 已从系统前置检查、固定 vcpkg 依赖安装、校验 SuiteSparse 下载、优化 bundle 编译/安装一直执行到 CPU-IPC GCC Release viewer/headless 链接成功；随后再次增量运行同一命令也成功。`./build.sh --dependencies-only --no-system-packages` 也验证通过，只准备依赖后正常退出；第二次运行命中 bundle 内容签名并即时复用。CMake cache 确认 `CIPC_ENABLE_PARDISO=ON`、`CIPC_REQUIRE_OPTIMIZED_CHOLMOD=ON`，编译定义包含 `CIPC_HAS_PARDISO`。
 
 运行命令：
 
@@ -106,7 +111,9 @@ bundle 安装目录包含内容签名；SuiteSparse 版本、vcpkg/关键 ports�
 
 两条路径都完成 1 个完整时间步、2 次 Newton，`matrix_nnz=151335`；`squared_norm_sum` 均为 `560.74908434861868`，坐标和只存在约 `1e-14` 的并行浮点归约差异。`ldd` 能解析优化 `libcholmod.so.5`，没有 `not found`。这里的单次耗时只用于 smoke，不是隔离性能基准；正式 PARDISO/CHOLMOD A/B 仍应使用 `scripts/benchmark.py` 多进程重复并报告中位数。
 
-`./build.sh --viewer` 也已完整通过：CMake 找到 Linux OpenGL、X11 与 vcpkg FreeGLUT，生成并链接 `build-wsl/cpu-ipc/cipc`；WSLg 启动 smoke 持续运行 3 秒后由验证命令主动终止。
+零参数 `./build.sh` 的 viewer 路径已完整通过：CMake 找到 Linux OpenGL、X11 与 vcpkg FreeGLUT，生成并链接 `build-wsl/cpu-ipc/cipc`；WSLg 启动 smoke 持续运行 3 秒后由验证命令主动终止。显式 `--viewer` 得到相同配置。
+
+Gmsh 2.2 tet loader 已改用与换行类型无关的字段解析。cloth-bunny 在 Windows/WSL 都得到 `7356 tets / 2893 vertices / 4074 surface faces`；non-quadratic 模式下 PARDISO 与 CHOLMOD 均完成单步，和 Windows 同为 8 Newton、12 次能量回退、`nnz=161979`，不再出现假性非正定。
 
 项目按要求没有测试源码或 CTest target；Linux 回归以 Release 构建、PARDISO/CHOLMOD headless smoke、viewer 启动 smoke、运行时依赖检查和物理/迭代指标一致性为准。
 

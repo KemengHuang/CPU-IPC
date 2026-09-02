@@ -2,9 +2,11 @@
 #include "RuntimePaths.h"
 #include <unordered_map>
 #include <cstdint>
+#include <cmath>
 #include <fstream>
 #include <iomanip>
 #include <set>
+#include <sstream>
 #include <stdexcept>
 #include <assert.h>
 
@@ -72,20 +74,6 @@ public:
         return key[0] == right[0] && key[1] == right[1] && key[2] == right[2];
     }
 };
-
-void split(string str, vector<string> &v, string spacer) {
-    int pos1, pos2;
-    int len = spacer.length();
-    pos1 = 0;
-    pos2 = str.find(spacer);
-    while (pos2 != string::npos) {
-        v.push_back(str.substr(pos1, pos2 - pos1));
-        pos1 = pos2 + len;
-        pos2 = str.find(spacer, pos1);
-    }
-    if (pos1 != str.length())
-        v.push_back(str.substr(pos1));
-}
 
 void mesh3D::InitMesh(int type, double scale) {
     UnitCubeTetMesh cuboid;
@@ -184,108 +172,192 @@ void mesh3D::load_test(double scale, int num) {
 }
 
 bool mesh3D::load_tetrahedraMesh(const std::string &filename, double scale, Vector3d position_offset) {
-
     ifstream ifs(filename);
     if (!ifs) {
         fprintf(stderr, "unable to read file %s\n", filename.c_str());
         return false;
     }
 
-    double x, y, z;
-    int index0, index1, index2, index3;
-    string line = "";
-    int nodeNumber = 0;
-    int elementNumber = 0;
-    int offset = vertexes.size();
-    Vector3d tempMinConer, tempMaxConer;
+    std::vector<Vector3d> loadedVertices;
+    std::vector<Vector4i> loadedTetrahedra;
+    std::unordered_map<int, int> nodeIdToLocalIndex;
+    bool foundNodes = false;
+    bool foundElements = false;
+    size_t nodeFieldCount = 0;
+    string line;
+
+    auto readNonNegativeCount = [&](int& count) {
+        if (!getline(ifs, line)) {
+            return false;
+        }
+        std::istringstream countStream(line);
+        return static_cast<bool>(countStream >> count) && count >= 0;
+    };
 
     while (getline(ifs, line)) {
-        if (line.length() <= 1) continue;
-
-        if (line.substr(1, 5) == "Nodes") {
-            getline(ifs, line);
-            nodeNumber = atoi(line.c_str());
-            vertexNum = nodeNumber;
-
-            double xmin = 1e32, ymin = 1e32, zmin = 1e32;
-            double xmax = -1e32, ymax = -1e32, zmax = -1e32;
-            for (int i = 0; i < nodeNumber; i++) {
-                getline(ifs, line);
-                vector<std::string> nodePos;
-                std::string spacer = " ";
-                split(line, nodePos, spacer);
-                int posNum = nodePos.size();
-                x = atof(nodePos[posNum - 3].c_str());
-                y = atof(nodePos[posNum - 2].c_str());
-                z = atof(nodePos[posNum - 1].c_str());
-                Vector3d vertex = scale * Vector3d(x, y, z) + position_offset;
-                Vector3d velocity = Vector3d(0, 0, 0);
-
-                double mass = 0;
-                vertexes.push_back(vertex);
-
-                velocities.push_back(velocity);
-
-                masses.push_back(mass);
-
-                int boundaryType = 0;
-                boundaryTypes.push_back(boundaryType);
-                Vector3d pos = vertex;
-                if (xmin > pos[0]) xmin = pos[0];
-                if (ymin > pos[1]) ymin = pos[1];
-                if (zmin > pos[2]) zmin = pos[2];
-                if (xmax < pos[0]) xmax = pos[0];
-                if (ymax < pos[1]) ymax = pos[1];
-                if (zmax < pos[2]) zmax = pos[2];
-            }
-            tempMinConer = Vector3d(xmin, ymin, zmin);
-            tempMaxConer = Vector3d(xmax, ymax, zmax);
-
-            if (maxConer[0] < tempMaxConer[0]) maxConer[0] = tempMaxConer[0];
-            if (maxConer[1] < tempMaxConer[1]) maxConer[1] = tempMaxConer[1];
-            if (maxConer[2] < tempMaxConer[2]) maxConer[2] = tempMaxConer[2];
-            if (minConer[0] > tempMinConer[0]) minConer[0] = tempMinConer[0];
-            if (minConer[1] > tempMinConer[1]) minConer[1] = tempMinConer[1];
-            if (minConer[2] > tempMinConer[2]) minConer[2] = tempMinConer[2];
-
+        if (!line.empty() && line.back() == '\r') {
+            line.pop_back();
         }
 
-        if (line.substr(1, 8) == "Elements") {
-            getline(ifs, line);
-            elementNumber = atoi(line.c_str());
-            tetrahedraNum = elementNumber;
-            for (int i = 0; i < elementNumber; i++) {
-                getline(ifs, line);
-
-                vector<std::string> elementIndexex;
-                std::string spacer = " ";
-                split(line, elementIndexex, spacer);
-                int eleNum = elementIndexex.size();
-                index0 = atoi(elementIndexex[eleNum - 4].c_str()) - 1;
-                index1 = atoi(elementIndexex[eleNum - 3].c_str()) - 1;
-                index2 = atoi(elementIndexex[eleNum - 2].c_str()) - 1;
-                index3 = atoi(elementIndexex[eleNum - 1].c_str()) - 1;
-
-                Vector4i tetrahedra;
-                tetrahedra[0] = (index0 + offset);
-                tetrahedra[1] = (index1 + offset);
-                tetrahedra[2] = (index2 + offset);
-                tetrahedra[3] = (index3 + offset);
-
-                tetrahedras.push_back(tetrahedra);
+        if (line == "$Nodes") {
+            int nodeCount = 0;
+            if (foundNodes || !readNonNegativeCount(nodeCount)) {
+                fprintf(stderr, "invalid $Nodes section in %s\n", filename.c_str());
+                return false;
             }
+            loadedVertices.reserve(static_cast<size_t>(nodeCount));
+            nodeIdToLocalIndex.reserve(static_cast<size_t>(nodeCount));
+            for (int localIndex = 0; localIndex < nodeCount; ++localIndex) {
+                if (!getline(ifs, line)) {
+                    fprintf(stderr, "truncated $Nodes section in %s\n", filename.c_str());
+                    return false;
+                }
+                int nodeId = 0;
+                double x = 0.0;
+                double y = 0.0;
+                double z = 0.0;
+                std::istringstream nodeStream(line);
+                std::vector<std::string> nodeFields;
+                std::string nodeField;
+                while (nodeStream >> nodeField) {
+                    nodeFields.push_back(nodeField);
+                }
+                if (nodeFieldCount == 0) {
+                    nodeFieldCount = nodeFields.size();
+                }
+                else if (nodeFields.size() != nodeFieldCount) {
+                    fprintf(stderr, "inconsistent Gmsh node rows in %s\n", filename.c_str());
+                    return false;
+                }
+                bool nodeParsed = false;
+                if (nodeFields.size() == 3) {
+                    // Legacy project assets label themselves Gmsh 4.1 but use
+                    // a compact row format without explicit node IDs.
+                    nodeId = localIndex + 1;
+                    std::istringstream coordinates(line);
+                    nodeParsed = static_cast<bool>(coordinates >> x >> y >> z);
+                }
+                else if (nodeFields.size() == 4) {
+                    std::istringstream indexedCoordinates(line);
+                    nodeParsed = static_cast<bool>(
+                        indexedCoordinates >> nodeId >> x >> y >> z);
+                }
+                else {
+                    fprintf(stderr, "invalid Gmsh node field count in %s\n", filename.c_str());
+                    return false;
+                }
+                if (!nodeParsed || nodeId <= 0
+                    || !std::isfinite(x)
+                    || !std::isfinite(y)
+                    || !std::isfinite(z)
+                    || !nodeIdToLocalIndex.emplace(nodeId, localIndex).second) {
+                    fprintf(stderr, "invalid Gmsh node in %s\n", filename.c_str());
+                    return false;
+                }
+                loadedVertices.emplace_back(
+                    scale * Vector3d(x, y, z) + position_offset);
+            }
+            foundNodes = true;
+        }
+        else if (line == "$Elements") {
+            int elementCount = 0;
+            if (!foundNodes || foundElements || !readNonNegativeCount(elementCount)) {
+                fprintf(stderr, "invalid $Elements section in %s\n", filename.c_str());
+                return false;
+            }
+            loadedTetrahedra.reserve(static_cast<size_t>(elementCount));
+            for (int element = 0; element < elementCount; ++element) {
+                if (!getline(ifs, line)) {
+                    fprintf(stderr, "truncated $Elements section in %s\n", filename.c_str());
+                    return false;
+                }
+                std::istringstream elementStream(line);
+                std::vector<int> elementFields;
+                int elementField = 0;
+                while (elementStream >> elementField) {
+                    elementFields.push_back(elementField);
+                }
+                if (!elementStream.eof()
+                    || elementFields.empty() || elementFields[0] <= 0) {
+                    fprintf(stderr, "invalid Gmsh element header in %s\n", filename.c_str());
+                    return false;
+                }
+
+                size_t firstNodeField = 0;
+                if (nodeFieldCount == 3 && elementFields.size() == 5) {
+                    // Compact project format: element ID followed by 4 nodes.
+                    firstNodeField = 1;
+                }
+                else {
+                    if (elementFields.size() < 3 || elementFields[2] < 0) {
+                        fprintf(stderr, "invalid Gmsh element tags in %s\n", filename.c_str());
+                        return false;
+                    }
+                    const int elementType = elementFields[1];
+                    if (elementType != 4) {
+                        continue;
+                    }
+                    if (elementFields.size() < 7) {
+                        fprintf(stderr, "invalid tetrahedron in %s\n", filename.c_str());
+                        return false;
+                    }
+                    // Standard Gmsh rows place the four node IDs after all
+                    // tags. bunny2.msh declares two tags but omits their
+                    // values, so preserve explicit compatibility with that
+                    // legacy asset by taking the final four integer fields.
+                    firstNodeField = elementFields.size() - 4;
+                }
+
+                Vector4i tetrahedron;
+                for (int corner = 0; corner < 4; ++corner) {
+                    const int nodeId = elementFields[firstNodeField + corner];
+                    const auto node = nodeIdToLocalIndex.find(nodeId);
+                    if (node == nodeIdToLocalIndex.end()) {
+                        fprintf(stderr, "tetrahedron references an unknown node in %s\n", filename.c_str());
+                        return false;
+                    }
+                    tetrahedron[corner] = node->second;
+                }
+                loadedTetrahedra.push_back(tetrahedron);
+            }
+            foundElements = true;
             break;
         }
     }
 
-    if ((tempMaxConer - tempMinConer).norm() > (objMaxConer - objMinConer).norm()) {
+    if (!foundNodes || !foundElements
+        || loadedVertices.empty() || loadedTetrahedra.empty()) {
+        fprintf(stderr, "missing tetrahedral mesh data in %s\n", filename.c_str());
+        return false;
+    }
+
+    Vector3d tempMinConer = loadedVertices.front();
+    Vector3d tempMaxConer = loadedVertices.front();
+    const int offset = static_cast<int>(vertexes.size());
+    for (const Vector3d& vertex : loadedVertices) {
+        vertexes.push_back(vertex);
+        velocities.push_back(Vector3d::Zero());
+        masses.push_back(0.0);
+        boundaryTypes.push_back(0);
+        tempMinConer = tempMinConer.cwiseMin(vertex);
+        tempMaxConer = tempMaxConer.cwiseMax(vertex);
+    }
+    for (Vector4i tetrahedron : loadedTetrahedra) {
+        tetrahedron.array() += offset;
+        tetrahedras.push_back(tetrahedron);
+    }
+
+    maxConer = maxConer.cwiseMax(tempMaxConer);
+    minConer = minConer.cwiseMin(tempMinConer);
+    if ((tempMaxConer - tempMinConer).norm()
+        > (objMaxConer - objMinConer).norm()) {
         objMaxConer = tempMaxConer;
         objMinConer = tempMinConer;
     }
 
-    ifs.close();
+    vertexNum = static_cast<int>(vertexes.size());
+    tetrahedraNum = static_cast<int>(tetrahedras.size());
     V_prev = vertexes;
-
     return true;
 }
 

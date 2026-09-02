@@ -12,7 +12,7 @@
 ```
 
 ```bash
-# WSL/Ubuntu：默认只构建 benchmark 所需的 headless 产品
+# WSL/Ubuntu：默认同时构建 viewer 和 headless
 ./build.sh
 ```
 

@@ -202,7 +202,7 @@ cipc_headless  benchmark/regression CLI
 ## 每项优化的完成标准
 
 - 文档说明行为/API/数据结构变化；`07_gotchas.md` 状态同步。
-- Windows quadratic ON/OFF Release 构建无新增警告，代表场景 headless smoke 正常；Linux non-quadratic 后续发现直接求解失败，现按 `07_gotchas.md` 单独跟踪。
+- Windows/WSL quadratic ON/OFF Release 构建无新增警告，代表场景 headless smoke 正常；曾有的 Linux non-quadratic 直接求解失败已定位为 CRLF-sensitive Gmsh tet 解析并修复。
 - 固定场景数值回归通过，最小距离不恶化为穿透。
 - 报告同一机器、同一配置下的中位数与波动，不只报告单次最快值。
 - 同时报告时间、峰值内存、Newton/线搜索次数；算法迭代数变化时不能只比较 wall time。

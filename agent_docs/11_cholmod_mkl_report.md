@@ -63,6 +63,6 @@ bunny2，一个完整time step，3次独立进程中位数；所有运行得到�
 - 优化CHOLMOD Release与MSVC Debug均构建并运行；Debug通过DLL边界使用Release MKL/TBB runtime，不把静态MKL链接进Debug executable。
 - `CIPC_CHOLMOD_ROOT=`的system/OpenBLAS兼容配置独立构建并通过smoke。
 - Windows 产品目录自动包含 `suitesparseconfig/amd/camd/ccolamd/colamd/cholmod` 与 TBB DLL，不含 `openblas.dll` 或 `lapack.dll`；`cholmod.dll` 大小约 26.6 MB。
-- quadratic Release、Windows non-quadratic Release、普通 Debug、PARDISO 关闭与 system-CHOLMOD fallback 均完成构建和 headless smoke；性能数字只来自 quadratic 默认路径。Linux non-quadratic 的直接求解失败已单独登记在 `07_gotchas.md`，不能归入跨平台通过项。
+- Windows/WSL quadratic 与 non-quadratic Release、普通 Debug、PARDISO 关闭与 system-CHOLMOD fallback 均完成构建和 headless smoke；性能数字只来自 quadratic 默认路径。Linux non-quadratic 曾有的非正定现象来自 CRLF-sensitive Gmsh 拓扑解析，修复后两直接求解器均通过。
 - WSL2 Ubuntu 22.04.5 使用 SuiteSparse 7.14.0/CHOLMOD 5.3.5 与 oneMKL 2025.2 完成 Release 全量构建；共享 bundle 通过 `--exclude-libs` 隐藏内嵌静态 MKL 符号，主程序链接无重复符号警告。默认 PARDISO 和显式 CHOLMOD 均完成 twisting-mat 单步 smoke，`ldd` 无 `not found` 或 OpenBLAS。
 - Windows 从空的固定 vcpkg checkout 完成无 OpenBLAS/hwloc 的首次依赖安装、SHA-512 SuiteSparse 下载、bundle 构建、Release/Debug 产品编译和运行；第二次依赖运行命中内容签名，不重复配置 SuiteSparse。

@@ -16,6 +16,7 @@ The benchmark path is fully headless and records solver-stage timing together wi
 - Optional CHOLMOD with symbolic-factorization reuse and a verified, cost-aware METIS nested-dissection fallback.
 - Optional oneMKL PARDISO SPD backend with parallel factorization, cross-time-step symbolic reuse, adaptive METIS-permutation refresh, and per-phase metrics.
 - Optional Eigen-CG backend using the same assembled system and boundary handling.
+- Current-step Newton convergence checks before CCD/line search, avoiding strict-energy backtracking on numerically vanished directions.
 - Strict energy-decreasing line search, Additive CCD, and the original IPC CFL strategy.
 
 ## Dependencies
@@ -100,6 +101,8 @@ The CPU LBVH broad phase is the default; use `--broad-phase spatial-hash` for th
 
 The default Newton solver is selected from build capabilities: PARDISO when oneMKL is available in the current configuration, otherwise SuiteSparse LDL. PARDISO defaults to 16 threads, while `--pardiso-threads 0` explicitly requests the oneMKL default. Use `--linear-solver suitesparse-ldl` to force the portable block-aware LDL backend, `--linear-solver cholmod` for CHOLMOD's cost-aware AMD/METIS policy, or `--linear-solver eigen-cg` for Eigen conjugate gradient with incomplete-Cholesky preconditioning. All four backends share the same lower-triangular Hessian assembly and boundary handling.
 
+Each Newton convergence decision uses the direction just solved from the current gradient/Hessian. A converged direction exits before CCD and line search; the strict acceptance rule remains `E_trial < E0` with `armijoCoefficient=0`. This prevents a numerically vanished direction from being halved repeatedly only because parallel energy summation fluctuates in the last bit. On the two-bunny2 scene, five independent five-step runs reduced the first 25 frames from 417 energy backtracks to 0, made all five final states identical, and reduced median total time from 4.429 s to 3.396 s. The final convergence-check factorization is still counted, so `numeric_factorizations` can be one greater than the number of accepted Newton updates.
+
 On the development machine, alternating paired Release runs reduced five-step wall time by about 5.9% on cloth-bunny and 8.6% on twisting-mat versus the installed non-supernodal CHOLMOD build. These numbers are machine/dependency specific; use `scripts/benchmark.py` to compare locally.
 
 For the larger two-`bunny2` scene (38,386 vertices, 115,158 DOF), one complete time step with three Newton solves had a three-run median of 1.284 s with 16-thread PARDISO, versus 8.253 s with CHOLMOD and 12.568 s with SuiteSparse LDL on the development machine. Here one `--steps 1` means one complete simulation time step/frame, not one Newton iteration. See [`agent_docs/10_pardiso_report.md`](agent_docs/10_pardiso_report.md) for the thread sweep, phase timings, memory, 50-step contact validation, and limitations.
@@ -152,7 +155,7 @@ D = E * thickness^3 / (12 * (1 - poisson_ratio^2)).
 
 | Path | Responsibility |
 |---|---|
-| `CPU IPC/IPCSolver.*` | Time stepping, Newton loop, CCD/CFL integration, and strict energy line search. |
+| `CPU IPC/IPCSolver.*` | Time stepping, current-direction Newton convergence, CCD/CFL integration, and strict energy line search. |
 | `CPU IPC/ContactMechanics.*` | Contact distances, barriers, derivatives, and feasible self-contact steps. |
 | `CPU IPC/CollisionBroadPhase.*`, `LBVH.*` | SpatialHash and Linear BVH broad phases. |
 | `CPU IPC/Elasticity.*`, `HingeBending.*` | Solid/cloth elasticity and bending models. |

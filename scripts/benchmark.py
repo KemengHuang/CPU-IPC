@@ -15,7 +15,8 @@ def parse_args():
     parser.add_argument(
         "--scene",
         choices=("cloth-bunny", "twisting-mat", "twisting-mat-soft", "bunny2"),
-        default="cloth-bunny",
+        default="twisting-mat-soft",
+        help="simulation scene (default: twisting-mat-soft)",
     )
     parser.add_argument(
         "--broad-phase", choices=("spatial-hash", "lbvh"), default="lbvh"

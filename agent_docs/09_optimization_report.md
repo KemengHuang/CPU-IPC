@@ -38,7 +38,7 @@ METIS接入时做了策略诊断，而不是把“调用METIS”直接当成加�
 
 50 时间步接触审计中，首次 ground/self contact 出现在 frame 43；末帧为 441/1006，`min_distance2=7.3483170186983491e−7>0`。adaptive permutation 总时间 59.167 s，比每次 fresh METIS 的 73.033 s 快 19.0%，比永远固定首份 permutation 的 62.838 s 快 5.8%，并保持接触整数指标一致、终态仅有浮点舍入差。完整线程表、phase、内存、5 步中型场景和排序策略数据见 `10_pardiso_report.md`。
 
-以下矩阵与性能数字是早期 `plane100` 场景的历史基线；当前默认场景已由用户改为 `plane1024`，不可直接横向比较：
+以下矩阵与性能数字是早期 `plane100` cloth-bunny 的历史基线；当前 cloth-bunny 使用 `plane1024`，且项目默认入口现为 `TwistingMatSoft`，不可直接横向比较：
 
 | 指标 | 优化前 | 优化后 | 变化 |
 |---|---:|---:|---:|
@@ -132,7 +132,7 @@ cloth-bunny、1 步、独立进程：
 
 - WSL2 Ubuntu 22.04.5（GCC 11.4、CMake 4.3.3、Ninja 1.10.1）已用零参数 `./build.sh` 从系统检查、依赖安装到产品链接端到端通过；Linux oneMKL 2025.2、METIS/TBB 来自固定 `x64-linux` vcpkg，SuiteSparse 7.14/CHOLMOD 5.3.5 由校验下载的源码直接构建，`ldd` 中没有 OpenBLAS。`--dependencies-only --no-system-packages` 与 bundle stamp 增量复用分支均通过。默认 PARDISO 与显式 CHOLMOD 的 twisting-mat 单步 smoke 成功且终态仅有浮点归约误差；`./build.sh --viewer` 也已完成 OpenGL/X11/FreeGLUT 配置与链接，并通过 WSLg 3 秒启动 smoke。
 - Windows `.\build.cmd -HeadlessOnly` 已从空的固定 revision vcpkg checkout 验证 MSVC/CMake 自动解析、`tbb[core]`/METIS/oneMKL 安装、无 OpenBLAS 的 SuiteSparse bundle、六个 DLL 自动部署和 CPU-IPC Release；`.\build.cmd -DependenciesOnly -HeadlessOnly` 及 bundle stamp 二次复用也通过。MSVC Debug 自动 CHOLMOD smoke 通过。
-- 边界重构的临时 soft twisting-mat 验证实际执行 2 次 Newton、0 次能量回退；两次 Taylor 诊断一阶相对误差 `3.2e-12/4.8e-11`、曲率比 `0.999997/0.999994`。随后新增正式 `TwistingMatSoft` 范例（相同目标端点、`weight=100`）：Windows/WSL 首步均为 1 Newton、0 回退、`nnz=158907`，Taylor 一阶相对误差分别 `8.5e-13/1.34e-11`，曲率比 `0.99999994/0.99999908`；四组 Windows/WSL × PARDISO/CHOLMOD 五步 `squared_norm_sum=560.770599388456xx`。benchmark 单次入口和 WSLg soft viewer 启动也通过。原 hard 场景的四组 5 步 `Newton=2`、`nnz=151335` 均不变，`squared_norm_sum=560.775874160993xx`。
+- 边界重构的临时 soft twisting-mat 验证实际执行 2 次 Newton、0 次能量回退；两次 Taylor 诊断一阶相对误差 `3.2e-12/4.8e-11`、曲率比 `0.999997/0.999994`。随后新增正式 `TwistingMatSoft` 范例（相同目标端点、`weight=100`）：Windows/WSL 首步均为 1 Newton、0 回退、`nnz=158907`，Taylor 一阶相对误差分别 `8.5e-13/1.34e-11`，曲率比 `0.99999994/0.99999908`；四组 Windows/WSL × PARDISO/CHOLMOD 五步 `squared_norm_sum=560.770599388456xx`。viewer/headless/`SimulationOptions`/无参 `buildModels()`/benchmark 随后统一默认到该场景；不传 `--scene` 的 Windows/WSL headless 五步及 benchmark 单次均复现上述结果，WSLg 无参数 viewer 也通过。原 hard 场景的四组 5 步 `Newton=2`、`nnz=151335` 均不变，`squared_norm_sum=560.775874160993xx`。
 - 安装器开发期间发现 WSL non-quadratic 曾在 PARDISO phase 22 报 `-4`、CHOLMOD 报非正定；根因不是 Hessian/solver，而是 Gmsh 行末“空格+CRLF”被旧 `split(" ")` 在 Linux 解析出额外 `\r` token，破坏了全部 tet 连接。改为结构化 Gmsh 2.2 stream parser 后，Windows/WSL 均为 4074 surface faces、8 Newton、12 energy backtracks、`nnz=161979`，PARDISO/CHOLMOD 单步终态在浮点误差内一致。
 - 新 bundle 的 Windows 五次独立进程中位数：bunny2 单步 PARDISO/CHOLMOD 为 `1.310/1.686 s`，cloth-bunny 五步为 `0.575/0.621 s`，twisting-mat 五步为 `0.431/0.412 s`，终态逐次一致。同一时段旧/新 CHOLMOD bunny2 对照为 `1.670/1.686 s`（约 1%）；不把安装简化宣称为算法提速，PARDISO 仍是默认。
 - MSVC Release `--clean-first` 全量构建：通过，无新增编译警告。

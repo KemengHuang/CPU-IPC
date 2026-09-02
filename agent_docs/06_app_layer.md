@@ -6,7 +6,7 @@
 
 ## 1. ViewerMain.cpp —— 固定管线查看器
 
-- `main`：先移除并解析统一的 `--scene` 参数（缺省保持 `cloth-bunny`），再做 GLUT 初始化（1000×1000 窗口 "CPU IPC"）→ `initializeViewer(scene)` → 注册 display/reshape/keyboard/mouse/motion/idle 回调。场景名称由 `Simulator::parseSimulationScene` 与 headless 共用，非法名称在创建窗口前报错。
+- `main`：先移除并解析统一的 `--scene` 参数（缺省为 `twisting-mat-soft`），再做 GLUT 初始化（1000×1000 窗口 "CPU IPC"）→ `initializeViewer(scene)` → 注册 display/reshape/keyboard/mouse/motion/idle 回调。场景名称由 `Simulator::parseSimulationScene` 与 headless 共用，非法名称在创建窗口前报错。
 - shader 目录、永远为 false 的 shader 分支、VBO/VAO 全局量和 GLEW 初始化/链接已全部删除；viewer 明确只使用当前实际工作的 OpenGL 固定管线。
 - 主循环：`idle` 请求重绘；`display` 渲染后若未暂停则调用一次 `simulator.simulateStep(step)`，即每显示帧一个时间步。
 - `drawSimulationSurface` 只画当前 `SimulationModel::meshes.front()`：红色表面、白色表面边、灰底与线框包围盒。
@@ -48,9 +48,9 @@
 
 ### 场景
 
-- **`ClothOverBunny` / `buildClothOverBunnyScene`（默认）**：布料盖 bunny。当前载入 `Assets/triangleMesh/planes/plane1024.obj`（1024 顶点、1922 个三角形，scale 1），绕 X 转 π/2；按编译选项预计算 quadratic 或 hinge bending；再载入 `Assets/tetrahedraMesh/bunny.msh`（scale 0.5，offset (0,−0.5,0)）追加进同一 `mesh3D`。
+- **`ClothOverBunny` / `buildClothOverBunnyScene`**：布料盖 bunny。当前载入 `Assets/triangleMesh/planes/plane1024.obj`（1024 顶点、1922 个三角形，scale 1），绕 X 转 π/2；按编译选项预计算 quadratic 或 hinge bending；再载入 `Assets/tetrahedraMesh/bunny.msh`（scale 0.5，offset (0,−0.5,0)）追加进同一 `mesh3D`。
 - **`TwistingMat` / `buildTwistingMatScene(..., HardDirichlet)`**：扭转垫（准静态，`is_quasi_static=true`，无重力），`ipcmesh/mat40x40.msh`；两侧顶点标为 `VertexBoundaryType::Dirichlet` 并加入 `boundaryConditions.dirichlet.vertexIndices`，`updateDirection(current,rest,step,alpha,dt)` 保留原旋转驱动。
-- **`TwistingMatSoft` / `buildTwistingMatScene(..., SoftTarget)`**：可运行的软边界范例；复用同一网格、两侧顶点选择和 hard 版本的一步目标端点，但端点保持 free DOF，通过 `soft.updateTarget` 与 `weight=100` 二次势拉向目标。headless/benchmark 名称为 `twisting-mat-soft`，viewer 也接受 `--scene twisting-mat-soft`。
+- **`TwistingMatSoft` / `buildTwistingMatScene(..., SoftTarget)`（默认）**：可运行的软边界范例；复用同一网格、两侧顶点选择和 hard 版本的一步目标端点，但端点保持 free DOF，通过 `soft.updateTarget` 与 `weight=100` 二次势拉向目标。viewer、headless、`SimulationOptions`、无参 `buildModels()` 与 benchmark 脚本均默认选择它，也可显式传 `--scene twisting-mat-soft`。
 - **`Bunny2` / `buildBunny2Scene`**：参考 `GPU_IPC/GPU_IPC/gl_main.cpp` 的 `initScene1`，两次追加 `Assets/tetrahedraMesh/bunny2.msh`，两只都取 scale=0.2，offset 分别为 `(0,0.65,0)` 与 `(0,0,0)`，`YoungModulus=1e5`。合并后是 38,386 顶点、159,870 tet、41,664 表面三角形；用于大稀疏系统/碰撞压力基准，不替换默认场景。
 
 ### `buildModels`（`:283-336`）全流程
@@ -78,7 +78,7 @@ cipc_headless --scene bunny2 --steps 1 --linear-solver pardiso --pardiso-threads
 ```
 
 - `--steps N` 的单位是完整仿真时间步/帧；一个 step 内可能有多次 Newton 迭代和数值分解。
-- 默认不恢复、不写 checkpoint、使用 LBVH；可用 `--resume`、`--write-checkpoints` 显式开启。viewer 同样默认 fresh，不会让 `Output/tempData` 覆盖 cloth+bunny 初态。
+- 默认不恢复、不写 checkpoint、使用 LBVH；可用 `--resume`、`--write-checkpoints` 显式开启。viewer 同样默认 fresh，不会让 `Output/tempData` 覆盖所选场景初态。
 - `--broad-phase lbvh|spatial-hash`用于碰撞宽阶段A/B；`--linear-solver cholmod|pardiso|eigen-cg`显式选择线性后端。未指定时优先PARDISO，否则自动使用优化CHOLMOD；`--verbose`打印求解细节。
 - 诊断选项：`--diagnose-line-search` 输出方向一阶/二阶 Taylor 对比；`--disable-barrier` 仅用于无接触隔离。临时的 `--friction-scale` 已删除，正式接口不能绕过场景材料参数改变摩擦。
 - 每帧 `metrics.csv` 字段包括五阶段耗时、Newton/κ、总/能量/穿透回退、单 Newton 最大回退与 `Newton>2` 数、mean/min/max α、碰撞、最小平方距离、活动集、nnz、symbolic analyze 与 numeric factorize 次数；`linear_solver_threads`同时记录CHOLMOD/PARDISO有效线程数，`pardiso_*_ms`与`factor_nnz`仅用于PARDISO细分。

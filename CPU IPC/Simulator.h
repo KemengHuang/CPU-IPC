@@ -15,7 +15,7 @@ enum class SimulationScene {
 SimulationScene parseSimulationScene(const std::string& name);
 
 struct SimulationOptions {
-    SimulationScene scene = SimulationScene::ClothOverBunny;
+    SimulationScene scene = SimulationScene::TwistingMatSoft;
     bool resumeCheckpoint = false;
     bool writeRuntimeFiles = true;
     bool writeCheckpoints = false;
@@ -28,7 +28,7 @@ struct SimulationOptions {
 
 class FEMSimulator {
 public:
-    bool buildModels(SimulationScene scene = SimulationScene::ClothOverBunny);
+    bool buildModels(SimulationScene scene = SimulationScene::TwistingMatSoft);
     bool buildModels(const SimulationOptions& options);
 
     SimulationModel& getModel() { return model_; }

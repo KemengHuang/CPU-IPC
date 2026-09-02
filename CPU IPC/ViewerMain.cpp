@@ -37,7 +37,7 @@ bool surfaceExportEnabled = false;
 
 SimulationScene extractViewerSceneArgument(int& argc, char** argv)
 {
-    SimulationScene scene = SimulationScene::ClothOverBunny;
+    SimulationScene scene = SimulationScene::TwistingMatSoft;
     int outputArgument = 1;
     for (int inputArgument = 1; inputArgument < argc; ++inputArgument) {
         const std::string argument = argv[inputArgument];
@@ -368,14 +368,15 @@ void motion(int x, int y)
 
 int main(int argc, char** argv)
 {
-    SimulationScene scene = SimulationScene::ClothOverBunny;
+    SimulationScene scene = SimulationScene::TwistingMatSoft;
     try {
         scene = extractViewerSceneArgument(argc, argv);
     }
     catch (const std::exception& error) {
         std::cerr << error.what() << '\n';
         std::cerr << "Usage: " << argv[0]
-                  << " [--scene cloth-bunny|twisting-mat|twisting-mat-soft|bunny2]\n";
+                  << " [--scene cloth-bunny|twisting-mat|twisting-mat-soft|bunny2]\n"
+                  << "Default scene: twisting-mat-soft\n";
         return 1;
     }
 

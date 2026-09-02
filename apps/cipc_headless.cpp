@@ -12,7 +12,7 @@
 namespace {
 
 struct CommandLineOptions {
-    SimulationScene scene = SimulationScene::ClothOverBunny;
+    SimulationScene scene = SimulationScene::TwistingMatSoft;
     int steps = 1;
     bool resume = false;
     bool writeOutput = true;
@@ -32,6 +32,7 @@ void printUsage(const char* executable)
     std::cout
         << "Usage: " << executable << " [options]\n"
         << "  --scene cloth-bunny|twisting-mat|twisting-mat-soft|bunny2\n"
+        << "    default: twisting-mat-soft\n"
         << "  --steps N\n"
         << "  --output DIRECTORY\n"
         << "  --broad-phase spatial-hash|lbvh\n"

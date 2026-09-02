@@ -116,7 +116,7 @@ build/cpu-ipc/Release/cipc.exe
 build/cpu-ipc/Release/cipc.exe --scene twisting-mat-soft
 ```
 
-Without `--scene`, the viewer retains the existing `cloth-bunny` default.
+Without `--scene`, the viewer runs the `twisting-mat-soft` soft-boundary example. The headless executable, `SimulationOptions`, `FEMSimulator::buildModels()`, and `scripts/benchmark.py` use the same default.
 
 Press Space to simulate, `9` to toggle OBJ output, and `/` to toggle screenshots.
 

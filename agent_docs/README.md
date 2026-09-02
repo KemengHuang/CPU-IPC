@@ -31,7 +31,7 @@
 
 ## 30 秒上手
 
-1. Windows 推荐运行 `powershell -ExecutionPolicy Bypass -File build.ps1`；WSL/Ubuntu 推荐运行 `bash build.sh --headless-only`。两者都会自动定位或隔离安装 vcpkg，一键安装依赖、构建/连接优化 CHOLMOD 并编译 Release，不依赖任何开发者机器的绝对路径。项目不生成测试 target。
+1. Windows 直接运行 `.\build.cmd`，WSL/Ubuntu 直接运行 `./build.sh`。用户不需要手工配置 vcpkg、Eigen、TBB、METIS、oneMKL、SuiteSparse、CHOLMOD 或 FreeGLUT；脚本会检查不可避免的系统编译器、自动准备其余依赖、构建/连接优化 CHOLMOD 并编译 Release。项目不生成测试 target。
 2. 运行 `cipc`：打开 1000×1000 GLUT 窗口，**空格键**开始/暂停仿真；每显示一帧 = 一个 IPC 时间步。资产和输出均使用编译期绝对路径，不再依赖当前工作目录。
 3. `SimulationScene` 已接通三个场景：默认 `ClothOverBunny`、`TwistingMat`，以及参考 GPU_IPC 的双 `bunny2` 大场景（每只 scale=0.2）。场景参数在 `Assets/scene/parameterSetting.txt`，现按键名解析并校验未知、重复、缺失及越界值。
 4. 时间步/Newton/线搜索编排在 `CPU IPC/IPCSolver.cpp`（`solveIPCStep` / `solveBarrierSubproblem`）；接触导数在 `ContactMechanics.cpp`，摩擦在 `Friction.cpp`，线性后端在 `NewtonLinearSystem.cpp`。

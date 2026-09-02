@@ -230,16 +230,18 @@ endif()
 target_link_libraries(cipc_headless PRIVATE cipc_core)
 
 if(CIPC_CHOLMOD_ROOT AND WIN32)
-    set(_CIPC_CHOLMOD_DLL "${CIPC_CHOLMOD_ROOT}/bin/cholmod.dll")
-    if(NOT EXISTS "${_CIPC_CHOLMOD_DLL}")
-        message(FATAL_ERROR "CIPC_CHOLMOD_ROOT does not contain bin/cholmod.dll")
+    file(GLOB _CIPC_SUITESPARSE_DLLS "${CIPC_CHOLMOD_ROOT}/bin/*.dll")
+    if(NOT _CIPC_SUITESPARSE_DLLS)
+        message(FATAL_ERROR
+            "CIPC_CHOLMOD_ROOT does not contain the optimized SuiteSparse DLL bundle")
     endif()
     get_target_property(_CIPC_TBB_RELEASE_DLL TBB::tbb IMPORTED_LOCATION_RELEASE)
     foreach(_CIPC_PRODUCT IN LISTS CIPC_PRODUCT_TARGETS)
         if(NOT _CIPC_PRODUCT STREQUAL "cipc_core")
             add_custom_command(TARGET ${_CIPC_PRODUCT} POST_BUILD
                 COMMAND ${CMAKE_COMMAND} -E copy_if_different
-                    "${_CIPC_CHOLMOD_DLL}" "$<TARGET_FILE_DIR:${_CIPC_PRODUCT}>/cholmod.dll")
+                    ${_CIPC_SUITESPARSE_DLLS}
+                    "$<TARGET_FILE_DIR:${_CIPC_PRODUCT}>")
             if(_CIPC_TBB_RELEASE_DLL)
                 add_custom_command(TARGET ${_CIPC_PRODUCT} POST_BUILD
                     COMMAND ${CMAKE_COMMAND} -E copy_if_different

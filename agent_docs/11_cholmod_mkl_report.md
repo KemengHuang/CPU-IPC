@@ -4,30 +4,30 @@
 
 ## 1. 最终配置
 
-- CHOLMOD 5.3.0，启用GPL supernodal与Partition/METIS模块；关闭CUDA、CHOLMOD OpenMP、MatrixOps和Modify。
-- BLAS/LAPACK：oneMKL static LP64，TBB threading；MKL代码嵌入共享`cholmod.dll`，不依赖OpenBLAS/LAPACK DLL。
+- 固定 SuiteSparse 7.14.0 / CHOLMOD 5.3.5，启用 GPL supernodal 与 Partition/METIS；关闭 CUDA、CHOLMOD OpenMP、MatrixOps 和 Modify。
+- BLAS/LAPACK：oneMKL static LP64，TBB threading；MKL 代码嵌入共享 `cholmod`，不依赖 OpenBLAS/LAPACK。SuiteSparse Config/AMD/CAMD/CCOLAMD/COLAMD 与 CHOLMOD 作为同一 bundle 构建。
 - `common.supernodal=CHOLMOD_AUTO`；三个项目场景均实际选择supernodal。
 - ordering固定AMD。Partition/METIS仍编译供实验，但强制METIS和multi-method AUTO在项目矩阵上都更慢。
 - `--cholmod-threads 0`为默认自适应：矩阵`nnz<500,000`用4线程，否则8线程；正数显式覆盖。
-- `CIPC_CHOLMOD_ROOT`选择优化prefix；CMake链接检查`cholmod_super_numeric`和`cholmod_metis`，Windows构建后复制优化DLL与Release TBB runtime。
+- `CIPC_CHOLMOD_ROOT` 选择优化 prefix；CMake 强制全部 SuiteSparse 组件来自该 prefix，链接检查 `cholmod_super_numeric` 和 `cholmod_metis`，Windows 构建后复制六个 SuiteSparse DLL 与正确 TBB runtime。
 
 推荐一键构建（依赖、CHOLMOD、连接、CPU-IPC Release全部完成）：
 
-```powershell
-powershell -ExecutionPolicy Bypass -File build.ps1
+```bat
+.\build.cmd
 ```
 
 WSL/Ubuntu 22.04 对应入口为：
 
 ```bash
-bash build.sh --headless-only
+./build.sh
 ```
 
-Windows 底层 `build_cholmod_mkl.ps1` 默认安装到 `build/cholmod-mkl-install`，主工程自动识别；Linux 脚本安装到隔离的 `build-wsl/cholmod-mkl-install` 并显式传入。也可手动设置 `-DCIPC_CHOLMOD_ROOT=<prefix>`。两条根目录一键脚本都已完成端到端验证；Linux 的详细环境与复现记录见 `12_wsl_ubuntu_build.md`。
+Windows 底层 `build_cholmod_mkl.ps1` 默认安装到 `build/cholmod-mkl-install`，主工程自动识别；Linux 脚本安装到隔离的 `build-wsl/cholmod-mkl-install` 并显式传入。两者读取固定 vcpkg revision 与 SuiteSparse 版本/校验和，vcpkg 只安装 Eigen、TBB core、METIS、oneMKL 和可选 FreeGLUT；SuiteSparse bundle 直接从源码构建，避免 vcpkg CHOLMOD 间接引入 OpenBLAS。内容签名允许后续构建直接复用 bundle。也可手动设置 `-DCIPC_CHOLMOD_ROOT=<prefix>`。Linux 的详细环境与复现记录见 `12_wsl_ubuntu_build.md`。
 
 ## 2. 许可边界
 
-CHOLMOD supernodal在当前SuiteSparse/vcpkg中属于GPL-2.0-or-later模块。性能版DLL因此改变二进制分发的许可边界；不能把它描述为原先的非GPL CHOLMOD core。PARDISO与显式关闭性能要求的system-CHOLMOD诊断路径仍可独立构建。
+CHOLMOD supernodal 在当前 SuiteSparse 源码中属于 GPL-2.0-or-later 模块。性能 bundle 因此改变二进制分发的许可边界；不能把它描述为原先的非 GPL CHOLMOD core。PARDISO 与显式关闭性能要求的 system-CHOLMOD 诊断路径仍可独立构建。
 
 ## 3. Provider与算法A/B
 
@@ -48,20 +48,21 @@ bunny2，一个完整time step，3次独立进程中位数；所有运行得到�
 
 ## 4. 最终与PARDISO对比
 
-当前代码、5次独立进程中位数：
+当前固定依赖 bundle、5次独立进程中位数：
 
 | 场景 | 测量步数 | CHOLMOD MKL | PARDISO 16 | 结论 |
 |---|---:|---:|---:|---|
-| bunny2 | 1 | 1.625 s | 1.301 s | PARDISO约24.9%更快 |
-| cloth-bunny | 5 | 0.608 s | 0.586 s | PARDISO约3.6%更快 |
-| twisting-mat | 5 | 0.413 s | 0.434 s | CHOLMOD约5.0%更快 |
+| bunny2 | 1 | 1.686 s | 1.310 s | PARDISO约28.7%更快 |
+| cloth-bunny | 5 | 0.621 s | 0.575 s | PARDISO约8.0%更快 |
+| twisting-mat | 5 | 0.412 s | 0.431 s | CHOLMOD约4.6%更快 |
 
-三场景的终态、Newton与接触语义一致，只存在并行归约舍入差。PARDISO在大系统上仍有明确优势，因此保持默认；优化CHOLMOD已从“慢数倍的兼容后端”提升为中型场景上非常接近PARDISO的有效A/B后端。
+三场景的终态、Newton与接触语义一致，只存在并行归约舍入差。PARDISO在大系统上仍有明确优势，因此保持默认；优化CHOLMOD已从“慢数倍的兼容后端”提升为中型场景上非常接近PARDISO的有效A/B后端。同一时段用旧单 DLL 与新完整 bundle 做 bunny2 五次对照，中位数为 `1.670/1.686 s`，差约 1%，说明去掉 vcpkg/OpenBLAS 安装和拆分 SuiteSparse 运行库没有实质改变 CHOLMOD 数值性能。
 
 ## 5. 验证
 
 - 优化CHOLMOD Release与MSVC Debug均构建并运行；Debug通过DLL边界使用Release MKL/TBB runtime，不把静态MKL链接进Debug executable。
 - `CIPC_CHOLMOD_ROOT=`的system/OpenBLAS兼容配置独立构建并通过smoke。
-- 优化DLL依赖中含`tbb12.dll`，不含`openblas.dll`或`lapack.dll`；大小约26.6MB。
-- quadratic/non-quadratic Release、普通Debug、PARDISO关闭与system-CHOLMOD fallback均完成构建和headless smoke；性能数字只来自quadratic默认路径。
-- WSL2 Ubuntu 22.04.5 使用 SuiteSparse 7.14.0/CHOLMOD 5.3.5 与 oneMKL 2025.2 完成 Release 全量构建；共享 `libcholmod.so` 通过 `--exclude-libs` 隐藏内嵌静态 MKL 符号，主程序链接无重复符号警告。默认 PARDISO 和显式 CHOLMOD 均完成 twisting-mat 单步 smoke，`ldd` 无 `not found`。
+- Windows 产品目录自动包含 `suitesparseconfig/amd/camd/ccolamd/colamd/cholmod` 与 TBB DLL，不含 `openblas.dll` 或 `lapack.dll`；`cholmod.dll` 大小约 26.6 MB。
+- quadratic Release、Windows non-quadratic Release、普通 Debug、PARDISO 关闭与 system-CHOLMOD fallback 均完成构建和 headless smoke；性能数字只来自 quadratic 默认路径。Linux non-quadratic 的直接求解失败已单独登记在 `07_gotchas.md`，不能归入跨平台通过项。
+- WSL2 Ubuntu 22.04.5 使用 SuiteSparse 7.14.0/CHOLMOD 5.3.5 与 oneMKL 2025.2 完成 Release 全量构建；共享 bundle 通过 `--exclude-libs` 隐藏内嵌静态 MKL 符号，主程序链接无重复符号警告。默认 PARDISO 和显式 CHOLMOD 均完成 twisting-mat 单步 smoke，`ldd` 无 `not found` 或 OpenBLAS。
+- Windows 从空的固定 vcpkg checkout 完成无 OpenBLAS/hwloc 的首次依赖安装、SHA-512 SuiteSparse 下载、bundle 构建、Release/Debug 产品编译和运行；第二次依赖运行命中内容签名，不重复配置 SuiteSparse。

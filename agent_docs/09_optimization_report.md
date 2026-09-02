@@ -129,13 +129,16 @@ cloth-bunny、1 步、独立进程：
 
 ## 8. 自动验证结果
 
-- WSL2 Ubuntu 22.04.5（GCC 11.4、CMake 4.3.3、Ninja 1.10.1）已用根目录 `build.sh --headless-only` 从依赖安装到产品链接端到端通过；Linux oneMKL 2025.2、SuiteSparse 7.14/CHOLMOD 5.3.5、METIS/TBB 均来自 `x64-linux` vcpkg tree。默认 PARDISO 与显式 CHOLMOD 的 twisting-mat 单步 smoke 均成功且终态仅有浮点归约误差；`ldd` 无缺失依赖。`build.sh --viewer` 也已完成 OpenGL/X11/FreeGLUT 配置与链接，并通过 WSLg 3 秒启动 smoke。
+- WSL2 Ubuntu 22.04.5（GCC 11.4、CMake 4.3.3、Ninja 1.10.1）已用零参数 `./build.sh` 从系统检查、依赖安装到产品链接端到端通过；Linux oneMKL 2025.2、METIS/TBB 来自固定 `x64-linux` vcpkg，SuiteSparse 7.14/CHOLMOD 5.3.5 由校验下载的源码直接构建，`ldd` 中没有 OpenBLAS。`--dependencies-only --no-system-packages` 与 bundle stamp 增量复用分支均通过。默认 PARDISO 与显式 CHOLMOD 的 twisting-mat 单步 smoke 成功且终态仅有浮点归约误差；`./build.sh --viewer` 也已完成 OpenGL/X11/FreeGLUT 配置与链接，并通过 WSLg 3 秒启动 smoke。
+- Windows `.\build.cmd -HeadlessOnly` 已从空的固定 revision vcpkg checkout 验证 MSVC/CMake 自动解析、`tbb[core]`/METIS/oneMKL 安装、无 OpenBLAS 的 SuiteSparse bundle、六个 DLL 自动部署和 CPU-IPC Release；`.\build.cmd -DependenciesOnly -HeadlessOnly` 及 bundle stamp 二次复用也通过。MSVC Debug 自动 CHOLMOD smoke 通过。
+- 安装器开发期间额外复核 non-quadratic：Windows/PARDISO 单步通过，但 WSL PARDISO phase 22 `-4`，CHOLMOD 报非正定；该便利开关未保留，一键产品固定 quadratic ON，问题登记在 `07_gotchas.md`，不能沿用此前仅 Windows 的 ON/OFF 通过记录推断 Linux 正确。
+- 新 bundle 的 Windows 五次独立进程中位数：bunny2 单步 PARDISO/CHOLMOD 为 `1.310/1.686 s`，cloth-bunny 五步为 `0.575/0.621 s`，twisting-mat 五步为 `0.431/0.412 s`，终态逐次一致。同一时段旧/新 CHOLMOD bunny2 对照为 `1.670/1.686 s`（约 1%）；不把安装简化宣称为算法提速，PARDISO 仍是默认。
 - MSVC Release `--clean-first` 全量构建：通过，无新增编译警告。
 - headless-only（viewer OFF）独立构建：通过。
 - METIS ordering ON/OFF 两套 MSVC Release 构建与 twisting-mat/cloth-bunny CHOLMOD smoke 均通过；ON 下 Eigen-CG smoke 也通过。ON 配置会实际编译/链接检查 `cholmod_metis` 后才提供 `Partition`，不会只根据包名静默假定支持。
 - 多配置映射已在生成的 VS 工程中核对：Debug 链接 `debug/lib`，Release/RelWithDebInfo/MinSizeRel 链接 `lib`；Debug headless 构建和 twisting-mat CHOLMOD smoke 通过。
 - PARDISO/优化CHOLMOD逐帧结果在浮点归约误差内一致；twisting-mat 5步和Eigen-CG单步smoke通过。
-- 当前 quadratic ON/OFF 两种 Release 配置与 cloth-bunny/twisting-mat headless smoke 均通过；项目不再运行 CTest。
+- Windows MSVC 的 quadratic ON/OFF 两种 Release 配置与 cloth-bunny/twisting-mat headless smoke 均通过；Linux 当前只将 quadratic 纳入通过项。项目不再运行 CTest。
 - oneMKL PARDISO Release、非 quadratic+PARDISO、`CIPC_ENABLE_PARDISO=OFF` 与普通 MSVC Debug 四条构建路径均通过；Windows 静态 oneMKL 因 CRT 边界在 Debug 自动排除，显式选择时按预期清晰报错。
 - bunny2 PARDISO 1/5/50时间步运行通过；PARDISO/优化CHOLMOD单步终态在浮点舍入内一致。
 - 默认 LBVH 与 SpatialHash、TwistingMat 三条 1 步轨迹均纳入回归。
@@ -193,7 +196,7 @@ bunny2 无接触初始阶段暴露了另一类“机器精度长尾”：旧顺�
 - Eigen-CG 已可选运行，但尚未在大网格上系统比较容差、预条件、收敛鲁棒性和性能；它不会被能力感知逻辑自动选择。
 - CHOLMOD GPL supernodal + oneMKL已完成隔离benchmark；剩余风险是GPL二进制分发边界，而不是性能未知。
 - PARDISO为Release默认；不可用或MSVC Debug时自动使用优化CHOLMOD。下一线性热点是triplet→Eigen CSC构造与symbolic阶段。
-- 优化CHOLMOD将bunny2从supernodal+OpenBLAS约8.67s降到1.625s（约5.3×）；同版本PARDISO为1.301s。cloth五步CHOLMOD/PARDISO为0.608/0.586s，twisting-mat为0.413/0.434s。PARDISO仍作为大场景默认，完整A/B见`11_cholmod_mkl_report.md`。
+- 优化 CHOLMOD 历史上将 bunny2 从 supernodal+OpenBLAS 约 8.67s 降到约 1.63s（约 5.3×）；固定安装 bundle 的当前五次中位数为 CHOLMOD/PARDISO：bunny2 `1.686/1.310s`、cloth 五步 `0.621/0.575s`、twisting-mat 五步 `0.412/0.431s`。PARDISO 仍作为大场景默认，完整 A/B 见 `11_cholmod_mkl_report.md`。
 - lagged/modified Newton、接触 Hessian 近似。
 - 直接 CSC 数值装配与固定 superset sparsity（可能改变 fill-in/内存）。
 - 梯度 graph coloring/TLS/gather（当前 assembly 已降为小占比）。

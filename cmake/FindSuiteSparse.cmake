@@ -224,7 +224,7 @@ macro(suitesparse_find_component COMPONENT)
 
   set(SuiteSparse_${COMPONENT}_FOUND TRUE)
   if (SuiteSparse_FIND_COMPONENT_${COMPONENT}_FILES)
-    if ("${COMPONENT}" STREQUAL "CHOLMOD" AND CIPC_CHOLMOD_ROOT)
+    if (CIPC_CHOLMOD_ROOT)
       unset(SuiteSparse_${COMPONENT}_INCLUDE_DIR CACHE)
       find_path(SuiteSparse_${COMPONENT}_INCLUDE_DIR
         NAMES ${SuiteSparse_FIND_COMPONENT_${COMPONENT}_FILES}
@@ -265,21 +265,21 @@ macro(suitesparse_find_component COMPONENT)
         "${_SuiteSparse_LIBRARY_NAME}")
     endforeach()
 
-    if ("${COMPONENT}" STREQUAL "CHOLMOD" AND CIPC_CHOLMOD_ROOT)
-      unset(_SuiteSparse_CHOLMOD_OVERRIDE_LIBRARY CACHE)
-      find_library(_SuiteSparse_CHOLMOD_OVERRIDE_LIBRARY
+    if (CIPC_CHOLMOD_ROOT)
+      unset(_SuiteSparse_ROOT_OVERRIDE_LIBRARY CACHE)
+      find_library(_SuiteSparse_ROOT_OVERRIDE_LIBRARY
         NAMES ${SuiteSparse_FIND_COMPONENT_${COMPONENT}_LIBRARIES}
         PATHS "${CIPC_CHOLMOD_ROOT}/lib"
         NO_DEFAULT_PATH)
       set(SuiteSparse_${COMPONENT}_LIBRARY_RELEASE
-        "${_SuiteSparse_CHOLMOD_OVERRIDE_LIBRARY}"
+        "${_SuiteSparse_ROOT_OVERRIDE_LIBRARY}"
         CACHE FILEPATH "Release ${COMPONENT} library" FORCE)
-      # The optimized Windows build is a Release DLL. Debug clients can safely
-      # use the same import library across the DLL boundary.
+      # The optimized SuiteSparse bundle consists of Release DLLs. Debug
+      # clients can safely use the same import libraries across DLL boundaries.
       set(SuiteSparse_${COMPONENT}_LIBRARY_DEBUG
-        "${_SuiteSparse_CHOLMOD_OVERRIDE_LIBRARY}"
+        "${_SuiteSparse_ROOT_OVERRIDE_LIBRARY}"
         CACHE FILEPATH "Debug ${COMPONENT} library" FORCE)
-      unset(_SuiteSparse_CHOLMOD_OVERRIDE_LIBRARY CACHE)
+      unset(_SuiteSparse_ROOT_OVERRIDE_LIBRARY CACHE)
     elseif (VCPKG_INSTALLED_DIR AND VCPKG_TARGET_TRIPLET)
       # vcpkg puts libraries with identical names in lib and debug/lib. Its
       # toolchain may prepend debug/lib to the generic search path, so isolate

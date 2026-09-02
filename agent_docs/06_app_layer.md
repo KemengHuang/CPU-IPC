@@ -2,7 +2,7 @@
 
 构建已分层：`cipc_core` 包含 Simulator/elasticity/IPC/contact/solver 且不依赖 OpenGL；`cipc` 仅是 viewer；`cipc_headless` 是无窗口 CLI。`CIPC_BUILD_VIEWER=OFF` 可完全跳过 OpenGL/GLUT 查找。项目已无 GLEW 依赖。
 
-生产构建入口按平台分开：Windows 使用根目录 `build.ps1`，WSL/Ubuntu 使用 `build.sh`。二者都串联 vcpkg 依赖、GPL supernodal+oneMKL CHOLMOD、`CIPC_CHOLMOD_ROOT` 和 CPU-IPC Release 编译；Windows 的 `-HeadlessOnly` 与 Linux 的默认/`--headless-only` 跳过 viewer。两套产物分别写入 `build` 和 `build-wsl`，不得共用 CMake cache 或二进制。
+生产构建入口按平台分开：Windows 用户直接运行根目录 `build.cmd`（薄包装到 `build.ps1`），WSL/Ubuntu 使用 `build.sh`。二者都自动检查系统工具，以固定 vcpkg revision 准备 Eigen/TBB/METIS/oneMKL，下载校验固定 SuiteSparse 源码并构建 GPL supernodal+oneMKL bundle，再配置 `CIPC_CHOLMOD_ROOT` 和 CPU-IPC Release；`-DependenciesOnly` / `--dependencies-only` 可只准备库。Windows 的 `-HeadlessOnly` 与 Linux 的默认 headless 跳过 viewer。两套主工程分别写入 `build/cpu-ipc` 和 `build-wsl/cpu-ipc`，不得共用 CMake cache 或二进制。
 
 ## 1. ViewerMain.cpp —— 固定管线查看器
 
@@ -90,7 +90,7 @@ cipc_headless --scene bunny2 --steps 1 --linear-solver pardiso --pardiso-threads
 - `assemble` 从 `BHessian` 生成下三角 triplet，加入质量/阻尼对角并按 `boundaryTypes` 将固定顶点 RHS 清零。
 - CHOLMOD、PARDISO与Eigen-CG共用同一`Eigen::SparseMatrix`、RHS和解向量，再统一scatter回每顶点方向。
 - `LinearSolverOptions`在PARDISO可用时首选PARDISO，否则选择优化CHOLMOD。Eigen-CG保留为显式对照。
-- 性能版 CHOLMOD 由 `scripts/build_cholmod_mkl.ps1` 构建：GPL supernodal、oneMKL LP64/TBB、CUDA/OpenMP关闭。主工程用 `CIPC_CHOLMOD_ROOT` 接入，配置时同时验证 `cholmod_super_numeric/cholmod_metis`。生产ordering固定AMD（bunny2中位2.464s，优于METIS 2.557s与AUTO约2.66s）；supernodal模式保持CHOLMOD AUTO，三个场景均实际选择supernodal。线程默认`0=auto`：`nnz<500k`用4线程，否则8线程；`--cholmod-threads`可覆盖。
+- 性能版 CHOLMOD 由 `scripts/build_cholmod_mkl.ps1` / `build.sh` 从固定 SuiteSparse 7.14.0 源码构建完整 bundle：仅 Config、AMD、CAMD、CCOLAMD、COLAMD、GPL supernodal CHOLMOD，oneMKL LP64/TBB 为唯一 BLAS/LAPACK，CUDA/OpenMP关闭。主工程用 `CIPC_CHOLMOD_ROOT` 接入全部组件并验证 `cholmod_super_numeric/cholmod_metis`；Windows 会复制六个 SuiteSparse DLL。生产ordering固定AMD（历史 bunny2中位2.464s，优于METIS 2.557s与AUTO约2.66s）；supernodal模式保持CHOLMOD AUTO，三个场景均实际选择supernodal。线程默认`0=auto`：`nnz<500k`用4线程，否则8线程；`--cholmod-threads`可覆盖。
 - PARDISO是默认主后端；不可用时自动切换优化CHOLMOD。`PardisoSolver`直接调用phase 11/22/33并复用symbolic/permutation/factor workspace。
 - Windows vcpkg oneMKL 静态链接会使 Release headless 约 74.0 MB（70.6 MiB）；性能版CHOLMOD DLL约26.6MB并通过DLL边界供Debug使用。supernodal模块引入GPL-2.0-or-later许可，分发时必须明确处理。Release/RelWithDebInfo仍是正式benchmark配置。
 - Eigen-CG 可用 `cipc_headless --scene twisting-mat --steps 1 --no-output --linear-solver eigen-cg` 做手工 smoke；它不要求与直接法 bitwise 相同。

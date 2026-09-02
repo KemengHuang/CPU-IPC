@@ -84,7 +84,7 @@ linear_solver_threads,factor_nnz
 
 ```bash
 python scripts/benchmark.py \
-  --exe build/Release/cipc_headless.exe \
+  --exe build/cpu-ipc/Release/cipc_headless.exe \
   --scene bunny2 \
   --linear-solver pardiso \
   --pardiso-threads 16 \

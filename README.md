@@ -4,6 +4,24 @@ CPU-IPC is a CPU-optimized implementation of Incremental Potential Contact for t
 
 The benchmark path is fully headless and records solver-stage timing together with numerical/iteration diagnostics. The implementation preserves the same contact, CCD, CFL, energy, gradient, and Hessian semantics across its alternative broad-phase and linear-solver backends, so performance comparisons are not obtained by silently changing the simulated problem.
 
+## Quick start
+
+No manual vcpkg, Eigen, TBB, METIS, oneMKL, SuiteSparse, CHOLMOD, or FreeGLUT setup is required.
+
+Windows, from Command Prompt or PowerShell:
+
+```bat
+.\build.cmd
+```
+
+WSL/Ubuntu:
+
+```bash
+./build.sh
+```
+
+The first run downloads the numerical dependencies and builds the tuned CHOLMOD library, so it is substantially slower than later incremental builds. Windows produces the viewer and headless runner; Ubuntu defaults to the headless benchmark. Use `.\build.cmd -HeadlessOnly` or `./build.sh --viewer` to select the other application set.
+
 ### CPU-oriented optimizations
 
 - TBB-parallel elastic/contact assembly, energy evaluation, broad-phase construction, and reductions.
@@ -18,44 +36,35 @@ The benchmark path is fully headless and records solver-stage timing together wi
 - Current-step Newton convergence checks before CCD/line search, avoiding strict-energy backtracking on numerically vanished directions.
 - Strict energy-decreasing line search, Additive CCD, and the original IPC CFL strategy.
 
-## Dependencies
+## System requirements
 
-Windows:
+- Windows: 64-bit Windows and Visual Studio/Build Tools with the **Desktop development with C++** workload. `build.cmd` detects this prerequisite and prints a ready-to-run `winget` command if it is absent. Git is needed only when the private vcpkg cache must first be downloaded or updated, with an equivalent command shown on failure. CMake is resolved from `PATH`, Visual Studio, or vcpkg's own downloaded tools.
+- WSL/Ubuntu: x86-64 Ubuntu. `build.sh` detects missing compiler/build packages and installs them through `apt` automatically, requesting sudo only when necessary. `zip`/`unzip` can be unpacked into the user cache without sudo, and a system CMake older than 3.23 is transparently replaced by vcpkg's private tool. Pass `--no-system-packages` in CI or managed environments to disable automatic `apt` changes and receive the exact required command instead.
 
-```powershell
-# Recommended: installs and connects every dependency and builds Release.
-powershell -ExecutionPolicy Bypass -File build.ps1
-```
-
-WSL/Ubuntu (headless benchmark build by default):
-
-```bash
-bash build.sh --headless-only
-```
-
-Both launchers locate vcpkg from an explicit option, `VCPKG_ROOT`, or `PATH`. If none exists, they bootstrap an isolated copy automatically—`build/_deps/vcpkg` on Windows and `${XDG_CACHE_HOME:-$HOME/.cache}/cpu-ipc/vcpkg` on Ubuntu. All solver dependencies, including Linux oneMKL, are then installed by vcpkg.
-
-A fresh Ubuntu installation needs a compiler and build frontends once: `sudo apt-get install build-essential cmake ninja-build git curl tar`. These were already present in the WSL installation used for validation. Its missing `zip`/`unzip` tools were downloaded and unpacked into the user cache by `build.sh`, without sudo or system package changes.
+Everything else is project-managed. An explicit vcpkg option or `VCPKG_ROOT` overrides the default; otherwise the launchers bootstrap the revision pinned in `scripts/vcpkg-revision.txt`. Windows keeps that checkout in a short `%LOCALAPPDATA%/CPU-IPC` path to avoid path-length failures, while Ubuntu uses `${XDG_CACHE_HOME:-$HOME/.cache}/cpu-ipc`. Eigen, TBB core, METIS, oneMKL, and optional FreeGLUT are installed together. SuiteSparse is downloaded at a pinned version with a verified SHA-512 hash and only the required CHOLMOD/AMD family is built—OpenBLAS and TBB's unused hwloc feature are not installed.
 
 ## Build
 
-Recommended one-command Windows build—installs dependencies, builds and connects the tuned CHOLMOD DLL, configures CPU-IPC, and compiles Release:
+Recommended Windows build—installs dependencies, builds and connects the tuned CHOLMOD DLL, configures CPU-IPC, and compiles Release:
 
-```powershell
-powershell -ExecutionPolicy Bypass -File build.ps1
+```bat
+.\build.cmd
 ```
 
 Recommended WSL/Ubuntu 22.04 command—uses Linux packages/binaries only and writes them separately under `build-wsl`:
 
 ```bash
-bash build.sh --headless-only
+./build.sh
 ```
 
-Use `powershell -ExecutionPolicy Bypass -File build.ps1 -HeadlessOnly` on Windows or `bash build.sh --viewer` on WSL to change the application targets. Existing vcpkg checkouts can be selected with `-VcpkgRoot <path>` or `--vcpkg-root <path>`; no repository file contains a machine-specific vcpkg path. The lower-level manual build remains available after one-time setup:
+Use `.\build.cmd -DependenciesOnly` or `./build.sh --dependencies-only` when only preparing libraries; `.\build.cmd -Help` and `./build.sh --help` list all options. Existing vcpkg checkouts can be selected with `-VcpkgRoot <path>` or `--vcpkg-root <path>`; no repository file contains a machine-specific vcpkg path. The PowerShell entry remains available as `powershell -ExecutionPolicy Bypass -File build.ps1`. After the one-command setup, incremental compilation is simply:
+
+```powershell
+cmake --build build/cpu-ipc --config Release --parallel
+```
 
 ```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release --parallel
+cmake --build build-wsl/cpu-ipc --parallel
 ```
 
 For best WSL compilation throughput, keeping the repository in the Linux filesystem (for example under `~/src`) is preferable, but the complete workflow was also verified directly from this repository through `/mnt/c`.
@@ -77,31 +86,21 @@ The build intentionally contains no test targets or CTest registration.
 | `CIPC_ENABLE_QUADRATIC_BENDING` | `ON` | Use quadratic isometric bending; set `OFF` for the complete dihedral-hinge model. |
 | `CIPC_ENABLE_METIS_ORDERING` | `ON` | Build/link CHOLMOD Partition/METIS support for experiments; measured production ordering remains AMD. |
 | `CIPC_ENABLE_PARDISO` | `ON` | Build the recommended/default oneMKL PARDISO backend; when disabled, optimized CHOLMOD becomes the default. |
-| `CIPC_CHOLMOD_ROOT` | auto | Prefix of the tuned supernodal+oneMKL CHOLMOD build. The standard `build/cholmod-mkl-install` is detected automatically. |
+| `CIPC_CHOLMOD_ROOT` | auto | Prefix of the tuned supernodal+oneMKL SuiteSparse bundle. The standard `build/cholmod-mkl-install` is detected automatically. |
 | `CIPC_REQUIRE_OPTIMIZED_CHOLMOD` | `ON` | Reject accidental system/OpenBLAS CHOLMOD linkage; set `OFF` only for compatibility diagnostics. |
 
 With METIS ordering enabled, configuration fails early unless the installed CHOLMOD exports the Partition functionality and `cholmod_metis` is linkable. The local SuiteSparse finder accepts `METIS::METIS`, `METIS::metis`, vcpkg's un-namespaced `metis` target, conventional `metis.h + libmetis` installations, and CHOLMOD builds with embedded Partition support. It also selects matching Debug/Release SuiteSparse libraries for multi-configuration builds.
 
 PARDISO is the recommended installation and the default solver in Release-family configurations. It uses oneMKL's static LP64/TBB threading layer and defaults to 16 threads. When PARDISO is unavailable—most notably MSVC Debug—the tuned CHOLMOD backend is selected automatically. Static oneMKL increases the headless executable to about 74.0 MB (70.6 MiB) on the measured setup.
 
-The root launchers build high-performance CHOLMOD automatically: Windows delegates to `scripts/build_cholmod_mkl.ps1`, while Ubuntu performs the equivalent Linux shared-library build inside `build.sh`. Both enable the GPL supernodal module and embed static oneMKL LP64/TBB; CPU-IPC verifies both `cholmod_super_numeric` and `cholmod_metis`. This changes the distribution license boundary to include GPL-2.0-or-later code. A system CHOLMOD is only a compatibility diagnostic when `CIPC_REQUIRE_OPTIMIZED_CHOLMOD=OFF`; it may use OpenBLAS or lack supernodal support.
-
-Headless-only non-quadratic build:
-
-```bash
-cmake -S . -B build/nonquadratic \
-  -DCMAKE_BUILD_TYPE=Release \
-  -DCIPC_BUILD_VIEWER=OFF \
-  -DCIPC_ENABLE_QUADRATIC_BENDING=OFF
-cmake --build build/nonquadratic --config Release --parallel
-```
+The root launchers build high-performance CHOLMOD automatically: Windows delegates to `scripts/build_cholmod_mkl.ps1`, while Ubuntu performs the equivalent build inside `build.sh`. Both build a self-contained shared SuiteSparse bundle containing only Config, AMD, CAMD, CCOLAMD, COLAMD, and GPL supernodal CHOLMOD, with static oneMKL LP64/TBB as the sole BLAS/LAPACK provider. CPU-IPC verifies `cholmod_super_numeric` and `cholmod_metis`, and deploys every required DLL on Windows. A content stamp skips this bundle entirely on unchanged incremental builds. This changes the distribution license boundary to include GPL-2.0-or-later code. A system CHOLMOD is only a compatibility diagnostic when `CIPC_REQUIRE_OPTIMIZED_CHOLMOD=OFF`.
 
 ## Run
 
 Viewer:
 
 ```bash
-build/Release/cipc
+build/cpu-ipc/Release/cipc.exe
 ```
 
 Press Space to simulate, `9` to toggle OBJ output, and `/` to toggle screenshots.
@@ -111,11 +110,11 @@ The viewer uses the working fixed-function OpenGL path only; the unused shader d
 Headless:
 
 ```bash
-build/Release/cipc_headless --scene cloth-bunny --steps 20 --broad-phase lbvh --output Output/run
-build/Release/cipc_headless --scene cloth-bunny --steps 20 --linear-solver cholmod --no-output
-build/Release/cipc_headless --scene twisting-mat --steps 1 --linear-solver eigen-cg --no-output
-build/Release/cipc_headless --scene bunny2 --steps 1 --linear-solver pardiso --pardiso-threads 16 --no-output
-python scripts/benchmark.py --exe build/Release/cipc_headless.exe --repeats 5 --steps 20
+build/cpu-ipc/Release/cipc_headless.exe --scene cloth-bunny --steps 20 --broad-phase lbvh --output Output/run
+build/cpu-ipc/Release/cipc_headless.exe --scene cloth-bunny --steps 20 --linear-solver cholmod --no-output
+build/cpu-ipc/Release/cipc_headless.exe --scene twisting-mat --steps 1 --linear-solver eigen-cg --no-output
+build/cpu-ipc/Release/cipc_headless.exe --scene bunny2 --steps 1 --linear-solver pardiso --pardiso-threads 16 --no-output
+python scripts/benchmark.py --exe build/cpu-ipc/Release/cipc_headless.exe --repeats 5 --steps 20
 ```
 
 WSL/Ubuntu headless executable:
@@ -134,7 +133,7 @@ PARDISO is the project's primary and default Newton solver. It uses 16 threads u
 
 Each Newton convergence decision uses the direction just solved from the current gradient/Hessian. A converged direction exits before CCD and line search; the strict acceptance rule remains `E_trial < E0` with `armijoCoefficient=0`. This prevents a numerically vanished direction from being halved repeatedly only because parallel energy summation fluctuates in the last bit. On the two-bunny2 scene, five independent five-step runs reduced the first 25 frames from 417 energy backtracks to 0, made all five final states identical, and reduced median total time from 4.429 s to 3.396 s. The final convergence-check factorization is still counted, so `numeric_factorizations` can be one greater than the number of accepted Newton updates.
 
-The tuned CHOLMOD path is about 5.3× faster than the supernodal+OpenBLAS build on bunny2. With the current convergence semantics, five-run medians are: bunny2 one step 1.625 s for CHOLMOD versus 1.301 s for PARDISO; cloth-bunny five steps 0.608 s versus 0.586 s; twisting-mat five steps 0.413 s versus 0.434 s. The two production solvers are therefore in the same performance tier: generally within about 5% on the medium scenes, with PARDISO retaining about a 25% advantage on the large bunny2 scene. PARDISO remains the default, while tuned CHOLMOD is the automatic backup. Numerical results agree within floating-point reduction error. See [`agent_docs/11_cholmod_mkl_report.md`](agent_docs/11_cholmod_mkl_report.md) for the full ordering/thread/provider A/B and [`agent_docs/10_pardiso_report.md`](agent_docs/10_pardiso_report.md) for PARDISO details.
+The tuned CHOLMOD path is about 5.3× faster than the historical supernodal+OpenBLAS build on bunny2. With the pinned dependency bundle, five-run medians are: bunny2 one step 1.686 s for CHOLMOD versus 1.310 s for PARDISO; cloth-bunny five steps 0.621 s versus 0.575 s; twisting-mat five steps 0.412 s versus 0.431 s. A same-session old/new CHOLMOD bundle comparison on bunny2 measured 1.670/1.686 s, about a 1% difference. The two production solvers remain in the same performance tier on medium scenes, while PARDISO retains about a 29% advantage on the large bunny2 scene. PARDISO remains the default, tuned CHOLMOD is the automatic backup, and numerical results agree within floating-point reduction error. See [`agent_docs/11_cholmod_mkl_report.md`](agent_docs/11_cholmod_mkl_report.md) for the full ordering/thread/provider A/B and [`agent_docs/10_pardiso_report.md`](agent_docs/10_pardiso_report.md) for PARDISO details.
 
 The one-command production build opts into GPL supernodal CHOLMOD; treat its binaries as GPL-covered distributions. Setting `CIPC_REQUIRE_OPTIMIZED_CHOLMOD=OFF` is only for system-package compatibility diagnostics.
 
@@ -180,6 +179,8 @@ D = E * thickness^3 / (12 * (1 - poisson_ratio^2)).
 - Non-quadratic bending precomputes each interior hinge's rest angle and geometry weight `l0 / (h0 + h1)`, then uses consistent energy, gradient, and Hessian expressions.
 - `TetInversionGuard` is retained as an optional utility but is not enabled in the default IPC step.
 
+The one-command production launchers deliberately select quadratic bending. The non-quadratic branch passes the Windows smoke but currently fails the WSL direct-solver regression with a non-positive-definite matrix; see `agent_docs/07_gotchas.md` before enabling it manually on Linux.
+
 ## Project layout
 
 | Path | Responsibility |
@@ -192,7 +193,7 @@ D = E * thickness^3 / (12 * (1 - poisson_ratio^2)).
 | `CPU IPC/SimulationMesh.*`, `Simulator.*` | Mesh state, IO, scene construction, and simulation ownership. |
 | `CPU IPC/ViewerMain.cpp` | Fixed-function GLUT viewer. |
 | `apps/cipc_headless.cpp` | Headless executable. |
-| `build.ps1`, `build.sh` | Portable one-command Windows and WSL/Ubuntu production builds. |
+| `build.cmd`, `build.ps1`, `build.sh` | One-command dependency setup and Windows/WSL/Ubuntu production builds. |
 | `scripts/` | Benchmark and video utilities. |
 
 ## Manual smoke checks
@@ -200,10 +201,9 @@ D = E * thickness^3 / (12 * (1 - poisson_ratio^2)).
 The repository intentionally ships no test suite. After changes, validate the product executables directly:
 
 ```bash
-build/Release/cipc_headless --scene cloth-bunny --steps 1 --no-output --broad-phase lbvh
-build/Release/cipc_headless --scene cloth-bunny --steps 1 --no-output --broad-phase spatial-hash
-build/Release/cipc_headless --scene cloth-bunny --steps 1 --no-output --linear-solver cholmod
-build/Release/cipc_headless --scene twisting-mat --steps 1 --no-output --linear-solver eigen-cg
-build/Release/cipc_headless --scene bunny2 --steps 1 --no-output --linear-solver pardiso --pardiso-threads 16
-build/nonquadratic/Release/cipc_headless --scene cloth-bunny --steps 1 --no-output
+build/cpu-ipc/Release/cipc_headless.exe --scene cloth-bunny --steps 1 --no-output --broad-phase lbvh
+build/cpu-ipc/Release/cipc_headless.exe --scene cloth-bunny --steps 1 --no-output --broad-phase spatial-hash
+build/cpu-ipc/Release/cipc_headless.exe --scene cloth-bunny --steps 1 --no-output --linear-solver cholmod
+build/cpu-ipc/Release/cipc_headless.exe --scene twisting-mat --steps 1 --no-output --linear-solver eigen-cg
+build/cpu-ipc/Release/cipc_headless.exe --scene bunny2 --steps 1 --no-output --linear-solver pardiso --pardiso-threads 16
 ```

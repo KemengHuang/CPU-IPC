@@ -8,19 +8,22 @@
 
 ```powershell
 # Windows：默认同时构建 viewer 和 headless
-powershell -ExecutionPolicy Bypass -File build.ps1
+.\build.cmd
 ```
 
 ```bash
 # WSL/Ubuntu：默认只构建 benchmark 所需的 headless 产品
-bash build.sh --headless-only
+./build.sh
 ```
 
-两条脚本均按“显式参数 → `VCPKG_ROOT` → `PATH` → 自动 bootstrap”解析 vcpkg。Windows 的隔离 checkout 位于 `<repo>/build/_deps/vcpkg`，WSL 默认位于 `${XDG_CACHE_HOME:-$HOME/.cache}/cpu-ipc/vcpkg`；没有任何提交到仓库的本机绝对路径。Windows 产物位于 `build/<Configuration>`，WSL 使用独立的 `build-wsl/cpu-ipc`，避免两套 ABI/缓存互相污染。完成一次配置后仍可在相应 build 目录手工增量构建：
+两条入口均按“显式参数 → `VCPKG_ROOT` → 项目固定 revision 的托管 checkout”解析 vcpkg。Windows 会检查 MSVC C++ workload，并从 PATH、Visual Studio 或 vcpkg tools 自动解析 CMake；Ubuntu 会检测并按需通过 apt 安装基础编译包，`--no-system-packages` 可关闭该行为，系统 CMake 低于 3.23 时自动使用 vcpkg 私有版本。Windows 的短路径 checkout 位于 `%LOCALAPPDATA%/CPU-IPC/vcpkg-<revision>`，WSL 位于 `${XDG_CACHE_HOME:-$HOME/.cache}/cpu-ipc/vcpkg`；没有任何提交到仓库的本机绝对路径。vcpkg 一次准备 Eigen、`tbb[core]`、METIS、oneMKL 与可选 FreeGLUT；SuiteSparse 7.14.0 按 SHA-512 校验下载，只构建 Config/AMD/CAMD/CCOLAMD/COLAMD/CHOLMOD，不再安装无用 OpenBLAS/hwloc。Windows 产物位于 `build/cpu-ipc/<Configuration>`，WSL 使用独立的 `build-wsl/cpu-ipc`，避免两套 ABI/缓存互相污染。完成一次配置后仍可在相应 build 目录手工增量构建：
+
+```powershell
+cmake --build build/cpu-ipc --config Release --parallel
+```
 
 ```bash
-cmake -B build -DCMAKE_BUILD_TYPE=Release
-cmake --build build --config Release
+cmake --build build-wsl/cpu-ipc --parallel
 ```
 
 - `CMakeLists.txt` 显式列出核心源文件并拆成三个 C++14 产品 targets：`cipc_core`（无 OpenGL）、`cipc_headless`、可选 `cipc` viewer；不注册 CTest/测试 target。
@@ -30,11 +33,11 @@ cmake --build build --config Release
   - `CIPC_ENABLE_QUADRATIC_BENDING=ON` — 定义 `USE_QUADRATIC_BENDING`。
   - `CIPC_ENABLE_METIS_ORDERING=ON` — 构建/链接 CHOLMOD Partition/METIS 供实验；生产配置按实测固定 AMD，因为它在三个项目矩阵上都快于强制 METIS 与 multi-method AUTO。
   - `CIPC_ENABLE_PARDISO=ON` — 推荐保持开启；找到oneMKL时以PARDISO作为默认主后端。PARDISO不可用或MSVC Debug时自动选择优化CHOLMOD。
-  - `CIPC_CHOLMOD_ROOT` — 指向性能版 CHOLMOD prefix；Windows 标准 `build/cholmod-mkl-install` 会自动识别，WSL 一键脚本显式传入 `build-wsl/cholmod-mkl-install`。配置会验证 supernodal 与 METIS 符号，并让共享库内部使用 oneMKL LP64/TBB。
-  - `CIPC_REQUIRE_OPTIMIZED_CHOLMOD=ON` — 默认拒绝误连普通 OpenBLAS CHOLMOD；根目录 `build.ps1` / `build.sh` 可一键完成依赖、连接和编译。
+  - `CIPC_CHOLMOD_ROOT` — 指向性能版 SuiteSparse/CHOLMOD bundle prefix；Windows 标准 `build/cholmod-mkl-install` 会自动识别，WSL 一键脚本显式传入 `build-wsl/cholmod-mkl-install`。配置会从同一 prefix 解析全部 SuiteSparse 组件，验证 supernodal 与 METIS 符号，并让 CHOLMOD 使用 oneMKL LP64/TBB。
+  - `CIPC_REQUIRE_OPTIMIZED_CHOLMOD=ON` — 默认拒绝误连普通 OpenBLAS CHOLMOD；根目录 `build.cmd` / `build.sh` 可一键完成依赖、连接和编译。
   - `CIPC_ASSETS_DIR` = `<repo>/Assets/`（活，`Simulator.cpp` 读参数文件/网格用）
   - `CIPC_OUTPUT_DIR` = `<repo>/Output/`（活，由 `RuntimePaths` 统一管理日志、检查点、表面和截图输出）
-- SuiteSparse 查找器会校验 `cholmod_metis`，兼容 `METIS::METIS`、`METIS::metis`、vcpkg 的 `metis` target、Linux 常规 `metis.h + libmetis` 以及内嵌 Partition 的 CHOLMOD；多配置生成器分别绑定 Release/Debug SuiteSparse 库。性能版CHOLMOD通过共享库内部嵌入oneMKL并额外校验`cholmod_super_numeric`；system fallback才选择OpenBLAS/系统BLAS-LAPACK。
+- SuiteSparse 查找器会校验 `cholmod_metis`，兼容 `METIS::METIS`、`METIS::metis`、vcpkg 的 `metis` target、Linux 常规 `metis.h + libmetis` 以及内嵌 Partition 的 CHOLMOD；性能 bundle 的全部组件强制来自 `CIPC_CHOLMOD_ROOT`，Windows Debug/Release 通过 DLL 边界共用 Release bundle。配置额外校验 `cholmod_super_numeric`；只有显式兼容诊断的 system fallback 才选择 OpenBLAS/系统 BLAS-LAPACK。
 - MSVC 的 `/bigobj` 只施加到 `cipc_core`（`ContactMechanics.cpp` 的生成代码需要），不再污染全局 `CMAKE_CXX_FLAGS`。
 
 运行：`cipc`打开GLUT窗口，空格开始/暂停。`cipc_headless --steps N --broad-phase lbvh`写逐帧`metrics.csv`；默认有PARDISO时使用PARDISO，否则自动使用优化CHOLMOD。`--linear-solver cholmod|pardiso|eigen-cg`可显式覆盖。PARDISO默认16线程；CHOLMOD默认按nnz自动4/8线程。一个`--steps 1`是一个完整时间步/帧。——见`06_app_layer.md`。

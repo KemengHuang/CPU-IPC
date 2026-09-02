@@ -7,6 +7,18 @@ configuration="Release"
 build_viewer="OFF"
 requested_vcpkg_root="${VCPKG_ROOT:-}"
 cache_root="${XDG_CACHE_HOME:-${HOME}/.cache}/cpu-ipc"
+install_system_packages="ON"
+dependencies_only="OFF"
+vcpkg_revision="$(tr -d '[:space:]' < "${repo_root}/scripts/vcpkg-revision.txt")"
+suitesparse_version="$(tr -d '[:space:]' < "${repo_root}/scripts/suitesparse-version.txt")"
+if [[ ! "$vcpkg_revision" =~ ^[0-9a-fA-F]{40}$ ]]; then
+    echo "scripts/vcpkg-revision.txt must contain one 40-character Git revision." >&2
+    exit 1
+fi
+if [[ ! "$suitesparse_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+    echo "scripts/suitesparse-version.txt must contain a semantic version." >&2
+    exit 1
+fi
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -42,6 +54,14 @@ while [[ $# -gt 0 ]]; do
             build_viewer="OFF"
             shift
             ;;
+        --dependencies-only)
+            dependencies_only="ON"
+            shift
+            ;;
+        --no-system-packages)
+            install_system_packages="OFF"
+            shift
+            ;;
         -h|--help)
             cat <<'EOF'
 Usage: ./build.sh [options]
@@ -50,6 +70,10 @@ Usage: ./build.sh [options]
   --config TYPE      Release, RelWithDebInfo, or Debug.
   --viewer           Build the GLUT viewer (headless is the default).
   --headless-only    Explicitly disable the viewer.
+  --dependencies-only
+                     Install/build dependencies without building CPU-IPC.
+  --no-system-packages
+                     Never invoke sudo/apt; report missing prerequisites.
 EOF
             exit 0
             ;;
@@ -68,47 +92,11 @@ case "$configuration" in
         ;;
 esac
 
-if [[ "$(uname -m)" != "x86_64" ]]; then
-    echo "This oneMKL build currently supports x86_64 Ubuntu/WSL only." >&2
-    exit 1
-fi
+. "${repo_root}/scripts/ensure_ubuntu_prerequisites.sh"
+echo "[1/4] Checking the Ubuntu build environment"
+ensure_ubuntu_prerequisites "$cache_root" "$build_viewer" "$install_system_packages"
 
-required_commands=(git cmake ninja g++ make tar curl)
-missing_commands=()
-for command_name in "${required_commands[@]}"; do
-    if ! command -v "$command_name" >/dev/null 2>&1; then
-        missing_commands+=("$command_name")
-    fi
-done
-if [[ ${#missing_commands[@]} -ne 0 ]]; then
-    echo "Missing Ubuntu build tools: ${missing_commands[*]}" >&2
-    echo "Install them once with:" >&2
-    echo "  sudo apt-get update && sudo apt-get install -y build-essential cmake ninja-build git curl tar" >&2
-    exit 1
-fi
-
-# vcpkg's bootstrap requires zip/unzip. On the tested minimal WSL image these
-# were absent, so obtain just those tools in the user cache without sudo.
-user_tools="${cache_root}/tools"
-if ! command -v zip >/dev/null 2>&1 || ! command -v unzip >/dev/null 2>&1; then
-    if ! command -v apt-get >/dev/null 2>&1 || ! command -v dpkg-deb >/dev/null 2>&1; then
-        echo "zip/unzip are missing and apt-get/dpkg-deb are unavailable." >&2
-        exit 1
-    fi
-    if [[ ! -x "${user_tools}/usr/bin/zip" || ! -x "${user_tools}/usr/bin/unzip" ]]; then
-        package_cache="${cache_root}/apt-packages"
-        mkdir -p "$package_cache" "$user_tools"
-        (
-            cd "$package_cache"
-            apt-get download zip unzip
-        )
-        for package in "${package_cache}"/*.deb; do
-            dpkg-deb -x "$package" "$user_tools"
-        done
-    fi
-    export PATH="${user_tools}/usr/bin:${PATH}"
-fi
-
+echo "[2/4] Preparing vcpkg and numerical dependencies"
 if [[ -n "$requested_vcpkg_root" ]]; then
     if [[ -x "$requested_vcpkg_root" && ! -d "$requested_vcpkg_root" ]]; then
         vcpkg_executable="$(readlink -f "$requested_vcpkg_root")"
@@ -119,15 +107,26 @@ if [[ -n "$requested_vcpkg_root" ]]; then
         echo "The requested vcpkg path does not exist: $requested_vcpkg_root" >&2
         exit 1
     fi
-elif command -v vcpkg >/dev/null 2>&1; then
-    vcpkg_executable="$(readlink -f "$(command -v vcpkg)")"
-    vcpkg_root="$(dirname "$vcpkg_executable")"
 else
     vcpkg_root="${cache_root}/vcpkg"
-    if [[ ! -x "${vcpkg_root}/vcpkg" ]]; then
-        mkdir -p "$cache_root"
-        if [[ ! -d "${vcpkg_root}/.git" ]]; then
-            git clone --depth 1 https://github.com/microsoft/vcpkg.git "$vcpkg_root"
+    mkdir -p "$cache_root"
+    needs_bootstrap="OFF"
+    if [[ ! -d "${vcpkg_root}/.git" ]]; then
+        mkdir -p "$vcpkg_root"
+        git -C "$vcpkg_root" init
+        git -C "$vcpkg_root" remote add origin https://github.com/microsoft/vcpkg.git
+        needs_bootstrap="ON"
+    fi
+    current_revision="$(git -C "$vcpkg_root" rev-parse HEAD 2>/dev/null || true)"
+    if [[ "$current_revision" != "$vcpkg_revision" ]]; then
+        git -C "$vcpkg_root" fetch --depth 1 origin "$vcpkg_revision"
+        git -C "$vcpkg_root" checkout --detach FETCH_HEAD
+        needs_bootstrap="ON"
+    fi
+    if [[ "$needs_bootstrap" == "ON" || ! -x "${vcpkg_root}/vcpkg" ]]; then
+        if [[ ! -x "${vcpkg_root}/bootstrap-vcpkg.sh" ]]; then
+            echo "The pinned vcpkg checkout is incomplete: $vcpkg_root" >&2
+            exit 1
         fi
         "${vcpkg_root}/bootstrap-vcpkg.sh" -disableMetrics
     fi
@@ -146,72 +145,117 @@ fi
 triplet="x64-linux"
 dependencies=(
     "eigen3:${triplet}"
-    "tbb:${triplet}"
+    "tbb[core]:${triplet}"
     "metis:${triplet}"
     "intel-mkl:${triplet}"
-    "suitesparse-cholmod[partition]:${triplet}"
 )
 if [[ "$build_viewer" == "ON" ]]; then
     dependencies+=("freeglut:${triplet}")
 fi
-"$vcpkg_executable" install "${dependencies[@]}" --recurse
-
-source_parent="${vcpkg_root}/buildtrees/suitesparse-cholmod/src"
-cholmod_source=""
-for candidate in "${source_parent}"/*.clean; do
-    if [[ ! -f "${candidate}/CHOLMOD/CMakeLists.txt" ]]; then
-        continue
-    fi
-    if [[ -z "$cholmod_source" || "$candidate" -nt "${cholmod_source%/CHOLMOD}" ]]; then
-        cholmod_source="${candidate}/CHOLMOD"
-    fi
-done
-if [[ ! -f "${cholmod_source}/CMakeLists.txt" ]]; then
-    echo "Extracted CHOLMOD source was not found under $source_parent" >&2
-    exit 1
-fi
+"$vcpkg_executable" install "${dependencies[@]}" --recurse --no-print-usage
+cmake_executable="$(resolve_cmake_executable "$vcpkg_root")"
 
 installed_prefix="${vcpkg_root}/installed/${triplet}"
-cholmod_build="${build_root}/cholmod-mkl-lib"
+suitesparse_source_parent="${build_root}/_deps"
+suitesparse_source="${suitesparse_source_parent}/SuiteSparse-${suitesparse_version}"
+download_directory="${vcpkg_root}/downloads"
+fetch_script="${repo_root}/cmake/FetchSuiteSparse.cmake"
+cholmod_build="${build_root}/suitesparse-mkl-bundle"
 cholmod_install="${build_root}/cholmod-mkl-install"
 provider_file="${repo_root}/cmake/CholmodMKLProvider.cmake"
+blas_shim="${repo_root}/cmake/SuiteSparseBLAS.cmake"
+bundle_stamp="${cholmod_install}/.cpu-ipc-suite-sparse-bundle"
+# Increment recipe when the SuiteSparse configure arguments below change.
+bundle_signature="$(printf '%s\n' \
+    'schema=1' \
+    'recipe=1' \
+    "suitesparse=${suitesparse_version}" \
+    "vcpkg_revision=${vcpkg_revision}" \
+    "vcpkg=${vcpkg_root}" \
+    "vcpkg_executable=$(sha256sum "$vcpkg_executable" | cut -d' ' -f1)" \
+    "mkl_port=$(sha256sum "${vcpkg_root}/ports/intel-mkl/vcpkg.json" | cut -d' ' -f1)" \
+    "tbb_port=$(sha256sum "${vcpkg_root}/ports/tbb/vcpkg.json" | cut -d' ' -f1)" \
+    "metis_port=$(sha256sum "${vcpkg_root}/ports/metis/vcpkg.json" | cut -d' ' -f1)" \
+    "provider=$(sha256sum "$provider_file" | cut -d' ' -f1)" \
+    "blas_shim=$(sha256sum "$blas_shim" | cut -d' ' -f1)" \
+    "fetch=$(sha256sum "$fetch_script" | cut -d' ' -f1)")"
 
-cmake -S "$cholmod_source" -B "$cholmod_build" -G Ninja \
-    -DCMAKE_BUILD_TYPE=Release \
-    -DCMAKE_PREFIX_PATH="$installed_prefix" \
-    -DCMAKE_PROJECT_INCLUDE="$provider_file" \
-    -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
-    -DSuiteSparse_config_DIR="${installed_prefix}/share/SuiteSparse_config" \
-    -DAMD_DIR="${installed_prefix}/share/AMD" \
-    -DCOLAMD_DIR="${installed_prefix}/share/COLAMD" \
-    -DCAMD_DIR="${installed_prefix}/share/CAMD" \
-    -DCCOLAMD_DIR="${installed_prefix}/share/CCOLAMD" \
-    -DCMAKE_INSTALL_PREFIX="$cholmod_install" \
-    -DCMAKE_SHARED_LINKER_FLAGS="-Wl,--exclude-libs,ALL" \
-    -DBUILD_SHARED_LIBS=ON \
-    -DBUILD_STATIC_LIBS=OFF \
-    -DBUILD_TESTING=OFF \
-    -DCHOLMOD_GPL=ON \
-    -DCHOLMOD_SUPERNODAL=ON \
-    -DCHOLMOD_PARTITION=ON \
-    -DCHOLMOD_MATRIXOPS=OFF \
-    -DCHOLMOD_MODIFY=OFF \
-    -DCHOLMOD_USE_OPENMP=OFF \
-    -DCHOLMOD_USE_CUDA=OFF \
-    -DSUITESPARSE_USE_CUDA=OFF \
-    -DSUITESPARSE_DEMOS=OFF
-cmake --build "$cholmod_build" --parallel
-cmake --install "$cholmod_build"
+bundle_ready="ON"
+required_bundle_files=(
+    "lib/libsuitesparseconfig.so"
+    "lib/libamd.so"
+    "lib/libcamd.so"
+    "lib/libccolamd.so"
+    "lib/libcolamd.so"
+    "lib/libcholmod.so"
+)
+if [[ ! -f "$bundle_stamp" || "$(cat "$bundle_stamp" 2>/dev/null || true)" != "$bundle_signature" ]]; then
+    bundle_ready="OFF"
+fi
+for relative_path in "${required_bundle_files[@]}"; do
+    [[ -f "${cholmod_install}/${relative_path}" ]] || bundle_ready="OFF"
+done
 
+if [[ "$bundle_ready" == "ON" ]]; then
+    echo "[3/4] Reusing the optimized SuiteSparse/CHOLMOD bundle"
+else
+    "$cmake_executable" \
+        "-DCPU_IPC_SUITESPARSE_SOURCE_PARENT=${suitesparse_source_parent}" \
+        "-DCPU_IPC_DOWNLOAD_DIR=${download_directory}" \
+        -P "$fetch_script"
+
+    echo "[3/4] Building the optimized SuiteSparse/CHOLMOD bundle with oneMKL"
+    "$cmake_executable" -S "$suitesparse_source" -B "$cholmod_build" -G Ninja \
+        -DCMAKE_BUILD_TYPE=Release \
+        -DCMAKE_TOOLCHAIN_FILE="$vcpkg_toolchain" \
+        -DVCPKG_TARGET_TRIPLET="$triplet" \
+        -DCMAKE_PREFIX_PATH="$installed_prefix" \
+        -DCMAKE_PROJECT_INCLUDE="$provider_file" \
+        -DCMAKE_FIND_PACKAGE_PREFER_CONFIG=ON \
+        -DCMAKE_INSTALL_PREFIX="$cholmod_install" \
+        -DCMAKE_SHARED_LINKER_FLAGS="-Wl,--exclude-libs,ALL" \
+        -DSUITESPARSE_ENABLE_PROJECTS=cholmod \
+        -DBUILD_SHARED_LIBS=ON \
+        -DBUILD_STATIC_LIBS=OFF \
+        -DBUILD_TESTING=OFF \
+        -DCHOLMOD_GPL=ON \
+        -DCHOLMOD_SUPERNODAL=ON \
+        -DCHOLMOD_PARTITION=ON \
+        -DCHOLMOD_MATRIXOPS=OFF \
+        -DCHOLMOD_MODIFY=OFF \
+        -DCHOLMOD_USE_OPENMP=OFF \
+        -DCHOLMOD_USE_CUDA=OFF \
+        -DSUITESPARSE_USE_CUDA=OFF \
+        -DSUITESPARSE_USE_OPENMP=OFF \
+        -DSUITESPARSE_USE_FORTRAN=OFF \
+        -DSUITESPARSE_DEMOS=OFF \
+        -DSUITESPARSE_USE_STRICT=ON
+    "$cmake_executable" --build "$cholmod_build" --parallel
+    "$cmake_executable" --install "$cholmod_build"
+    printf '%s\n' "$bundle_signature" > "$bundle_stamp"
+fi
+
+if [[ "$dependencies_only" == "ON" ]]; then
+    echo "CPU-IPC dependencies are ready."
+    echo "vcpkg: ${vcpkg_root}"
+    echo "Optimized CHOLMOD: ${cholmod_install}"
+    exit 0
+fi
+
+echo "[4/4] Configuring and building CPU-IPC"
 project_build="${build_root}/cpu-ipc"
-cmake -S "$repo_root" -B "$project_build" -G Ninja \
+"$cmake_executable" -S "$repo_root" -B "$project_build" -G Ninja \
     -DCMAKE_BUILD_TYPE="$configuration" \
     -DCMAKE_TOOLCHAIN_FILE="$vcpkg_toolchain" \
     -DVCPKG_TARGET_TRIPLET="$triplet" \
     -DCIPC_BUILD_VIEWER="$build_viewer" \
+    -DCIPC_ENABLE_FRICTION=ON \
+    -DCIPC_ENABLE_QUADRATIC_BENDING=ON \
+    -DCIPC_ENABLE_METIS_ORDERING=ON \
+    -DCIPC_ENABLE_PARDISO=ON \
     -DCIPC_CHOLMOD_ROOT="$cholmod_install" \
     -DCIPC_REQUIRE_OPTIMIZED_CHOLMOD=ON
-cmake --build "$project_build" --parallel
+"$cmake_executable" --build "$project_build" --parallel
 
 echo "CPU-IPC ${configuration} build completed: ${project_build}"
 echo "Headless executable: ${project_build}/cipc_headless"

@@ -8,8 +8,10 @@
 4. **迭代上限尚未配置化**：Newton 10000、κ 64、穿透回退 64、ACCD 10000 目前是代码常量；已有失败出口，但若要针对场景调节，应进入 `SolverSettings`/配置文件。
 5. **`mesh3D` 仍是 god object**：静止拓扑、材料、动态状态、接触历史和 workspace 伴随数据尚未完全分离；当前仅把 Newton workspace、solver context 和 broad phase 独立出来。
 6. **PARDISO 是推荐默认Release后端**：Windows静态oneMKL与`/MDd`不兼容，因此MSVC Debug自动使用优化CHOLMOD。两条生产路径都需要oneMKL，一键脚本会统一准备。
-7. **性能版 CHOLMOD 改变许可边界**：`scripts/build_cholmod_mkl.ps1` 启用GPL supernodal模块并将静态oneMKL嵌入CHOLMOD DLL。配置必须通过`CIPC_CHOLMOD_ROOT`接入且验证`cholmod_super_numeric`；不能把普通OpenBLAS/simplicial包的结果标成MKL supernodal。二进制分发需遵守GPL-2.0-or-later。
+7. **性能版 CHOLMOD 改变许可边界**：一键脚本从固定 SuiteSparse 源码构建 Config/AMD/CAMD/CCOLAMD/COLAMD/CHOLMOD 共享 bundle，启用 GPL supernodal 并把静态 oneMKL 嵌入 CHOLMOD。配置必须通过 `CIPC_CHOLMOD_ROOT` 接入完整 bundle 且验证 `cholmod_super_numeric`；不能把普通 OpenBLAS/simplicial 包的结果标成 MKL supernodal。二进制分发需遵守 GPL-2.0-or-later。
 8. **Windows 与 WSL 构建目录不可复用**：两边的编译器、路径语法、库格式和 ABI 不同。Windows 固定使用 `build`，WSL 一键脚本固定使用 `build-wsl`；不要从 WSL 配置已有的 Windows build tree，也不要把 `/mnt/c/...` 或盘符路径写入仓库配置。vcpkg 只能复用同一平台的 checkout/installed tree。
+9. **一键脚本只能代替库配置，不能消除平台编译器**：Windows 仍需 64-bit MSVC C++ workload；脚本会检测并给出 winget 命令。Ubuntu 默认会通过 sudo/apt 补齐缺少的编译工具和 viewer X11/OpenGL 开发包；CI 或受管环境应传 `--no-system-packages`，此时只报告精确缺项、不修改系统。自动 vcpkg 固定 revision；只有用户显式传 `VCPKG_ROOT`/路径时才允许替换，维护者升级 `vcpkg-revision.txt` 后必须重新做双平台首次安装。
+10. **非 quadratic hinge 尚未通过 Linux 直接求解器回归**：相同一键依赖下 Windows PARDISO 单步通过，但 WSL/GCC 的 PARDISO phase 22 返回 `-4`，CHOLMOD 报矩阵非正定并在 0 Newton 退出；两边首轮稀疏模式也不同。默认产品和一键脚本因此明确固定 quadratic bending ON。重新开放 Linux non-quadratic 产品前必须审计 hinge Hessian/PSD 与装配确定性，并完成双求解器轨迹回归。
 
 ## B. 保留但默认未接入的安全路径
 
@@ -44,7 +46,7 @@
 - PARDISO 使用 `mtype=2` 且读取 upper CSR；Eigen column-major lower CSC 的 outer/inner/value 内存正好等价于同一对称矩阵的 upper CSR。不要再做一次转置，也不能把 `iparm[34]=1` 的零基索引改回一基。LP64 构建要求 `MKL_INT` 与 Eigen `StorageIndex` 都是 32-bit int。
 - PARDISO 的 phase 11/22/33 状态随 `IPCSolverContext::linearSystem` 跨帧保存。模式变化时可输入上一份 METIS permutation；factor nnz 超过最近 fresh ordering 的 1.2 倍会在下一次求解强制重排。维护这一逻辑时要同时检查结果、`symbolic_analyses`、phase 时间和 fill，不能只减少 phase 11 次数。
 - oneMKL 的 TBB threading layer 不由简单的 `mkl_set_num_threads` 可靠限制；当前每个 phase 用 `tbb::global_control`，运行时默认 16 线程（本机 16C/32T 最优），32 线程无收益；显式 0 才使用 oneMKL 默认。线程数属于 benchmark 配置，必须随结果报告。
-- vcpkg默认CHOLMOD不含supernodal；性能脚本显式启用该GPL模块并另建oneMKL DLL。默认PARDISO/system fallback不强制GPL，但一旦设置`CIPC_CHOLMOD_ROOT`使用性能版，不能把其结果或分发许可写成普通CHOLMOD core。
+- 性能脚本不安装 vcpkg CHOLMOD，而是校验下载固定 SuiteSparse 源码、显式启用 GPL supernodal 并构建 oneMKL bundle，避免无用 OpenBLAS。默认 PARDISO/system fallback 本身不强制 GPL，但一旦设置 `CIPC_CHOLMOD_ROOT` 使用性能 bundle，不能把其结果或分发许可写成普通 CHOLMOD core。
 
 ## E. 已修复记录（保留用于理解历史代码与旧文档）
 

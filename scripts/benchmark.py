@@ -22,7 +22,7 @@ def parse_args():
     )
     parser.add_argument(
         "--linear-solver",
-        choices=("auto", "cholmod", "suitesparse-ldl", "pardiso", "eigen-cg"),
+        choices=("auto", "cholmod", "pardiso", "eigen-cg"),
         default="auto",
         help="solver backend (default: auto, matching the executable)",
     )

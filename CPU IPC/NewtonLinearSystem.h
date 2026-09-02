@@ -2,7 +2,6 @@
 
 #include "LinearSolverOptions.h"
 #include "CholmodSolver.h"
-#include "SuiteSparseLDLSolver.h"
 #ifdef CIPC_HAS_PARDISO
 #include "PardisoSolver.h"
 #endif
@@ -45,7 +44,6 @@ private:
         const std::vector<Eigen::Vector3d>& gradient,
         std::size_t& matrixNonZeros);
     void solveWithCholmod(const LinearSolverOptions& options);
-    void solveWithSuiteSparseLDL();
     void solveWithPardiso(const LinearSolverOptions& options);
     void solveWithEigenConjugateGradient(const LinearSolverOptions& options);
     void scatter(std::vector<Eigen::Vector3d>& direction) const;
@@ -55,7 +53,6 @@ private:
     Eigen::VectorXd rightHandSide_;
     Eigen::VectorXd solution_;
     CholmodSolver cholmodSolver_;
-    SuiteSparseLDLSolver suiteSparseLDLSolver_;
 #ifdef CIPC_HAS_PARDISO
     PardisoSolver pardisoSolver_;
 #endif

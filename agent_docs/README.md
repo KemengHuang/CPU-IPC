@@ -9,7 +9,7 @@
 - **Stable Neo-Hookean（SNK）** 四面体弹性模型（Smith et al. 2018）
 - **Baraff-Witkin** 布料拉伸/剪切 + 二次弯曲（Bergou/Bridson 风格）
 - 经典 IPC 对数障碍接触（PT/EE/PP/PE）+ 近平行 EE mollifier + 滞后摩擦
-- Newton 迭代 + 能力感知默认后端（有 oneMKL 则 PARDISO，否则块感知 SuiteSparse LDL）/ 可选 CHOLMOD 与 Eigen-CG + 回溯线搜索 + Additive CCD
+- Newton迭代 + 默认PARDISO / 自动备选优化CHOLMOD / 可选Eigen-CG + 回溯线搜索 + Additive CCD
 - TBB 并行；GLUT/OpenGL 固定管线可视化
 
 ## 文档索引
@@ -30,7 +30,7 @@
 
 ## 30 秒上手
 
-1. 装依赖（见 `01_overview.md`），`cmake -B build && cmake --build build --config Release`，得到 `cipc` viewer、`cipc_headless` 和 `cipc_core`。项目不再生成测试 target。
+1. Windows推荐直接运行`powershell -ExecutionPolicy Bypass -File build.ps1 -VcpkgRoot D:/VCPKG/vcpkg`，一键安装依赖、构建/连接优化CHOLMOD并编译Release，得到`cipc`、`cipc_headless`和`cipc_core`。项目不生成测试target。
 2. 运行 `cipc`：打开 1000×1000 GLUT 窗口，**空格键**开始/暂停仿真；每显示一帧 = 一个 IPC 时间步。资产和输出均使用编译期绝对路径，不再依赖当前工作目录。
 3. `SimulationScene` 已接通三个场景：默认 `ClothOverBunny`、`TwistingMat`，以及参考 GPU_IPC 的双 `bunny2` 大场景（每只 scale=0.2）。场景参数在 `Assets/scene/parameterSetting.txt`，现按键名解析并校验未知、重复、缺失及越界值。
 4. 时间步/Newton/线搜索编排在 `CPU IPC/IPCSolver.cpp`（`solveIPCStep` / `solveBarrierSubproblem`）；接触导数在 `ContactMechanics.cpp`，摩擦在 `Friction.cpp`，线性后端在 `NewtonLinearSystem.cpp`。

@@ -6,6 +6,7 @@ option(CIPC_ENABLE_FRICTION "Enable lagged IPC friction" ON)
 option(CIPC_ENABLE_QUADRATIC_BENDING "Enable quadratic cloth bending" ON)
 option(CIPC_ENABLE_METIS_ORDERING "Build CHOLMOD Partition/METIS support for ordering experiments" ON)
 option(CIPC_ENABLE_PARDISO "Build the recommended/default oneMKL PARDISO backend when available" ON)
+option(CIPC_REQUIRE_OPTIMIZED_CHOLMOD "Require the tuned GPL supernodal+oneMKL CHOLMOD fallback" ON)
 
 set(_CIPC_LOCAL_CHOLMOD_MKL_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/build/cholmod-mkl-install")
 if(EXISTS "${_CIPC_LOCAL_CHOLMOD_MKL_ROOT}/lib/cholmod.lib"
@@ -17,6 +18,11 @@ else()
 endif()
 set(CIPC_CHOLMOD_ROOT "${_CIPC_DEFAULT_CHOLMOD_ROOT}" CACHE PATH
     "Prefix of the recommended supernodal CHOLMOD build linked to oneMKL")
+if(CIPC_REQUIRE_OPTIMIZED_CHOLMOD AND NOT CIPC_CHOLMOD_ROOT)
+    message(FATAL_ERROR
+        "Optimized CHOLMOD is required. Run build.ps1, or "
+        "set CIPC_REQUIRE_OPTIMIZED_CHOLMOD=OFF for a compatibility build.")
+endif()
 
 # Select a default build type for single-configuration generators.
 if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
@@ -66,7 +72,7 @@ if(CIPC_CHOLMOD_ROOT)
     endif()
     set(CIPC_CHOLMOD_USE_MKL ON)
 endif()
-set(CIPC_SUITESPARSE_COMPONENTS CHOLMOD LDL)
+set(CIPC_SUITESPARSE_COMPONENTS CHOLMOD)
 if(CIPC_ENABLE_METIS_ORDERING)
     list(APPEND CIPC_SUITESPARSE_COMPONENTS Partition)
 endif()
@@ -116,7 +122,6 @@ set(CIPC_CORE_SOURCES
     "${IPC_SOURCE_DIR}/RuntimePaths.cpp"
     "${IPC_SOURCE_DIR}/SimulationMesh.cpp"
     "${IPC_SOURCE_DIR}/Simulator.cpp"
-    "${IPC_SOURCE_DIR}/SuiteSparseLDLSolver.cpp"
     "${IPC_SOURCE_DIR}/TetInversionGuard.cpp"
 )
 if(CIPC_HAS_PARDISO)
@@ -201,7 +206,6 @@ target_link_libraries(cipc_core PUBLIC
     TBB::tbb
     SuiteSparse::AMD
     SuiteSparse::CHOLMOD
-    SuiteSparse::LDL
 )
 if(CIPC_ENABLE_METIS_ORDERING)
     target_link_libraries(cipc_core PUBLIC SuiteSparse::Partition)
@@ -260,13 +264,13 @@ message(STATUS "  - Headless runner: cipc_headless")
 message(STATUS "  - Friction: ${CIPC_ENABLE_FRICTION}")
 message(STATUS "  - Quadratic bending: ${CIPC_ENABLE_QUADRATIC_BENDING}")
 if(CIPC_HAS_PARDISO AND MSVC)
-    message(STATUS "  - Default linear solver: PARDISO (non-Debug); SuiteSparse LDL (Debug)")
+    message(STATUS "  - Default linear solver: PARDISO (non-Debug); optimized CHOLMOD (Debug)")
     message(STATUS "  - oneMKL PARDISO backend: ON (non-Debug configurations)")
 elseif(CIPC_HAS_PARDISO)
     message(STATUS "  - Default linear solver: PARDISO")
     message(STATUS "  - oneMKL PARDISO backend: ON")
 else()
-    message(STATUS "  - Default linear solver: SuiteSparse LDL")
+    message(STATUS "  - Default linear solver: optimized CHOLMOD")
     message(STATUS "  - oneMKL PARDISO backend: OFF")
 endif()
 message(STATUS "  - CHOLMOD Partition/METIS support: ${CIPC_ENABLE_METIS_ORDERING}")

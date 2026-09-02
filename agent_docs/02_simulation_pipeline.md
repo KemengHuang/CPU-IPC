@@ -21,7 +21,7 @@
 | 顺序 | 步骤 | 位置 | 计时器 |
 |---|---|---|---|
 | 1 | `computeGradientAndHessian(mesh, gradient, BH, gd)`，返回碰撞数 | `:1971` | time0 |
-| 2 | `NewtonLinearSystem::solve`：统一装配后按配置调用 SuiteSparse LDL、CHOLMOD、PARDISO 或 Eigen-CG；三个直接法在稀疏结构不变时复用符号分析 | `NewtonLinearSystem.cpp` | time1 |
+| 2 | `NewtonLinearSystem::solve`：统一装配后按配置调用PARDISO、优化CHOLMOD或Eigen-CG；两个直接法在稀疏结构不变时复用符号分析 | `NewtonLinearSystem.cpp` | time1 |
 | 3 | 用**本轮刚求出的方向**做收敛检查：`directionInfinityNorm(moveDir)`；阈值 = `Newton_Solver_Threshold·sqrt(bboxDiagSize2)·dt`；低于阈值则记录本轮 assembly/linear 时间并在 CCD/line search 前 break | `solveBarrierSubproblem` | — |
 | 4 | 可行步长上限（见 §3） | `:1990-2024` | time2 |
 | 5 | `lineSearch(...)` 回溯 | `:2031` | time3 |
@@ -79,8 +79,7 @@ E = dt²·(E_SNH(四面体) + E_BaraffWitkin(布料) + E_bend)
 
 ## 7. 线性求解（`NewtonLinearSystem.cpp/.h`）
 
-- 四个后端共用完全相同的 `BHessian` 下三角 triplet、质量对角和固定顶点 RHS 清零逻辑，避免后端间装配语义分叉。
-- 回退 `LinearSolverBackend::SuiteSparseLDL`：当当前配置没有 PARDISO 时自动使用；将标量稀疏图折叠到每顶点 3-DOF block 做 AMD，展开 permutation 后只构建一次 `PAPᵀ` 上三角 CSC；同结构 Newton 只按缓存映射刷新 14.5 万个数值，再复用 symbolic 数据做 LDLᵀ numeric factorization。
+- 三个后端共用完全相同的`BHessian`下三角triplet、质量对角和固定顶点RHS清零逻辑，避免后端间装配语义分叉。
 - 可选 `LinearSolverBackend::Cholmod`：只有CSC结构变化才重新analyze，使用`cholmod_solve2`复用dense solution/workspace。性能prefix启用GPL supernodal+oneMKL/TBB，生产ordering按实测固定AMD；`--cholmod-threads 0`按矩阵nnz自动选择4/8线程，正数显式覆盖。无prefix时兼容system CHOLMOD。
 - 首选 `LinearSolverBackend::Pardiso`：当前配置定义 `CIPC_HAS_PARDISO` 时自动成为默认；使用 `mtype=2` 的实对称正定模式。Eigen 的 lower CSC 对称地解释为 upper CSR，避免转置/复制矩阵；phase 11 分析、22 数值分解、33 求解分别计时。同模式跨 Newton/κ/时间步跳过 phase 11；模式变化时优先复用已有 METIS permutation，若 factor nnz 超过最近 fresh ordering 的 1.2 倍则下一轮重新排序。默认限制为 16 线程；`--pardiso-threads 0` 使用 oneMKL 默认，其他正数通过 `tbb::global_control` 限制每个 phase。
 - 可选 `LinearSolverBackend::EigenConjugateGradient`：Eigen CG + `IncompleteCholesky<Lower>`，容差/最大迭代来自 `LinearSolverOptions`。CLI 用 `--linear-solver eigen-cg`；可通过 twisting-mat 单步手工 smoke。它是正式可选项，不是死代码。

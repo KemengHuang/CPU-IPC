@@ -10,7 +10,7 @@ bunny2 首时间步为 3 次 Newton，因此 PARDISO phase 22 与 phase 33 各�
 
 ## 2. 构建与接口
 
-- `CIPC_ENABLE_PARDISO=ON` 是推荐保持开启的默认主路径。找到 `MKL CONFIG` 时定义 `CIPC_HAS_PARDISO`、编译 `PardisoSolver.cpp` 并默认选择 PARDISO；找不到时仅为兼容性继续构建 SuiteSparse LDL、CHOLMOD 与 Eigen-CG。
+- `CIPC_ENABLE_PARDISO=ON`是推荐保持开启的默认主路径。当前配置无法提供PARDISO时自动选择优化CHOLMOD；Eigen-CG仅保留显式对照。
 - Windows/vcpkg：`vcpkg install intel-mkl:x64-windows`。当前接入固定 `MKL_LINK=static`、`MKL_INTERFACE=lp64`、`MKL_THREADING=tbb_thread`。
 - 当前 vcpkg oneMKL 2025.2 静态包使用 Release CRT。为避免 `/MD` 与 `/MDd` 的 `LNK2038`，MSVC Debug 配置自动只排除 PARDISO；Release、RelWithDebInfo 和其余 Debug 产品仍正常。静态链接后的 Release `cipc_headless.exe` 在本机为 74,003,968 bytes（约 74.0 MB / 70.6 MiB）。
 - CLI：`--linear-solver pardiso --pardiso-threads N`。运行时默认 `N=16`，显式 `N=0` 才采用 oneMKL 默认；正数通过每个 phase 外层的 `tbb::global_control(max_allowed_parallelism)` 生效。直接调用 `mkl_set_num_threads` 对 TBB threading layer 的实测限制无效，因此未采用。
@@ -29,7 +29,7 @@ bunny2 首时间步为 3 次 Newton，因此 PARDISO phase 22 与 phase 33 各�
 
 ### 生命周期与 permutation
 
-`NewtonLinearSystem` 现由 `IPCSolverContext` 持有，不再局限于一个 barrier 子问题，因此 sparse buffer 与三个直接法的 symbolic 状态可跨 Newton、κ 外层和时间步复用。每帧 metrics 用调用前后的累计计数/计时差值，避免跨帧重复计账。
+`NewtonLinearSystem`现由`IPCSolverContext`持有，因此sparse buffer与PARDISO/CHOLMOD两个直接法的symbolic状态可跨Newton、κ外层和时间步复用。每帧metrics使用累计值差分，避免跨帧重复计账。
 
 最终两步 smoke 中 frame 0 为 `analyze=1`，相同 pattern 的 frame 1 为 `analyze=0`；第二帧 phase 22/33 约为 89/61 ms，验证了复用不是只停留在代码结构上。
 
@@ -115,7 +115,6 @@ bunny2、一个完整时间步、每档 3 次中位数：
 |---|---:|---:|---:|
 | PARDISO, 16 threads | 1284.371 | 1167.917 | 1.00× |
 | CHOLMOD（当前非 supernodal vcpkg） | 8253.445 | 8143.121 | 6.43× slower |
-| SuiteSparse LDL | 12568.366 | 12456.280 | 9.79× slower |
 
 三者均为 3 Newton；位置和、平方范数和、nnz 与接触指标在浮点舍入内一致。这里的巨大收益来自大 SPD sparse factorization，并不表示 PARDISO 在所有小场景都必然有相同比例。
 
@@ -124,13 +123,11 @@ bunny2、一个完整时间步、每档 3 次中位数：
 | scene / solver | total step_ms | total linear_ms | PARDISO 加速 |
 |---|---:|---:|---:|
 | cloth-bunny / PARDISO(16) | 585.018 | 450.187 | — |
-| cloth-bunny / SuiteSparse LDL | 973.519 | 837.246 | 1.66× |
 | cloth-bunny / CHOLMOD | 1049.260 | 910.539 | 1.79× |
 | twisting-mat / PARDISO(16) | 467.444 | 338.971 | — |
-| twisting-mat / SuiteSparse LDL | 628.311 | 506.454 | 1.34× |
 | twisting-mat / CHOLMOD | 674.331 | 544.592 | 1.44× |
 
-这组数据已包含 `NewtonLinearSystem` 跨 time step 复用；该生命周期优化也同时帮助 LDL/CHOLMOD，比较不是只给 PARDISO 特权。
+这组数据已包含`NewtonLinearSystem`跨time step复用；PARDISO与CHOLMOD使用同一生命周期和装配语义。
 
 ## 8. 内存
 
@@ -140,7 +137,6 @@ bunny2 单时间步、50 ms 轮询的一次运行记录：
 |---|---:|---:|---:|---:|
 | PARDISO(16) | 1.70 s | 8.97 s | 1050.9 MiB | 1229.7 MiB |
 | CHOLMOD | 8.62 s | 13.39 s | 1045.2 MiB | 1146.8 MiB |
-| SuiteSparse LDL | 13.0 s | 17.86 s | 1085.8 MiB | 1180.2 MiB |
 
 PARDISO 的 working set 与两者相近，private bytes 比 CHOLMOD 高约 7%；这是单次轮询样本，不应解释成精确分配剖析。
 
@@ -173,7 +169,7 @@ always-fresh 与 adaptive 的坐标和差约 `1e-10`，碰撞整数指标一致�
 
 ## 10. 正确性与当前方向收敛
 
-- PARDISO、CHOLMOD、SuiteSparse LDL 使用同一 Hessian、RHS、边界处理、CCD pair、CFL 与 line search；后端只替换线性求解。
+- PARDISO与CHOLMOD使用同一Hessian、RHS、边界处理、CCD pair、CFL与line search；后端只替换线性求解。
 - 首步跨后端结果在浮点舍入内一致；50 步 ordering A/B 保持接触数和正最小距离。
 - `armijoCoefficient=0`、严格 `E_trial<E0`、摩擦 Hessian scale=1 均未改变。
 - 无接触且接近机器精度时，旧停止顺序会把本轮近零方向继续送入严格比较：实测 `gTp≈7.33e−30`、能量只在约 `1e−16` 末位摆动，单帧可随机二分至52次。按项目当前要求，正式顺序改为先完成本轮线性求解，再用该当前方向判断；收敛时不进入CCD/line search。5次独立运行×前5帧的回退由417降为0，终态完全一致，5步中位由4429.220降至3396.438 ms。该调整不允许相等/上升能量，也没有修改Hessian或scale。
@@ -182,7 +178,7 @@ always-fresh 与 adaptive 的坐标和差约 `1e-10`，碰撞整数指标一致�
 ## 11. 采用建议与后续瓶颈
 
 - 大型 CPU benchmark 或 10 万 DOF 级 SPD Newton 系统：优先试 `pardiso --pardiso-threads <physical cores>`；本机为 16。
-- 当前配置提供 PARDISO 时，能力感知默认值直接选择 PARDISO（16线程）；无 oneMKL、显式关闭或 MSVC Debug 时自动回退 SuiteSparse LDL。仍可用 `--linear-solver suitesparse-ldl` 强制选择较小、可移植的后端。
+- 当前配置提供PARDISO时默认选择PARDISO（16线程）；显式关闭或MSVC Debug时自动选择优化CHOLMOD。
 - 下一性能目标应是直接构建/更新 CSC、减少 `setFromTriplets` 与 pattern comparison 成本，以及降低 phase 11 前后的串行工作；在本机继续从 16 增到 32 线程没有收益。
 - 若评估固定 superset pattern，必须同时报告 symbolic 次数、factor nnz、峰值内存、Newton/线搜索和最终轨迹；少做分析但让 fill 长期膨胀并不是净优化。
 

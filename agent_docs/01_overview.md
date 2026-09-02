@@ -1,6 +1,6 @@
 # 01 — 构建、架构与核心数据结构
 
-本版本定位为**高度 CPU 优化的 IPC 实现与 CPU IPC 对比基准**：提供无窗口产品入口、分阶段 metrics、重复进程 benchmark、LBVH/SpatialHash A/B 和 SuiteSparse LDL/CHOLMOD/oneMKL PARDISO/Eigen-CG A/B。对比时必须同时核对轨迹、接触、Newton/线搜索和最小距离，不能通过改变物理问题换取表面加速。
+本版本定位为**高度 CPU 优化的 IPC 实现与 CPU IPC 对比基准**：提供无窗口产品入口、分阶段metrics、重复进程benchmark、LBVH/SpatialHash A/B和PARDISO/优化CHOLMOD/Eigen-CG A/B。对比时必须同时核对轨迹、接触、Newton/线搜索和最小距离，不能通过改变物理问题换取表面加速。
 
 ## 构建与运行
 
@@ -13,6 +13,12 @@
 
 构建：
 
+```powershell
+powershell -ExecutionPolicy Bypass -File build.ps1 -VcpkgRoot D:/VCPKG/vcpkg
+```
+
+以上是一键推荐路径；完成后仍可手工增量构建：
+
 ```bash
 cmake -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build --config Release
@@ -24,14 +30,15 @@ cmake --build build --config Release
   - `CIPC_ENABLE_FRICTION=ON` — 定义 `USE_FRICTION`。
   - `CIPC_ENABLE_QUADRATIC_BENDING=ON` — 定义 `USE_QUADRATIC_BENDING`。
   - `CIPC_ENABLE_METIS_ORDERING=ON` — 构建/链接 CHOLMOD Partition/METIS 供实验；生产配置按实测固定 AMD，因为它在三个项目矩阵上都快于强制 METIS 与 multi-method AUTO。
-  - `CIPC_ENABLE_PARDISO=ON` — 推荐保持开启；找到 oneMKL CMake package 时以 PARDISO 作为默认主后端。未找到时为保证兼容性回退 SuiteSparse LDL。Windows vcpkg oneMKL 静态库使用 Release CRT，因此 MSVC Debug 回退 LDL，Release/RelWithDebInfo 使用 PARDISO。
+  - `CIPC_ENABLE_PARDISO=ON` — 推荐保持开启；找到oneMKL时以PARDISO作为默认主后端。PARDISO不可用或MSVC Debug时自动选择优化CHOLMOD。
   - `CIPC_CHOLMOD_ROOT` — 指向性能版 CHOLMOD prefix；标准 `build/cholmod-mkl-install` 会自动识别。配置会验证 supernodal 与 METIS 符号，并让DLL内部使用oneMKL LP64/TBB。
+  - `CIPC_REQUIRE_OPTIMIZED_CHOLMOD=ON` — 默认拒绝误连普通OpenBLAS CHOLMOD；运行根目录`build.ps1`可一键完成依赖、连接和编译。
   - `CIPC_ASSETS_DIR` = `<repo>/Assets/`（活，`Simulator.cpp` 读参数文件/网格用）
   - `CIPC_OUTPUT_DIR` = `<repo>/Output/`（活，由 `RuntimePaths` 统一管理日志、检查点、表面和截图输出）
 - SuiteSparse 查找器会校验 `cholmod_metis`，兼容 `METIS::METIS`、`METIS::metis`、vcpkg 的 `metis` target、Linux 常规 `metis.h + libmetis` 以及内嵌 Partition 的 CHOLMOD；多配置生成器分别绑定 Release/Debug SuiteSparse 库。性能版CHOLMOD通过共享库内部嵌入oneMKL并额外校验`cholmod_super_numeric`；system fallback才选择OpenBLAS/系统BLAS-LAPACK。
 - MSVC 的 `/bigobj` 只施加到 `cipc_core`（`ContactMechanics.cpp` 的生成代码需要），不再污染全局 `CMAKE_CXX_FLAGS`。
 
-运行：`cipc` 打开 GLUT 窗口，空格开始/暂停。`cipc_headless --steps N --broad-phase lbvh` 写逐帧 `metrics.csv`；默认后端按当前构建能力选择：定义 `CIPC_HAS_PARDISO` 时用 PARDISO，否则回退块感知 SuiteSparse LDL。`--linear-solver suitesparse-ldl|cholmod|pardiso|eigen-cg` 可显式覆盖。PARDISO 默认限制为 16 线程，`--pardiso-threads 0` 可改用 oneMKL 默认。一个 `--steps 1` 是一个完整时间步/帧，内部可能包含多次 Newton 与线性分解。运行时自动创建输出目录且可由 headless `--output` 覆盖；`9` 切换表面 OBJ，`/` 切换截图，两者默认关闭——见 `06_app_layer.md`。
+运行：`cipc`打开GLUT窗口，空格开始/暂停。`cipc_headless --steps N --broad-phase lbvh`写逐帧`metrics.csv`；默认有PARDISO时使用PARDISO，否则自动使用优化CHOLMOD。`--linear-solver cholmod|pardiso|eigen-cg`可显式覆盖。PARDISO默认16线程；CHOLMOD默认按nnz自动4/8线程。一个`--steps 1`是一个完整时间步/帧。——见`06_app_layer.md`。
 
 ## 整体架构
 
@@ -42,7 +49,7 @@ cipc viewer / cipc_headless
                   ├─ κ 外层循环: solveBarrierSubproblem × N
                   │    └─ Newton 迭代:
                   │         computeGradientAndHessian  (弹性+障碍+摩擦)
-                  │         NewtonLinearSystem::solve  (SuiteSparse LDL / CHOLMOD / PARDISO / Eigen-CG)
+                  │         NewtonLinearSystem::solve  (PARDISO / optimized CHOLMOD / Eigen-CG)
                   │         可行步长 (ACCD / CFL / 地面射线)
                   │         lineSearch (回溯 + 穿透防护)
                   │         postLineSearch (κ 自适应)
@@ -88,7 +95,7 @@ cipc viewer / cipc_headless
 - `H9x9 + D3Index`：3 顶点（PE 接触、布料三角形弹性）
 - `H12x12 + D4Index`：4 顶点（PT/EE 接触、tet 弹性、弯曲）
 
-`toTriplets(boundaryTypes, output)` 用两遍并行 count/prefix/fill，只输出对称求解所需的全局下三角、自由顶点项和非零数值；不会生成占位零。输出 buffer 属于 `NewtonLinearSystem` 并跨 Newton/时间步保留容量，`Eigen::SparseMatrix::setFromTriplets` 负责合并重叠项；SuiteSparse LDL、CHOLMOD、PARDISO 与 Eigen-CG 共用该矩阵和 RHS。
+`toTriplets(boundaryTypes, output)`用两遍并行count/prefix/fill，只输出全局下三角、自由顶点项和非零数值；不会生成占位零。输出buffer属于`NewtonLinearSystem`并跨Newton/时间步保留容量；PARDISO、CHOLMOD与Eigen-CG共用该矩阵和RHS。
 
 ### `EncodedContact` 接触编码（`EncodedContact.h`）
 

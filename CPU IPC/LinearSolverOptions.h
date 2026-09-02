@@ -2,7 +2,6 @@
 
 enum class LinearSolverBackend {
     Cholmod,
-    SuiteSparseLDL,
     Pardiso,
     EigenConjugateGradient
 };
@@ -11,7 +10,7 @@ struct LinearSolverOptions {
 #ifdef CIPC_HAS_PARDISO
     LinearSolverBackend backend = LinearSolverBackend::Pardiso;
 #else
-    LinearSolverBackend backend = LinearSolverBackend::SuiteSparseLDL;
+    LinearSolverBackend backend = LinearSolverBackend::Cholmod;
 #endif
     double relativeTolerance = 1e-6;
     int maximumIterations = 10000;

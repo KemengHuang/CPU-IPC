@@ -11,19 +11,17 @@
 - `--cholmod-threads 0`为默认自适应：矩阵`nnz<500,000`用4线程，否则8线程；正数显式覆盖。
 - `CIPC_CHOLMOD_ROOT`选择优化prefix；CMake链接检查`cholmod_super_numeric`和`cholmod_metis`，Windows构建后复制优化DLL与Release TBB runtime。
 
-构建：
+推荐一键构建（依赖、CHOLMOD、连接、CPU-IPC Release全部完成）：
 
 ```powershell
-powershell -ExecutionPolicy Bypass -File scripts/build_cholmod_mkl.ps1 `
-  -VcpkgRoot D:/VCPKG/vcpkg
-cmake -S . -B build -DCMAKE_TOOLCHAIN_FILE=D:/VCPKG/vcpkg/scripts/buildsystems/vcpkg.cmake
+powershell -ExecutionPolicy Bypass -File build.ps1 -VcpkgRoot D:/VCPKG/vcpkg
 ```
 
-脚本默认安装到`build/cholmod-mkl-install`，主工程自动识别；也可显式传`-DCIPC_CHOLMOD_ROOT=<prefix>`。
+底层`build_cholmod_mkl.ps1`默认安装到`build/cholmod-mkl-install`，主工程自动识别；也可显式传`-DCIPC_CHOLMOD_ROOT=<prefix>`。根目录一键脚本已用全新build目录完成端到端验证。
 
 ## 2. 许可边界
 
-CHOLMOD supernodal在当前SuiteSparse/vcpkg中属于GPL-2.0-or-later模块。性能版DLL因此改变二进制分发的许可边界；不能把它描述为原先的非GPL CHOLMOD core。PARDISO、LDL与system CHOLMOD兼容路径仍可独立构建。
+CHOLMOD supernodal在当前SuiteSparse/vcpkg中属于GPL-2.0-or-later模块。性能版DLL因此改变二进制分发的许可边界；不能把它描述为原先的非GPL CHOLMOD core。PARDISO与显式关闭性能要求的system-CHOLMOD诊断路径仍可独立构建。
 
 ## 3. Provider与算法A/B
 

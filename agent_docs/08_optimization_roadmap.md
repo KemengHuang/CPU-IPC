@@ -8,7 +8,7 @@
 - P1 已完成：下三角无占位零装配、固定尺寸活跃 FEM、PFPX 预计算、二次弯曲常量 Hessian、Newton/Energy workspace。
 - P2 已完成安全部分：SpatialHash bucket/occupancy 复用、排序 vector scratch、GPU 风格 CPU LBVH；梯度去锁和彻底 CSR SpatialHash 尚未实施，因为当前 assembly 已不是主瓶颈。
 - P3 部分完成：运行状态、构建 target、摩擦、线性系统、viewer 与核心文件职责均已分层；旧 PCG/特效/无调用文件已清理。`MMCVID` 已改名 `EncodedContact`，但负数槽位协议尚未类型化；`mesh3D` 其余职责仍待拆分。
-- P4 完成求解器优化：oneMKL PARDISO可用时成为默认并行SPD直接法，否则自动回退块感知SuiteSparse LDL；CHOLMOD已提供GPL supernodal+oneMKL/TBB构建脚本、AMD实测ordering与4/8线程自适应，Eigen-CG继续作为共享装配后的可选后端。未改Hessian scale/近似或Newton算法。
+- P4完成求解器优化：PARDISO为默认并行SPD直接法，优化CHOLMOD为自动备选；CHOLMOD提供GPL supernodal+oneMKL/TBB一键构建、AMD ordering与4/8线程自适应，Eigen-CG保留为对照。未改Hessian scale/近似或Newton算法。
 
 整体实测详见 `09_optimization_report.md`，PARDISO 专项见 `10_pardiso_report.md`。
 
@@ -18,7 +18,7 @@
 - 大规模 solver 场景：双 `bunny2`，38,386 顶点 / 159,870 tet / 115,158 DOF，用于避免小场景掩盖并行直接法收益。
 - 当前构建只生成产品 target，不注册 CTest。维护验证采用 quadratic ON/OFF Release、普通 Debug、PARDISO ON/OFF 构建，cloth-bunny/twisting-mat/bunny2 headless smoke、双 broad-phase 对照和 benchmark。
 - `metrics.csv` 逐帧记录五阶段、nnz、活动集、回退、direct solver analyze/factorize；PARDISO 另有 phase 11/22/33、线程数与 factor nnz。
-- 三个直接法的 solver 状态随 `IPCSolverContext::linearSystem` 跨 Newton、κ 子问题与时间步复用；同一 CSC 模式跳过符号分析。
+- PARDISO与CHOLMOD两个直接法的solver状态随`IPCSolverContext::linearSystem`跨Newton、κ子问题与时间步复用；同一CSC模式跳过符号分析。
 - 已有无窗口多步入口与容差回归；并行结果仍非 bitwise 确定。
 
 ## P0 — 先建立可测、可回归的核心（最高优先级）
@@ -63,7 +63,7 @@ cipc_headless --scene cloth-bunny --steps 20 --broad-phase lbvh --output <dir>
 
 ### 1. 只装配 CHOLMOD 使用的下三角
 
-**状态：已完成。** `BHessian::toTriplets` 现在只输出下三角、自由 DOF 和非零数值；SuiteSparse LDL、CHOLMOD（`stype=-1`）与 Eigen-CG 共用该装配。优化前默认 bunny 的 7356 个 tet 单独会生成：
+**状态：已完成。** `BHessian::toTriplets`现在只输出下三角、自由DOF和非零数值；PARDISO、CHOLMOD（`stype=-1`）与Eigen-CG共用该装配。优化前默认bunny的7356个tet单独会生成：
 
 ```text
 7356 × 144 = 1,059,264 triplets
@@ -183,8 +183,8 @@ cipc_headless  benchmark/regression CLI
 ## P4 — 高风险算法级优化（最后考虑）
 
 - Modified Newton / lagged Hessian：若多轮 Hessian 变化小，可少做装配或分解，但会改变收敛行为。
-- Eigen-CG + Incomplete Cholesky 已作为可选后端接通；大网格上是否胜过 SuiteSparse LDL/CHOLMOD、接触刚度下是否足够鲁棒仍需专门 benchmark。
-- oneMKL PARDISO 已接入：bunny2 单时间步相对 LDL/CHOLMOD 有 9.79×/6.43× wall-time speedup，当前剩余线性瓶颈转为 Eigen `setFromTriplets`/CSC 构造和 phase 11；直接 CSC 数值装配值得单独 A/B，但不能改变矩阵模式语义。
+- Eigen-CG + Incomplete Cholesky已作为对照后端接通；大网格与接触刚度下的鲁棒性仍需专门benchmark。
+- oneMKL PARDISO与优化CHOLMOD均已接入；当前剩余线性瓶颈转为Eigen `setFromTriplets`/CSC构造和symbolic阶段。
 - 固定 superset sparsity pattern：可长期复用符号分解，但可能显著增加 fill-in 和内存。
 - 接触 Hessian 的解析 PSD/Gauss-Newton 近似：可减少逐接触特征分解，但属于算法变更，必须核对 IPC 收敛与无穿透性质。
 - LBVH 已完成并默认启用；更高风险的增量 refit 或 SAH rebuild 仍需更大场景 profile。
@@ -193,7 +193,7 @@ cipc_headless  benchmark/regression CLI
 
 1. 已完成：headless/回归/benchmark、下三角、workspace、固定尺寸 FEM、PFPX/弯曲静态化。
 2. 已完成：SpatialHash 复用与 GPU 风格 CPU LBVH；继续按场景 A/B，默认 LBVH。
-3. 已完成：PARDISO phase 11/22/33 细分、1/2/4/8/16/32 线程 sweep、双 bunny2 单步/50 步与 permutation 策略 A/B；当前配置有 PARDISO 时默认使用，缺失时自动回退 SuiteSparse LDL。
+3. 已完成：PARDISO phase 11/22/33细分、线程sweep、双bunny2单步/50步与permutation A/B；PARDISO不可用时自动使用优化CHOLMOD。
 4. 已完成：CHOLMOD supernodal/OpenBLAS/MKL、AMD/METIS/AUTO与1/2/4/6/8/12/16线程A/B；性能版通过`CIPC_CHOLMOD_ROOT`接入并验证符号。
 5. 下一步：继续细分 PARDISO/CHOLMOD 之外的 `linear_ms`（triplet / setFromTriplets），评估直接 CSC 数值装配和 phase 11 前的结构构造成本。
 6. 下一步：拆 `mesh3D`、把 `EncodedContact` 改为 tagged contact、保存 checkpoint 拓扑/参数 hash，逐步清理仍嵌在活跃大文件中的实验函数。

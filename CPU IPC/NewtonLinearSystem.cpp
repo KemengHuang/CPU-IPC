@@ -42,9 +42,6 @@ void NewtonLinearSystem::solve(
     case LinearSolverBackend::Cholmod:
         solveWithCholmod(options);
         break;
-    case LinearSolverBackend::SuiteSparseLDL:
-        solveWithSuiteSparseLDL();
-        break;
     case LinearSolverBackend::Pardiso:
         solveWithPardiso(options);
         break;
@@ -60,8 +57,7 @@ void NewtonLinearSystem::solve(
 
 std::size_t NewtonLinearSystem::symbolicAnalysisCount() const
 {
-    std::size_t count = cholmodSolver_.symbolicAnalysisCount()
-        + suiteSparseLDLSolver_.symbolicAnalysisCount();
+    std::size_t count = cholmodSolver_.symbolicAnalysisCount();
 #ifdef CIPC_HAS_PARDISO
     count += pardisoSolver_.symbolicAnalysisCount();
 #endif
@@ -70,8 +66,7 @@ std::size_t NewtonLinearSystem::symbolicAnalysisCount() const
 
 std::size_t NewtonLinearSystem::numericFactorizationCount() const
 {
-    std::size_t count = cholmodSolver_.numericFactorizationCount()
-        + suiteSparseLDLSolver_.numericFactorizationCount();
+    std::size_t count = cholmodSolver_.numericFactorizationCount();
 #ifdef CIPC_HAS_PARDISO
     count += pardisoSolver_.numericFactorizationCount();
 #endif
@@ -163,11 +158,6 @@ void NewtonLinearSystem::solveWithCholmod(const LinearSolverOptions& options)
     cholmodSolver_.setThreadCount(options.cholmodThreadCount);
     cholmodSolver_.set_pattern(matrix_);
     cholmodSolver_.solve(rightHandSide_, solution_);
-}
-
-void NewtonLinearSystem::solveWithSuiteSparseLDL()
-{
-    suiteSparseLDLSolver_.solve(matrix_, rightHandSide_, solution_);
 }
 
 void NewtonLinearSystem::solveWithPardiso(const LinearSolverOptions& options)

@@ -35,8 +35,8 @@ void printUsage(const char* executable)
         << "  --steps N\n"
         << "  --output DIRECTORY\n"
         << "  --broad-phase spatial-hash|lbvh\n"
-        << "  --linear-solver cholmod|suitesparse-ldl|pardiso|eigen-cg\n"
-        << "    default: pardiso when available, otherwise suitesparse-ldl\n"
+        << "  --linear-solver cholmod|pardiso|eigen-cg\n"
+        << "    default: pardiso when available, otherwise optimized cholmod\n"
         << "  --cholmod-threads N (default 0: auto-select 4 or 8)\n"
         << "  --pardiso-threads N (default 16; 0 uses the oneMKL default)\n"
         << "  --disable-barrier\n"
@@ -107,9 +107,6 @@ CommandLineOptions parseCommandLine(int argc, char** argv)
             const std::string value = requireValue("--linear-solver");
             if (value == "cholmod") {
                 options.linearSolver = LinearSolverBackend::Cholmod;
-            }
-            else if (value == "suitesparse-ldl") {
-                options.linearSolver = LinearSolverBackend::SuiteSparseLDL;
             }
             else if (value == "pardiso") {
                 options.linearSolver = LinearSolverBackend::Pardiso;

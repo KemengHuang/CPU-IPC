@@ -1,6 +1,6 @@
 # CPU-IPC
 
-CPU-IPC is a CPU-optimized implementation of Incremental Potential Contact for tetrahedral solids and cloth. It is intended both as a concise and practical CPU simulator and as a reproducible benchmark/reference point when comparing other CPU IPC implementations. The recommended and default Release solver is oneMKL PARDISO with 16 threads.
+CPU-IPC is a CPU-optimized implementation of Incremental Potential Contact for tetrahedral solids and cloth. It is intended both as a concise and practical CPU simulator and as an optional reproducible benchmark/reference point when comparing other CPU IPC implementations. The recommended and default Release solver is oneMKL PARDISO with 16 threads.
 
 The benchmark path is fully headless and records solver-stage timing together with numerical/iteration diagnostics. The implementation preserves the same contact, CCD, CFL, energy, gradient, and Hessian semantics across its alternative broad-phase and linear-solver backends, so performance comparisons are not obtained by silently changing the simulated problem.
 
@@ -148,9 +148,9 @@ The CPU LBVH broad phase is the default; use `--broad-phase spatial-hash` for th
 
 PARDISO is the project's primary and default Newton solver. It uses 16 threads unless `--pardiso-threads` overrides the limit. Tuned CHOLMOD is the automatic fallback and can be selected explicitly with `--linear-solver cholmod`; `--cholmod-threads 0` uses the measured automatic policy (4 threads below 500k matrix nonzeros, otherwise 8), while a positive value overrides it. Eigen-CG remains an additional comparison backend. All three share the same lower-triangular Hessian assembly and boundary handling.
 
-Each Newton convergence decision uses the direction just solved from the current gradient/Hessian. A converged direction exits before CCD and line search; the strict acceptance rule remains `E_trial < E0` with `armijoCoefficient=0`. This prevents a numerically vanished direction from being halved repeatedly only because parallel energy summation fluctuates in the last bit. On the two-bunny2 scene, five independent five-step runs reduced the first 25 frames from 417 energy backtracks to 0, made all five final states identical, and reduced median total time from 4.429 s to 3.396 s. The final convergence-check factorization is still counted, so `numeric_factorizations` can be one greater than the number of accepted Newton updates.
+Each Newton convergence decision uses the direction just solved from the current gradient/Hessian. A converged direction exits before CCD and line search; the strict acceptance rule remains `E_trial < E0`. This prevents a numerically vanished direction from being halved repeatedly only because parallel energy summation fluctuates in the last bit.
 
-The tuned CHOLMOD path is about 5.3× faster than the historical supernodal+OpenBLAS build on bunny2. With the pinned dependency bundle, five-run medians are: bunny2 one step 1.686 s for CHOLMOD versus 1.310 s for PARDISO; cloth-bunny five steps 0.621 s versus 0.575 s; twisting-mat five steps 0.412 s versus 0.431 s. A same-session old/new CHOLMOD bundle comparison on bunny2 measured 1.670/1.686 s, about a 1% difference. The two production solvers remain in the same performance tier on medium scenes, while PARDISO retains about a 29% advantage on the large bunny2 scene. PARDISO remains the default, tuned CHOLMOD is the automatic backup, and numerical results agree within floating-point reduction error. See [`agent_docs/11_cholmod_mkl_report.md`](agent_docs/11_cholmod_mkl_report.md) for the full ordering/thread/provider A/B and [`agent_docs/10_pardiso_report.md`](agent_docs/10_pardiso_report.md) for PARDISO details.
+CPU-IPC uses a specially tuned CHOLMOD backend that is substantially faster than the generic, out-of-the-box CHOLMOD builds installed through Ubuntu's `apt install libsuitesparse-dev` or through `vcpkg install suitesparse` on Linux and Windows. It performs in the same general performance tier as PARDISO; PARDISO remains faster on the largest tested scene and is therefore the default solver. Tuned CHOLMOD serves as the automatic fallback, and both backends produce numerical results that agree within floating-point reduction error. See [11_cholmod_mkl_report.md](agent_docs/11_cholmod_mkl_report.md) for the full ordering/thread/provider A/B comparison and [10_pardiso_report.md](agent_docs/10_pardiso_report.md) for PARDISO details.
 
 The one-command production build opts into GPL supernodal CHOLMOD; treat its binaries as GPL-covered distributions. Setting `CIPC_REQUIRE_OPTIMIZED_CHOLMOD=OFF` is only for system-package compatibility diagnostics.
 
@@ -183,20 +183,6 @@ For fair comparisons:
 - compare `RESULT` and physical/iteration metrics in addition to wall time;
 - report the median of multiple independent runs, not only the fastest sample;
 - do not compare absolute timings from different machines as if they were directly interchangeable.
-
-## Bending models
-
-Both bending paths use the thin-plate rigidity
-
-```text
-D = E * thickness^3 / (12 * (1 - poisson_ratio^2)).
-```
-
-- Quadratic bending precomputes the constant cotangent/area matrix `Q`.
-- Non-quadratic bending precomputes each interior hinge's rest angle and geometry weight `l0 / (h0 + h1)`, then uses consistent energy, gradient, and Hessian expressions.
-- `TetInversionGuard` is retained as an optional utility but is not enabled in the default IPC step.
-
-The non-quadratic branch is verified on both Windows and WSL with PARDISO and tuned CHOLMOD. Its previous Linux non-positive-definite failure was traced to CRLF-sensitive Gmsh tokenization corrupting tetrahedron connectivity, not to the hinge Hessian or either linear solver.
 
 ## Project layout
 

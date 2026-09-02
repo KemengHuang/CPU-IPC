@@ -224,9 +224,18 @@ macro(suitesparse_find_component COMPONENT)
 
   set(SuiteSparse_${COMPONENT}_FOUND TRUE)
   if (SuiteSparse_FIND_COMPONENT_${COMPONENT}_FILES)
-    find_path(SuiteSparse_${COMPONENT}_INCLUDE_DIR
-      NAMES ${SuiteSparse_FIND_COMPONENT_${COMPONENT}_FILES}
-      PATH_SUFFIXES ${SuiteSparse_CHECK_PATH_SUFFIXES})
+    if ("${COMPONENT}" STREQUAL "CHOLMOD" AND CIPC_CHOLMOD_ROOT)
+      unset(SuiteSparse_${COMPONENT}_INCLUDE_DIR CACHE)
+      find_path(SuiteSparse_${COMPONENT}_INCLUDE_DIR
+        NAMES ${SuiteSparse_FIND_COMPONENT_${COMPONENT}_FILES}
+        PATHS "${CIPC_CHOLMOD_ROOT}/include"
+        PATH_SUFFIXES ${SuiteSparse_CHECK_PATH_SUFFIXES}
+        NO_DEFAULT_PATH)
+    else()
+      find_path(SuiteSparse_${COMPONENT}_INCLUDE_DIR
+        NAMES ${SuiteSparse_FIND_COMPONENT_${COMPONENT}_FILES}
+        PATH_SUFFIXES ${SuiteSparse_CHECK_PATH_SUFFIXES})
+    endif()
     if (SuiteSparse_${COMPONENT}_INCLUDE_DIR)
       message(STATUS "Found ${COMPONENT} headers in: "
         "${SuiteSparse_${COMPONENT}_INCLUDE_DIR}")
@@ -256,7 +265,22 @@ macro(suitesparse_find_component COMPONENT)
         "${_SuiteSparse_LIBRARY_NAME}")
     endforeach()
 
-    if (VCPKG_INSTALLED_DIR AND VCPKG_TARGET_TRIPLET)
+    if ("${COMPONENT}" STREQUAL "CHOLMOD" AND CIPC_CHOLMOD_ROOT)
+      unset(_SuiteSparse_CHOLMOD_OVERRIDE_LIBRARY CACHE)
+      find_library(_SuiteSparse_CHOLMOD_OVERRIDE_LIBRARY
+        NAMES ${SuiteSparse_FIND_COMPONENT_${COMPONENT}_LIBRARIES}
+        PATHS "${CIPC_CHOLMOD_ROOT}/lib"
+        NO_DEFAULT_PATH)
+      set(SuiteSparse_${COMPONENT}_LIBRARY_RELEASE
+        "${_SuiteSparse_CHOLMOD_OVERRIDE_LIBRARY}"
+        CACHE FILEPATH "Release ${COMPONENT} library" FORCE)
+      # The optimized Windows build is a Release DLL. Debug clients can safely
+      # use the same import library across the DLL boundary.
+      set(SuiteSparse_${COMPONENT}_LIBRARY_DEBUG
+        "${_SuiteSparse_CHOLMOD_OVERRIDE_LIBRARY}"
+        CACHE FILEPATH "Debug ${COMPONENT} library" FORCE)
+      unset(_SuiteSparse_CHOLMOD_OVERRIDE_LIBRARY CACHE)
+    elseif (VCPKG_INSTALLED_DIR AND VCPKG_TARGET_TRIPLET)
       # vcpkg puts libraries with identical names in lib and debug/lib. Its
       # toolchain may prepend debug/lib to the generic search path, so isolate
       # both searches instead of relying on path priority.
@@ -378,8 +402,18 @@ unset(SuiteSparse_BLAS_LINK_LIBRARIES)
 unset(SuiteSparse_LAPACK_LINK_LIBRARIES)
 set(SuiteSparse_BLAS_FOUND FALSE)
 set(SuiteSparse_LAPACK_FOUND FALSE)
-find_package(OpenBLAS QUIET CONFIG)
-if (OpenBLAS_FOUND)
+if (CIPC_CHOLMOD_USE_MKL AND TARGET MKL::MKL)
+  # The optimized CHOLMOD shared library embeds static oneMKL itself. Do not
+  # propagate MKL into every SuiteSparse consumer (especially MSVC Debug).
+  set(SuiteSparse_BLAS_LINK_LIBRARIES "")
+  set(SuiteSparse_LAPACK_LINK_LIBRARIES "")
+  set(SuiteSparse_BLAS_FOUND TRUE)
+  set(SuiteSparse_LAPACK_FOUND TRUE)
+  message(STATUS "Using CHOLMOD's embedded oneMKL BLAS/LAPACK provider.")
+else()
+  find_package(OpenBLAS QUIET CONFIG)
+endif()
+if (NOT CIPC_CHOLMOD_USE_MKL AND OpenBLAS_FOUND)
   if (TARGET OpenBLAS::OpenBLAS)
     set(_SuiteSparse_OPENBLAS_LINK OpenBLAS::OpenBLAS)
   else()
@@ -392,7 +426,7 @@ if (OpenBLAS_FOUND)
     set(SuiteSparse_LAPACK_FOUND TRUE)
     message(STATUS "Using OpenBLAS as the common BLAS/LAPACK provider.")
   endif()
-else()
+elseif (NOT CIPC_CHOLMOD_USE_MKL)
   find_package(BLAS QUIET)
   find_package(LAPACK QUIET)
 

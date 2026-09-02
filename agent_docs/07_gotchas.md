@@ -8,6 +8,7 @@
 4. **迭代上限尚未配置化**：Newton 10000、κ 64、穿透回退 64、ACCD 10000 目前是代码常量；已有失败出口，但若要针对场景调节，应进入 `SolverSettings`/配置文件。
 5. **`mesh3D` 仍是 god object**：静止拓扑、材料、动态状态、接触历史和 workspace 伴随数据尚未完全分离；当前仅把 Newton workspace、solver context 和 broad phase 独立出来。
 6. **PARDISO 是推荐必装的默认 Release 后端，同时依赖较重**：当前 Windows vcpkg oneMKL 2025.2 静态链接使 headless 约 74.0 MB（70.6 MiB），并且该包的 Release CRT 与 `/MDd` 不兼容；因此正式性能运行应使用 Release/RelWithDebInfo。无 MKL 或 MSVC Debug 时才为兼容性回退 SuiteSparse LDL；只有显式强制 `pardiso` 才报 unavailable。
+7. **性能版 CHOLMOD 改变许可边界**：`scripts/build_cholmod_mkl.ps1` 启用GPL supernodal模块并将静态oneMKL嵌入CHOLMOD DLL。配置必须通过`CIPC_CHOLMOD_ROOT`接入且验证`cholmod_super_numeric`；不能把普通OpenBLAS/simplicial包的结果标成MKL supernodal。二进制分发需遵守GPL-2.0-or-later。
 
 ## B. 保留但默认未接入的安全路径
 
@@ -38,13 +39,13 @@
 - `BHessian::toTriplets` 会按 `boundaryTypes` 过滤固定/驱动顶点；若改硬约束机制，矩阵和 RHS 必须一起改。
 - 并行累加共享状态必须有明确的数据竞争策略；替换 spin mutex 时要做数值回归。
 - 产品入口为 `ViewerMain.cpp` 和 `apps/cipc_headless.cpp`；核心源文件由 CMake 显式列出。项目当前不保留测试源码或 CTest target。
-- CHOLMOD 的排序策略会影响 symbolic 时间、fill-in 和 factorization 时间；比较 CHOLMOD 时必须记录并保持 `CIPC_ENABLE_METIS_ORDERING` 一致。ON 是 cost-aware AMD→METIS，不是无条件强制 METIS；OFF 是 AMD-only。SuiteSparse LDL 使用独立的 3-DOF block AMD。
+- CHOLMOD 的排序策略会影响 symbolic 时间、fill-in 和 factorization 时间；当前生产策略固定AMD，因为项目矩阵上的强制METIS与multi-method AUTO都更慢。`CIPC_ENABLE_METIS_ORDERING=ON`表示Partition/METIS模块仍编入供实验，不代表运行时强制使用。SuiteSparse LDL使用独立的3-DOF block AMD。
 - SuiteSparse LDL 后端假设 Newton 矩阵为 SPD：`ldl_numeric` 成功后还会逐项要求 `Dᵢ>0` 且有限。不得为了“继续运行”删除该检查；若触发，应查 Hessian PSD、质量对角或装配错误。
 - LDL 的 numeric 输入是预排列后的上三角 `PAPᵀ`，原下三角 CSC value slot 到该矩阵的映射只在结构相同时有效；任何改变稀疏结构的代码都必须保留完整 outer/inner pattern 比较。
 - PARDISO 使用 `mtype=2` 且读取 upper CSR；Eigen column-major lower CSC 的 outer/inner/value 内存正好等价于同一对称矩阵的 upper CSR。不要再做一次转置，也不能把 `iparm[34]=1` 的零基索引改回一基。LP64 构建要求 `MKL_INT` 与 Eigen `StorageIndex` 都是 32-bit int。
 - PARDISO 的 phase 11/22/33 状态随 `IPCSolverContext::linearSystem` 跨帧保存。模式变化时可输入上一份 METIS permutation；factor nnz 超过最近 fresh ordering 的 1.2 倍会在下一次求解强制重排。维护这一逻辑时要同时检查结果、`symbolic_analyses`、phase 时间和 fill，不能只减少 phase 11 次数。
 - oneMKL 的 TBB threading layer 不由简单的 `mkl_set_num_threads` 可靠限制；当前每个 phase 用 `tbb::global_control`，运行时默认 16 线程（本机 16C/32T 最优），32 线程无收益；显式 0 才使用 oneMKL 默认。线程数属于 benchmark 配置，必须随结果报告。
-- vcpkg 默认 CHOLMOD 不含 supernodal；`suitesparse[gpl]` 才加入该模块并带来额外 GPL 许可要求。当前项目不默认要求它，不能把仅在 GPL 依赖构建上的性能数字写成通用基线。
+- vcpkg默认CHOLMOD不含supernodal；性能脚本显式启用该GPL模块并另建oneMKL DLL。默认PARDISO/system fallback不强制GPL，但一旦设置`CIPC_CHOLMOD_ROOT`使用性能版，不能把其结果或分发许可写成普通CHOLMOD core。
 
 ## E. 已修复记录（保留用于理解历史代码与旧文档）
 

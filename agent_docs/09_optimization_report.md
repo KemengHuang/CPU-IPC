@@ -24,13 +24,14 @@
 - `SuiteSparseLDLSolver` 使用 3-DOF block AMD、预排列上三角 CSC 和 value-slot 映射；同模式只刷新数值并复用 symbolic，且显式拒绝非有限或非正的 D 对角。
 - `CholmodSolver` RAII、模式变化检测、同模式 symbolic reuse、失败检查和 analyze/factorize 计数；`cholmod_solve2` 复用 solution/Y/E dense workspace。
 - `PardisoSolver` 使用 oneMKL SPD `mtype=2`、phase 11/22/33、TBB 线程上限和自适应 METIS permutation；直接把共享 lower CSC 当作等价 upper CSR，避免额外转置。模式不变时复用全部 symbolic/factor workspace，模式变化时复用 permutation，fill 超过 fresh 参考 1.2× 则下一次强制重排。
-- `CIPC_ENABLE_METIS_ORDERING=ON` 成为默认：CMake 要求 CHOLMOD Partition/METIS 并链接检查 `cholmod_metis`；`CholmodSolver` 使用 CHOLMOD cost-aware AMD→METIS 策略与 weighted postorder，OFF 则固定 AMD-only，便于做同机 A/B。
+- CHOLMOD性能路径升级为GPL supernodal+oneMKL LP64/TBB共享库；CMake通过`CIPC_CHOLMOD_ROOT`选择并验证supernodal/METIS符号，运行时采用实测AMD ordering和按nnz自适应4/8线程。普通system CHOLMOD仍作为兼容路径。
+- `CIPC_ENABLE_METIS_ORDERING=ON` 保证CHOLMOD Partition/METIS模块可用于实验并链接检查`cholmod_metis`；最终生产ordering根据新A/B固定AMD，因为它快于强制METIS与multi-method AUTO。
 - 修复 vcpkg 只导出无命名空间 `metis` 导致 METIS 未接入的问题，并兼容 Linux 的 `metis.h + libmetis` 及内嵌 Partition 的 CHOLMOD；SuiteSparse fallback imported targets 现在区分 Debug/Release，BLAS/LAPACK 固定为同一 provider，同时修复 `SuiteSparse_SPQR_FOUND` 拼写。
 - `BHessian::toTriplets` 改为两遍并行 count/prefix/fill：仅自由 DOF、非零数值、全局下三角。
 - triplet、SparseMatrix、RHS/result 和四个 solver workspace 全部由 `IPCSolverContext` 中的 `NewtonLinearSystem` 跨 Newton、κ 子问题和时间步复用；`NewtonWorkspace` 只持有 gradient、BHessian、mutex 和该线性系统引用。
 - 当前默认首帧 9 次 numeric factorization 中 2 次 symbolic analysis；LDL 与 CHOLMOD 计数口径相同。
 
-METIS 接入时做了策略诊断，而不是把“调用 METIS”直接当成加速：当前 cloth-bunny 首步中，单次强制 METIS 约 515 ms、每次同时评估 AMD+METIS 约 506 ms，均慢于 cost-aware 策略。最终策略下各 5 个独立 Release 进程的首步中位数为 METIS-enabled 449.838 ms、AMD-only 449.675 ms，差异处于运行噪声；两者均为 8 Newton、`nnz=145053`、相同接触/线搜索指标，最终状态只差浮点归约舍入。该结果只说明当前规模由 AMD 胜出；METIS 的收益仍需在更大稀疏图上单独 benchmark。
+METIS接入时做了策略诊断，而不是把“调用METIS”直接当成加速。早期cloth-bunny已显示AMD不慢于METIS；新supernodal+MKL bunny2 A/B进一步得到AMD 2.464s、METIS 2.557s、multi-method AUTO约2.66s，因此生产策略固定AMD，同时保留Partition模块供后续矩阵实验。
 
 ### oneMKL PARDISO 与 bunny2
 
@@ -40,7 +41,7 @@ METIS 接入时做了策略诊断，而不是把“调用 METIS”直接当成�
 
 ### 块感知 SuiteSparse LDL
 
-线性细分 profile 显示原 5 步基线 `1071.250 ms` 中 `linear_ms=928.107 ms`；单 Newton 典型开销约为 triplet 生成 1 ms、Eigen CSC 归并 6–7 ms、CHOLMOD symbolic 4 ms（多数轮复用）、simplicial numeric factorization 33 ms、solve <1 ms。当前 vcpkg CHOLMOD 未带 GPL supernodal，瓶颈实际是串行 simplicial numeric factorization。
+早期线性细分profile显示5步基线`1071.250 ms`中`linear_ms=928.107 ms`，当时vcpkg CHOLMOD未带GPL supernodal，瓶颈是串行simplicial numeric factorization。该历史数据不代表现有oneMKL supernodal路径，当前结果见`11_cholmod_mkl_report.md`。
 
 新后端不改变 Hessian：先把标量图折叠为每顶点一个 3-DOF block 做 AMD，展开 permutation 后生成上三角 `PAPᵀ`。结构变化时建立原 lower CSC value slot 到 permuted CSC slot 的一一映射并执行 `ldl_symbolic`；同结构轮只刷新 14.5 万个数值，再运行 `ldl_numeric` 和三角求解。最终 A/B 使用同一 Release 可执行文件并交替运行两个后端，以减弱温度和调度漂移：
 
@@ -207,8 +208,9 @@ bunny2 无接触初始阶段暴露了另一类“机器精度长尾”：旧顺�
 ## 9. 未实施或尚未完成评估的高风险项
 
 - Eigen-CG 已可选运行，但尚未在大网格上系统比较容差、预条件、收敛鲁棒性和性能；它不会被能力感知逻辑自动选择。
-- CHOLMOD GPL supernodal + 多线程 BLAS 尚未做隔离 benchmark；启用会改变依赖许可边界，不能作为无条件默认优化。
+- CHOLMOD GPL supernodal + oneMKL已完成隔离benchmark；剩余风险是GPL二进制分发边界，而不是性能未知。
 - PARDISO 已在 bunny2 上确认显著加速，因此当前配置可用时成为默认；oneMKL 缺失、显式关闭或 MSVC Debug 时自动回退 SuiteSparse LDL。下一线性热点是 triplet→Eigen CSC 构造与 phase 11，而不是继续增加 16 以上线程。
+- 优化CHOLMOD将bunny2从supernodal+OpenBLAS约8.67s降到1.625s（约5.3×）；同版本PARDISO为1.301s。cloth五步CHOLMOD/PARDISO为0.608/0.586s，twisting-mat为0.413/0.434s。PARDISO仍作为大场景默认，完整A/B见`11_cholmod_mkl_report.md`。
 - lagged/modified Newton、接触 Hessian 近似。
 - 直接 CSC 数值装配与固定 superset sparsity（可能改变 fill-in/内存）。
 - 梯度 graph coloring/TLS/gather（当前 assembly 已降为小占比）。

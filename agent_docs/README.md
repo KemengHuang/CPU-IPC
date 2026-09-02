@@ -26,6 +26,7 @@
 | `08_optimization_roadmap.md` | 结构与性能优化路线、优先级、收益/风险和验证要求 |
 | `09_optimization_report.md` | 已实施优化、实测结果、回归与仍保留的高风险事项 |
 | `10_pardiso_report.md` | oneMKL PARDISO 实现、bunny2 大场景、线程/阶段/内存基准与 50 步正确性验证 |
+| `11_cholmod_mkl_report.md` | GPL supernodal+oneMKL CHOLMOD 构建、ordering/线程A/B及与PARDISO的当前性能对比 |
 
 ## 30 秒上手
 

@@ -370,6 +370,7 @@ bool FEMSimulator::buildModels(const SimulationOptions& options) {
     if (!std::isfinite(options.linearSolver.relativeTolerance)
         || options.linearSolver.relativeTolerance <= 0.0
         || options.linearSolver.maximumIterations <= 0
+        || options.linearSolver.cholmodThreadCount < 0
         || options.linearSolver.pardisoThreadCount < 0) {
         throw std::invalid_argument("linear solver options are invalid");
     }

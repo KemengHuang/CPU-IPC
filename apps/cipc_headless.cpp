@@ -22,6 +22,7 @@ struct CommandLineOptions {
     bool disableBarrier = false;
     BroadPhaseBackend broadPhase = BroadPhaseBackend::LinearBVH;
     LinearSolverBackend linearSolver = LinearSolverOptions{}.backend;
+    int cholmodThreadCount = LinearSolverOptions{}.cholmodThreadCount;
     int pardisoThreadCount = LinearSolverOptions{}.pardisoThreadCount;
     std::string outputDirectory;
 };
@@ -36,6 +37,7 @@ void printUsage(const char* executable)
         << "  --broad-phase spatial-hash|lbvh\n"
         << "  --linear-solver cholmod|suitesparse-ldl|pardiso|eigen-cg\n"
         << "    default: pardiso when available, otherwise suitesparse-ldl\n"
+        << "  --cholmod-threads N (default 0: auto-select 4 or 8)\n"
         << "  --pardiso-threads N (default 16; 0 uses the oneMKL default)\n"
         << "  --disable-barrier\n"
         << "  --diagnose-line-search\n"
@@ -123,6 +125,10 @@ CommandLineOptions parseCommandLine(int argc, char** argv)
             options.pardisoThreadCount = parseNonNegativeInt(
                 requireValue("--pardiso-threads"), "--pardiso-threads");
         }
+        else if (argument == "--cholmod-threads") {
+            options.cholmodThreadCount = parseNonNegativeInt(
+                requireValue("--cholmod-threads"), "--cholmod-threads");
+        }
         else if (argument == "--disable-barrier") {
             options.disableBarrier = true;
         }
@@ -207,6 +213,7 @@ int main(int argc, char** argv)
         simulationOptions.verbose = commandLine.verbose;
         simulationOptions.broadPhaseBackend = commandLine.broadPhase;
         simulationOptions.linearSolver.backend = commandLine.linearSolver;
+        simulationOptions.linearSolver.cholmodThreadCount = commandLine.cholmodThreadCount;
         simulationOptions.linearSolver.pardisoThreadCount = commandLine.pardisoThreadCount;
         simulationOptions.diagnoseLineSearch = commandLine.diagnoseLineSearch;
         simulationOptions.disableBarrier = commandLine.disableBarrier;

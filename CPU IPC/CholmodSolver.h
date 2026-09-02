@@ -16,6 +16,8 @@ public:
     CholmodSolver(const CholmodSolver&) = delete;
     CholmodSolver& operator=(const CholmodSolver&) = delete;
 
+    void setThreadCount(int threadCount);
+
     // Update numeric values and invalidate symbolic analysis only when the
     // compressed sparse structure actually changes.
     void set_pattern(const Eigen::SparseMatrix<double>& matrix);
@@ -27,10 +29,12 @@ public:
 
     std::size_t symbolicAnalysisCount() const { return symbolicAnalysisCount_; }
     std::size_t numericFactorizationCount() const { return numericFactorizationCount_; }
+    int activeThreadCount() const { return common_.nthreads_max; }
 
 private:
     bool hasSamePattern(const Eigen::SparseMatrix<double>& matrix) const;
     void updateMatrixView();
+    int effectiveThreadCount() const;
     void factorize();
     void solveFactorized(const Eigen::VectorXd& rhs, Eigen::VectorXd& result);
 
@@ -49,6 +53,7 @@ private:
     bool matrixReady_ = false;
     std::size_t symbolicAnalysisCount_ = 0;
     std::size_t numericFactorizationCount_ = 0;
+    int requestedThreadCount_ = 0;
 };
 
 #endif // CIPC_CHOLMOD_SOLVER_H

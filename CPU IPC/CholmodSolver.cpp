@@ -1,6 +1,8 @@
 #include "CholmodSolver.h"
 
+#include <algorithm>
 #include <cstring>
+#include <tbb/global_control.h>
 #include <stdexcept>
 
 namespace {
@@ -13,18 +15,11 @@ bool arraysEqual(const Scalar* lhs, const Scalar* rhs, Eigen::Index count)
 
 void configureSymbolicOrdering(cholmod_common& common)
 {
-#ifdef CIPC_CHOLMOD_USE_METIS
-    // Keep CHOLMOD's cost-aware automatic policy: evaluate AMD first, then use
-    // METIS when AMD predicts excessive fill or work. Explicitly select METIS
-    // (rather than NESDIS) as the nested-dissection fallback.
-    common.nmethods = 0;
-    common.default_nesdis = 0;
-#else
-    // Make the build option a real A/B switch instead of leaving METIS
-    // reachable through CHOLMOD's default nmethods == 0 policy.
+    // AMD was faster than both forced METIS and CHOLMOD's multi-method policy
+    // on all project benchmark matrices. Keep Partition/METIS available for
+    // experiments, but use the measured production ordering here.
     common.nmethods = 1;
     common.method[0].ordering = CHOLMOD_AMD;
-#endif
     common.postorder = 1;
 }
 
@@ -38,6 +33,8 @@ CholmodSolver::CholmodSolver()
         throw std::runtime_error("CHOLMOD initialization failed");
     }
     configureSymbolicOrdering(common_);
+    common_.supernodal = CHOLMOD_AUTO;
+    common_.nthreads_max = 8;
 }
 
 CholmodSolver::~CholmodSolver()
@@ -71,6 +68,25 @@ bool CholmodSolver::hasSamePattern(const Eigen::SparseMatrix<double>& matrix) co
 
     return arraysEqual(outerIndices_.data(), matrix.outerIndexPtr(), outerCount)
         && arraysEqual(innerIndices_.data(), matrix.innerIndexPtr(), nonZeroCount);
+}
+
+void CholmodSolver::setThreadCount(int threadCount)
+{
+    if (threadCount < 0) {
+        throw std::invalid_argument("CHOLMOD thread count must be non-negative");
+    }
+    requestedThreadCount_ = threadCount;
+}
+
+int CholmodSolver::effectiveThreadCount() const
+{
+    if (requestedThreadCount_ > 0) {
+        return requestedThreadCount_;
+    }
+    // Small IPC systems lose more to BLAS task scheduling than they gain from
+    // wider parallelism; large systems benefit up to eight threads on the
+    // benchmark CPU.
+    return matrix_.nzmax < 500000 ? 4 : 8;
 }
 
 void CholmodSolver::updateMatrixView()
@@ -152,6 +168,10 @@ void CholmodSolver::factorize()
         ++symbolicAnalysisCount_;
     }
 
+    common_.nthreads_max = effectiveThreadCount();
+    tbb::global_control threadLimit(
+        tbb::global_control::max_allowed_parallelism,
+        static_cast<std::size_t>((std::max)(1, common_.nthreads_max)));
     if (!cholmod_factorize(&matrix_, factor_, &common_)) {
         throw std::runtime_error("CHOLMOD numeric factorization failed");
     }
@@ -177,6 +197,9 @@ void CholmodSolver::solveFactorized(const Eigen::VectorXd& rhs, Eigen::VectorXd&
     rhsView.xtype = CHOLMOD_REAL;
     rhsView.dtype = CHOLMOD_DOUBLE;
 
+    tbb::global_control threadLimit(
+        tbb::global_control::max_allowed_parallelism,
+        static_cast<std::size_t>((std::max)(1, common_.nthreads_max)));
     if (!cholmod_solve2(
             CHOLMOD_A,
             factor_,

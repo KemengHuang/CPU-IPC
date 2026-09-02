@@ -27,6 +27,12 @@ def parse_args():
         help="solver backend (default: auto, matching the executable)",
     )
     parser.add_argument(
+        "--cholmod-threads",
+        type=int,
+        default=0,
+        help="CHOLMOD/MKL thread limit (default: 0, auto-select 4 or 8)",
+    )
+    parser.add_argument(
         "--pardiso-threads",
         type=int,
         default=16,
@@ -46,8 +52,11 @@ def read_metrics(path):
 
 def main():
     args = parse_args()
-    if args.repeats <= 0 or args.steps <= 0 or args.pardiso_threads < 0:
-        raise SystemExit("--repeats/--steps must be positive and --pardiso-threads non-negative")
+    if (args.repeats <= 0 or args.steps <= 0
+            or args.cholmod_threads < 0 or args.pardiso_threads < 0):
+        raise SystemExit(
+            "--repeats/--steps must be positive and solver threads non-negative"
+        )
 
     executable = args.exe.resolve()
     samples = []
@@ -66,6 +75,8 @@ def main():
         ]
         if args.linear_solver != "auto":
             command.extend(("--linear-solver", args.linear_solver))
+        if args.linear_solver == "cholmod":
+            command.extend(("--cholmod-threads", str(args.cholmod_threads)))
         if args.linear_solver in ("auto", "pardiso"):
             command.extend(("--pardiso-threads", str(args.pardiso_threads)))
         completed = subprocess.run(command, check=True, text=True, capture_output=True)

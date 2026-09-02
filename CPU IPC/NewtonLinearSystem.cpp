@@ -40,7 +40,7 @@ void NewtonLinearSystem::solve(
 
     switch (options.backend) {
     case LinearSolverBackend::Cholmod:
-        solveWithCholmod();
+        solveWithCholmod(options);
         break;
     case LinearSolverBackend::SuiteSparseLDL:
         solveWithSuiteSparseLDL();
@@ -114,6 +114,11 @@ int NewtonLinearSystem::pardisoThreadCount() const
 #endif
 }
 
+int NewtonLinearSystem::cholmodThreadCount() const
+{
+    return cholmodSolver_.activeThreadCount();
+}
+
 int NewtonLinearSystem::pardisoFactorNonZeros() const
 {
 #ifdef CIPC_HAS_PARDISO
@@ -153,8 +158,9 @@ void NewtonLinearSystem::assemble(
     });
 }
 
-void NewtonLinearSystem::solveWithCholmod()
+void NewtonLinearSystem::solveWithCholmod(const LinearSolverOptions& options)
 {
+    cholmodSolver_.setThreadCount(options.cholmodThreadCount);
     cholmodSolver_.set_pattern(matrix_);
     cholmodSolver_.solve(rightHandSide_, solution_);
 }

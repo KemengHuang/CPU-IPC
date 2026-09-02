@@ -8,7 +8,7 @@
 - P1 已完成：下三角无占位零装配、固定尺寸活跃 FEM、PFPX 预计算、二次弯曲常量 Hessian、Newton/Energy workspace。
 - P2 已完成安全部分：SpatialHash bucket/occupancy 复用、排序 vector scratch、GPU 风格 CPU LBVH；梯度去锁和彻底 CSR SpatialHash 尚未实施，因为当前 assembly 已不是主瓶颈。
 - P3 部分完成：运行状态、构建 target、摩擦、线性系统、viewer 与核心文件职责均已分层；旧 PCG/特效/无调用文件已清理。`MMCVID` 已改名 `EncodedContact`，但负数槽位协议尚未类型化；`mesh3D` 其余职责仍待拆分。
-- P4 完成低风险接口：oneMKL PARDISO 可用时成为默认并行 SPD 直接法，否则自动回退块感知 SuiteSparse LDL；CHOLMOD 保留经过依赖校验的 cost-aware METIS fallback，Eigen-CG 继续作为共享装配后的可选后端并有 smoke。PARDISO 已完成 bunny2/线程/50 步验证，未改 Hessian scale/近似或 Newton 算法。
+- P4 完成求解器优化：oneMKL PARDISO可用时成为默认并行SPD直接法，否则自动回退块感知SuiteSparse LDL；CHOLMOD已提供GPL supernodal+oneMKL/TBB构建脚本、AMD实测ordering与4/8线程自适应，Eigen-CG继续作为共享装配后的可选后端。未改Hessian scale/近似或Newton算法。
 
 整体实测详见 `09_optimization_report.md`，PARDISO 专项见 `10_pardiso_report.md`。
 
@@ -194,10 +194,10 @@ cipc_headless  benchmark/regression CLI
 1. 已完成：headless/回归/benchmark、下三角、workspace、固定尺寸 FEM、PFPX/弯曲静态化。
 2. 已完成：SpatialHash 复用与 GPU 风格 CPU LBVH；继续按场景 A/B，默认 LBVH。
 3. 已完成：PARDISO phase 11/22/33 细分、1/2/4/8/16/32 线程 sweep、双 bunny2 单步/50 步与 permutation 策略 A/B；当前配置有 PARDISO 时默认使用，缺失时自动回退 SuiteSparse LDL。
-4. 下一步：继续细分 PARDISO 之外的 `linear_ms`（triplet / setFromTriplets），评估直接 CSC 数值装配和 phase 11 前的结构构造成本。
-5. 下一步：拆 `mesh3D`、把 `EncodedContact` 改为 tagged contact、保存 checkpoint 拓扑/参数 hash，逐步清理仍嵌在活跃大文件中的实验函数。
-6. profile 证明 assembly 锁争用成为瓶颈时，再比较 graph coloring / TLS / gather。
-7. 更大/更强接触场景需继续比较 PARDISO、SuiteSparse LDL、带 supernodal 的 CHOLMOD 与 Eigen-CG；启用 vcpkg GPL supernodal 前必须单独评估许可与分发要求。lagged Hessian 仍作为独立高风险实验。
+4. 已完成：CHOLMOD supernodal/OpenBLAS/MKL、AMD/METIS/AUTO与1/2/4/6/8/12/16线程A/B；性能版通过`CIPC_CHOLMOD_ROOT`接入并验证符号。
+5. 下一步：继续细分 PARDISO/CHOLMOD 之外的 `linear_ms`（triplet / setFromTriplets），评估直接 CSC 数值装配和 phase 11 前的结构构造成本。
+6. 下一步：拆 `mesh3D`、把 `EncodedContact` 改为 tagged contact、保存 checkpoint 拓扑/参数 hash，逐步清理仍嵌在活跃大文件中的实验函数。
+7. profile 证明 assembly 锁争用成为瓶颈时，再比较 graph coloring / TLS / gather。lagged Hessian 仍作为独立高风险实验。
 
 ## 每项优化的完成标准
 

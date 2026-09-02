@@ -8,6 +8,7 @@
 
 - Windows: `vcpkg install eigen3 freeglut tbb openblas suitesparse metis`
 - Windows 推荐/默认 PARDISO（应安装）：`vcpkg install intel-mkl:x64-windows`
+- 性能版 CHOLMOD：`powershell -ExecutionPolicy Bypass -File scripts/build_cholmod_mkl.ps1 -VcpkgRoot D:/VCPKG/vcpkg`（启用 GPL supernodal）
 - Ubuntu: `sudo apt install libeigen3-dev freeglut3-dev libtbb-dev libopenblas-dev libsuitesparse-dev libmetis-dev`
 
 构建：
@@ -22,11 +23,12 @@ cmake --build build --config Release
   - `CIPC_BUILD_VIEWER=ON` — viewer；关掉后配置阶段无需 OpenGL/GLUT。shader/GLEW 路径已删除。
   - `CIPC_ENABLE_FRICTION=ON` — 定义 `USE_FRICTION`。
   - `CIPC_ENABLE_QUADRATIC_BENDING=ON` — 定义 `USE_QUADRATIC_BENDING`。
-  - `CIPC_ENABLE_METIS_ORDERING=ON` — 要求 CHOLMOD Partition/METIS 可用，采用 CHOLMOD 的 cost-aware AMD→METIS 策略；设为 OFF 则固定为 AMD-only，便于真实 A/B。
+  - `CIPC_ENABLE_METIS_ORDERING=ON` — 构建/链接 CHOLMOD Partition/METIS 供实验；生产配置按实测固定 AMD，因为它在三个项目矩阵上都快于强制 METIS 与 multi-method AUTO。
   - `CIPC_ENABLE_PARDISO=ON` — 推荐保持开启；找到 oneMKL CMake package 时以 PARDISO 作为默认主后端。未找到时为保证兼容性回退 SuiteSparse LDL。Windows vcpkg oneMKL 静态库使用 Release CRT，因此 MSVC Debug 回退 LDL，Release/RelWithDebInfo 使用 PARDISO。
+  - `CIPC_CHOLMOD_ROOT` — 指向性能版 CHOLMOD prefix；标准 `build/cholmod-mkl-install` 会自动识别。配置会验证 supernodal 与 METIS 符号，并让DLL内部使用oneMKL LP64/TBB。
   - `CIPC_ASSETS_DIR` = `<repo>/Assets/`（活，`Simulator.cpp` 读参数文件/网格用）
   - `CIPC_OUTPUT_DIR` = `<repo>/Output/`（活，由 `RuntimePaths` 统一管理日志、检查点、表面和截图输出）
-- SuiteSparse 查找器会校验 `cholmod_metis`，兼容 `METIS::METIS`、`METIS::metis`、vcpkg 的 `metis` target、Linux 常规 `metis.h + libmetis` 以及内嵌 Partition 的 CHOLMOD；多配置生成器分别绑定 Release/Debug SuiteSparse 库。BLAS/LAPACK 必须来自同一 provider，优先使用带配置映射的 OpenBLAS target。
+- SuiteSparse 查找器会校验 `cholmod_metis`，兼容 `METIS::METIS`、`METIS::metis`、vcpkg 的 `metis` target、Linux 常规 `metis.h + libmetis` 以及内嵌 Partition 的 CHOLMOD；多配置生成器分别绑定 Release/Debug SuiteSparse 库。性能版CHOLMOD通过共享库内部嵌入oneMKL并额外校验`cholmod_super_numeric`；system fallback才选择OpenBLAS/系统BLAS-LAPACK。
 - MSVC 的 `/bigobj` 只施加到 `cipc_core`（`ContactMechanics.cpp` 的生成代码需要），不再污染全局 `CMAKE_CXX_FLAGS`。
 
 运行：`cipc` 打开 GLUT 窗口，空格开始/暂停。`cipc_headless --steps N --broad-phase lbvh` 写逐帧 `metrics.csv`；默认后端按当前构建能力选择：定义 `CIPC_HAS_PARDISO` 时用 PARDISO，否则回退块感知 SuiteSparse LDL。`--linear-solver suitesparse-ldl|cholmod|pardiso|eigen-cg` 可显式覆盖。PARDISO 默认限制为 16 线程，`--pardiso-threads 0` 可改用 oneMKL 默认。一个 `--steps 1` 是一个完整时间步/帧，内部可能包含多次 Newton 与线性分解。运行时自动创建输出目录且可由 headless `--output` 覆盖；`9` 切换表面 OBJ，`/` 切换截图，两者默认关闭——见 `06_app_layer.md`。

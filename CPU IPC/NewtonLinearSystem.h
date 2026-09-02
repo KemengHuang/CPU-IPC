@@ -33,6 +33,7 @@ public:
     double pardisoAnalysisMilliseconds() const;
     double pardisoFactorizationMilliseconds() const;
     double pardisoSolveMilliseconds() const;
+    int cholmodThreadCount() const;
     int pardisoThreadCount() const;
     int pardisoFactorNonZeros() const;
     int vertexCount() const { return static_cast<int>(matrix_.rows() / 3); }
@@ -43,7 +44,7 @@ private:
         const BHessian& hessian,
         const std::vector<Eigen::Vector3d>& gradient,
         std::size_t& matrixNonZeros);
-    void solveWithCholmod();
+    void solveWithCholmod(const LinearSolverOptions& options);
     void solveWithSuiteSparseLDL();
     void solveWithPardiso(const LinearSolverOptions& options);
     void solveWithEigenConjugateGradient(const LinearSolverOptions& options);

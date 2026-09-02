@@ -1039,8 +1039,12 @@ int solveBarrierSubproblem(
         workspace.linearSystem.pardisoFactorizationMilliseconds() - pardisoFactorizationBefore;
     stats.pardisoSolveMilliseconds +=
         workspace.linearSystem.pardisoSolveMilliseconds() - pardisoSolveBefore;
+    const int activeLinearSolverThreads =
+        linearSolverOptions.backend == LinearSolverBackend::Cholmod
+        ? workspace.linearSystem.cholmodThreadCount()
+        : workspace.linearSystem.pardisoThreadCount();
     stats.linearSolverThreads = (std::max)(
-        stats.linearSolverThreads, workspace.linearSystem.pardisoThreadCount());
+        stats.linearSolverThreads, activeLinearSolverThreads);
     const int pardisoFactorNonZeros = workspace.linearSystem.pardisoFactorNonZeros();
     if (pardisoFactorNonZeros > 0) {
         stats.factorNonZeros = (std::max)(
@@ -1236,12 +1240,17 @@ int solveIPCStep(
         std::cout << "totalCollision=" << context.totalCollisions
             << ", averageCollision=" << averageCollision
             << ", total=" << context.cumulativeStepMilliseconds << " ms" << std::endl;
-        if (stats.linearSolverThreads > 0) {
+        if (stats.pardisoAnalysisMilliseconds > 0.0
+            || stats.pardisoFactorizationMilliseconds > 0.0
+            || stats.pardisoSolveMilliseconds > 0.0) {
             std::cout << "PARDISO phase ms: analyze=" << stats.pardisoAnalysisMilliseconds
                 << ", factorize=" << stats.pardisoFactorizationMilliseconds
                 << ", solve=" << stats.pardisoSolveMilliseconds
                 << ", threads=" << stats.linearSolverThreads
                 << ", factor nnz=" << stats.factorNonZeros << std::endl;
+        }
+        else if (context.linearSolver.backend == LinearSolverBackend::Cholmod) {
+            std::cout << "CHOLMOD threads=" << stats.linearSolverThreads << std::endl;
         }
     }
 

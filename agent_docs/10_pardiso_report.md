@@ -185,3 +185,5 @@ always-fresh 与 adaptive 的坐标和差约 `1e-10`，碰撞整数指标一致�
 - 当前配置提供 PARDISO 时，能力感知默认值直接选择 PARDISO（16线程）；无 oneMKL、显式关闭或 MSVC Debug 时自动回退 SuiteSparse LDL。仍可用 `--linear-solver suitesparse-ldl` 强制选择较小、可移植的后端。
 - 下一性能目标应是直接构建/更新 CSC、减少 `setFromTriplets` 与 pattern comparison 成本，以及降低 phase 11 前后的串行工作；在本机继续从 16 增到 32 线程没有收益。
 - 若评估固定 superset pattern，必须同时报告 symbolic 次数、factor nnz、峰值内存、Newton/线搜索和最终轨迹；少做分析但让 fill 长期膨胀并不是净优化。
+
+后续GPL supernodal+oneMKL CHOLMOD已把与PARDISO的差距显著缩小；本文早期CHOLMOD绝对时间属于旧OpenBLAS路径。当前同版本对比见`11_cholmod_mkl_report.md`。

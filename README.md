@@ -14,7 +14,7 @@ The benchmark path is fully headless and records solver-stage timing together wi
 - Reused Newton, energy, sparse-matrix, RHS, and solver workspaces.
 - Default oneMKL PARDISO SPD solver with parallel factorization, cross-time-step symbolic reuse, adaptive METIS-permutation refresh, and per-phase metrics.
 - Block-aware SuiteSparse LDL with reusable symbolic data and a pre-permuted upper CSC numeric path; retained as the compatibility fallback and an explicit comparison backend.
-- Optional CHOLMOD with symbolic-factorization reuse and a verified, cost-aware METIS nested-dissection fallback.
+- Optional high-performance CHOLMOD comparison path: GPL supernodal factorization, embedded oneMKL LP64/TBB, measured AMD ordering, and adaptive 4/8-thread limits.
 - Optional Eigen-CG backend using the same assembled system and boundary handling.
 - Current-step Newton convergence checks before CCD/line search, avoiding strict-energy backtracking on numerically vanished directions.
 - Strict energy-decreasing line search, Additive CCD, and the original IPC CFL strategy.
@@ -25,6 +25,9 @@ Windows:
 vcpkg install eigen3 freeglut tbb openblas suitesparse metis
 # Recommended/default PARDISO solver (install this for the intended fast path):
 vcpkg install intel-mkl:x64-windows
+
+# Build the performance-tuned CHOLMOD comparison backend (enables GPL code):
+powershell -ExecutionPolicy Bypass -File scripts/build_cholmod_mkl.ps1 -VcpkgRoot D:/VCPKG/vcpkg
 ```
 
 Ubuntu:
@@ -56,12 +59,15 @@ The build intentionally contains no test targets or CTest registration.
 | `CIPC_BUILD_VIEWER` | `ON` | Build the GLUT viewer; set `OFF` for a headless-only build. |
 | `CIPC_ENABLE_FRICTION` | `ON` | Enable lagged IPC friction. |
 | `CIPC_ENABLE_QUADRATIC_BENDING` | `ON` | Use quadratic isometric bending; set `OFF` for the complete dihedral-hinge model. |
-| `CIPC_ENABLE_METIS_ORDERING` | `ON` | Require CHOLMOD Partition/METIS support and allow CHOLMOD's fill/work heuristic to select METIS after AMD; set `OFF` for AMD-only ordering. |
+| `CIPC_ENABLE_METIS_ORDERING` | `ON` | Build/link CHOLMOD Partition/METIS support for experiments; measured production ordering remains AMD. |
 | `CIPC_ENABLE_PARDISO` | `ON` | Build the recommended/default oneMKL PARDISO backend; disabling it is intended for compatibility and fallback validation. |
+| `CIPC_CHOLMOD_ROOT` | auto | Prefix of the tuned supernodal+oneMKL CHOLMOD build. The standard `build/cholmod-mkl-install` is detected automatically. |
 
 With METIS ordering enabled, configuration fails early unless the installed CHOLMOD exports the Partition functionality and `cholmod_metis` is linkable. The local SuiteSparse finder accepts `METIS::METIS`, `METIS::metis`, vcpkg's un-namespaced `metis` target, conventional `metis.h + libmetis` installations, and CHOLMOD builds with embedded Partition support. It also selects matching Debug/Release SuiteSparse libraries for multi-configuration builds.
 
 PARDISO is the recommended installation and the default solver in Release-family configurations. It uses oneMKL's static LP64/TBB threading layer and defaults to 16 threads. If oneMKL is absent, configuration remains usable by falling back to SuiteSparse LDL, but that is a compatibility path rather than the recommended performance configuration. The Windows oneMKL static package uses the Release CRT, so MSVC Debug builds deliberately fall back to LDL; use Release or RelWithDebInfo for the intended PARDISO path. Static oneMKL increases the headless executable to about 74.0 MB (70.6 MiB) on the measured setup.
+
+For CHOLMOD performance, run `scripts/build_cholmod_mkl.ps1` before configuring CPU-IPC. It builds a shared CHOLMOD with the GPL supernodal module and embeds static oneMKL LP64/TBB; CPU-IPC verifies both `cholmod_super_numeric` and `cholmod_metis` and deploys the resulting DLL. This changes the distribution license boundary to include GPL-2.0-or-later code. Without `CIPC_CHOLMOD_ROOT`, the system CHOLMOD remains a compatibility path and may use OpenBLAS or lack supernodal support.
 
 Headless-only non-quadratic build:
 
@@ -101,15 +107,13 @@ Scene construction is fresh by default. Checkpoint loading and writing are opt-i
 
 The CPU LBVH broad phase is the default; use `--broad-phase spatial-hash` for the optimized legacy backend.
 
-PARDISO is the project's primary and default Newton solver. Install oneMKL and use a Release-family build to obtain the intended default path; it uses 16 threads unless `--pardiso-threads` overrides the limit. SuiteSparse LDL is retained as the automatic compatibility fallback when PARDISO cannot be built. `--linear-solver suitesparse-ldl`, `cholmod`, and `eigen-cg` explicitly select the other optional comparison backends. All four backends share the same lower-triangular Hessian assembly and boundary handling.
+PARDISO is the project's primary and default Newton solver. Install oneMKL and use a Release-family build to obtain the intended default path; it uses 16 threads unless `--pardiso-threads` overrides the limit. SuiteSparse LDL is retained as the automatic compatibility fallback when PARDISO cannot be built. `--linear-solver cholmod` selects the tuned comparison backend; `--cholmod-threads 0` uses the measured automatic policy (4 threads below 500k matrix nonzeros, otherwise 8), while a positive value overrides it. `suitesparse-ldl` and `eigen-cg` remain additional comparison backends. All four share the same lower-triangular Hessian assembly and boundary handling.
 
 Each Newton convergence decision uses the direction just solved from the current gradient/Hessian. A converged direction exits before CCD and line search; the strict acceptance rule remains `E_trial < E0` with `armijoCoefficient=0`. This prevents a numerically vanished direction from being halved repeatedly only because parallel energy summation fluctuates in the last bit. On the two-bunny2 scene, five independent five-step runs reduced the first 25 frames from 417 energy backtracks to 0, made all five final states identical, and reduced median total time from 4.429 s to 3.396 s. The final convergence-check factorization is still counted, so `numeric_factorizations` can be one greater than the number of accepted Newton updates.
 
-On the development machine, alternating paired Release runs reduced five-step wall time by about 5.9% on cloth-bunny and 8.6% on twisting-mat versus the installed non-supernodal CHOLMOD build. These numbers are machine/dependency specific; use `scripts/benchmark.py` to compare locally.
+The tuned CHOLMOD path is about 5.3× faster than the supernodal+OpenBLAS build on bunny2. With the current convergence semantics, five-run medians are: bunny2 one step 1.625 s for CHOLMOD versus 1.301 s for PARDISO; cloth-bunny five steps 0.608 s versus 0.586 s; twisting-mat five steps 0.413 s versus 0.434 s. Thus PARDISO remains the recommended overall default and is about 25% faster on the large scene, while tuned CHOLMOD is competitive on medium scenes and slightly wins this small twisting-mat case. Numerical results agree within floating-point reduction error. See [`agent_docs/11_cholmod_mkl_report.md`](agent_docs/11_cholmod_mkl_report.md) for the full ordering/thread/provider A/B and [`agent_docs/10_pardiso_report.md`](agent_docs/10_pardiso_report.md) for PARDISO details.
 
-PARDISO was the fastest solver in every measured project scene. Over five complete time steps it was 1.66× faster than SuiteSparse LDL and 1.79× faster than CHOLMOD on cloth-bunny, and 1.34×/1.44× faster on twisting-mat. For the larger two-`bunny2` scene (38,386 vertices, 115,158 DOF), one complete time step had a three-run median of 1.284 s with 16-thread PARDISO, versus 8.253 s with CHOLMOD and 12.568 s with SuiteSparse LDL: 6.43× and 9.79× faster. Here one `--steps 1` means one complete simulation time step/frame, not one Newton iteration. See [`agent_docs/10_pardiso_report.md`](agent_docs/10_pardiso_report.md) for the thread sweep, phase timings, memory, 50-step contact validation, and limitations.
-
-The project deliberately does not require CHOLMOD's GPL supernodal module. If your SuiteSparse build includes it, benchmark `cholmod` separately; its relative performance can differ from the default non-supernodal vcpkg build.
+The default PARDISO path and system-CHOLMOD fallback do not require CHOLMOD's GPL modules. The performance-tuned CHOLMOD script explicitly opts into GPL supernodal code; treat binaries built with that path as GPL-covered distributions.
 
 ## CPU IPC benchmark usage
 
